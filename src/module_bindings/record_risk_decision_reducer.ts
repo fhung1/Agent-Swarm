@@ -17,4 +17,6 @@ export default {
   outcome: __t.string(),
   checks: __t.string(),
   expiresAt: __t.timestamp(),
+  snapshotId: __t.string(),
+  clockAsOf: __t.timestamp(),
 };

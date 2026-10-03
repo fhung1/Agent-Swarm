@@ -35,194 +35,286 @@ import {
 
 // Import all reducer arg schemas
 import AddFactReducer from "./add_fact_reducer";
+import AddRiskPolicyReducer from "./add_risk_policy_reducer";
 import AddSourceReducer from "./add_source_reducer";
 import ApproveProposalReducer from "./approve_proposal_reducer";
+import BeginInferenceReducer from "./begin_inference_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
 import CompleteTaskReducer from "./complete_task_reducer";
+import ConfigureRunLimitsReducer from "./configure_run_limits_reducer";
 import CreateRunReducer from "./create_run_reducer";
 import CreateTaskReducer from "./create_task_reducer";
 import FailTaskReducer from "./fail_task_reducer";
+import FinishInferenceReducer from "./finish_inference_reducer";
+import GrantAccountAccessReducer from "./grant_account_access_reducer";
 import GrantAgentReducer from "./grant_agent_reducer";
+import GrantRunAccessReducer from "./grant_run_access_reducer";
 import HeartbeatReducer from "./heartbeat_reducer";
 import PostMessageReducer from "./post_message_reducer";
 import ProposeTradeReducer from "./propose_trade_reducer";
 import PublishThesisReducer from "./publish_thesis_reducer";
 import RecordAccountSnapshotReducer from "./record_account_snapshot_reducer";
 import RecordDecisionReducer from "./record_decision_reducer";
+import RecordDecisionInputReducer from "./record_decision_input_reducer";
 import RecordFillReducer from "./record_fill_reducer";
+import RecordMarketClockReducer from "./record_market_clock_reducer";
 import RecordReconciliationReducer from "./record_reconciliation_reducer";
 import RecordRiskDecisionReducer from "./record_risk_decision_reducer";
 import RecordRunMetricReducer from "./record_run_metric_reducer";
+import RecordTradeDecisionReducer from "./record_trade_decision_reducer";
 import RenewTaskLeaseReducer from "./renew_task_lease_reducer";
 import ReservePaperOrderReducer from "./reserve_paper_order_reducer";
+import RevokeAccountAccessReducer from "./revoke_account_access_reducer";
 import RevokeAgentReducer from "./revoke_agent_reducer";
+import RevokeRunAccessReducer from "./revoke_run_access_reducer";
 import SetRunStatusReducer from "./set_run_status_reducer";
 import UpdatePaperOrderReducer from "./update_paper_order_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
-import AgentRow from "./agent_table";
-import DecisionRow from "./decision_table";
-import FactRow from "./fact_table";
-import MessageRow from "./message_table";
-import RunRow from "./run_table";
-import SourceRow from "./source_table";
-import TaskRow from "./task_table";
-import ThesisRow from "./thesis_table";
-import TradeProposalRow from "./trade_proposal_table";
+import MyAccountSnapshotRow from "./my_account_snapshot_table";
+import MyAgentRow from "./my_agent_table";
+import MyAgentDirectoryRow from "./my_agent_directory_table";
+import MyApprovalRow from "./my_approval_table";
+import MyDecisionRow from "./my_decision_table";
+import MyDecisionInputRow from "./my_decision_input_table";
+import MyFactRow from "./my_fact_table";
+import MyFillRow from "./my_fill_table";
+import MyInferenceAttemptRow from "./my_inference_attempt_table";
+import MyMarketClockRow from "./my_market_clock_table";
+import MyMarketObservationRow from "./my_market_observation_table";
+import MyMessageRow from "./my_message_table";
+import MyPaperOrderRow from "./my_paper_order_table";
+import MyReconciliationRow from "./my_reconciliation_table";
+import MyRiskDecisionRow from "./my_risk_decision_table";
+import MyRiskDecisionHistoryRow from "./my_risk_decision_history_table";
+import MyRiskPolicyRow from "./my_risk_policy_table";
+import MyRiskReservationRow from "./my_risk_reservation_table";
+import MyRunRow from "./my_run_table";
+import MyRunConfigRow from "./my_run_config_table";
+import MyRunMetricRow from "./my_run_metric_table";
+import MySourceRow from "./my_source_table";
+import MyTaskRow from "./my_task_table";
+import MyThesisRow from "./my_thesis_table";
+import MyTradeProposalRow from "./my_trade_proposal_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
-  agent: __table({
-    name: 'agent',
+  myAccountSnapshot: __table({
+    name: 'my_account_snapshot',
     indexes: [
-      { accessor: 'identity', name: 'agent_identity_idx_btree', algorithm: 'btree', columns: [
-        'identity',
-      ] },
     ],
     constraints: [
-      { name: 'agent_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
-  }, AgentRow),
-  decision: __table({
-    name: 'decision',
+  }, MyAccountSnapshotRow),
+  myAgent: __table({
+    name: 'my_agent',
     indexes: [
-      { accessor: 'id', name: 'decision_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'thesisId', name: 'decision_thesis_id_idx_btree', algorithm: 'btree', columns: [
-        'thesisId',
-      ] },
     ],
     constraints: [
-      { name: 'decision_id_key', constraint: 'unique', columns: ['id'] },
-      { name: 'decision_thesis_id_key', constraint: 'unique', columns: ['thesisId'] },
     ],
-  }, DecisionRow),
-  fact: __table({
-    name: 'fact',
+  }, MyAgentRow),
+  myAgentDirectory: __table({
+    name: 'my_agent_directory',
     indexes: [
-      { accessor: 'id', name: 'fact_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'symbol', name: 'fact_symbol_idx_btree', algorithm: 'btree', columns: [
-        'symbol',
-      ] },
     ],
     constraints: [
-      { name: 'fact_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, FactRow),
-  message: __table({
-    name: 'message',
+  }, MyAgentDirectoryRow),
+  myApproval: __table({
+    name: 'my_approval',
     indexes: [
-      { accessor: 'id', name: 'message_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'runId', name: 'message_run_id_idx_btree', algorithm: 'btree', columns: [
-        'runId',
-      ] },
     ],
     constraints: [
-      { name: 'message_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, MessageRow),
-  run: __table({
-    name: 'run',
+  }, MyApprovalRow),
+  myDecision: __table({
+    name: 'my_decision',
     indexes: [
-      { accessor: 'id', name: 'run_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
     ],
     constraints: [
-      { name: 'run_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, RunRow),
-  source: __table({
-    name: 'source',
+  }, MyDecisionRow),
+  myDecisionInput: __table({
+    name: 'my_decision_input',
     indexes: [
-      { accessor: 'id', name: 'source_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'runId', name: 'source_run_id_idx_btree', algorithm: 'btree', columns: [
-        'runId',
-      ] },
     ],
     constraints: [
-      { name: 'source_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, SourceRow),
-  task: __table({
-    name: 'task',
+  }, MyDecisionInputRow),
+  myFact: __table({
+    name: 'my_fact',
     indexes: [
-      { accessor: 'id', name: 'task_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'runId', name: 'task_run_id_idx_btree', algorithm: 'btree', columns: [
-        'runId',
-      ] },
     ],
     constraints: [
-      { name: 'task_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, TaskRow),
-  thesis: __table({
-    name: 'thesis',
+  }, MyFactRow),
+  myFill: __table({
+    name: 'my_fill',
     indexes: [
-      { accessor: 'id', name: 'thesis_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'runId', name: 'thesis_run_id_idx_btree', algorithm: 'btree', columns: [
-        'runId',
-      ] },
     ],
     constraints: [
-      { name: 'thesis_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, ThesisRow),
-  tradeProposal: __table({
-    name: 'trade_proposal',
+  }, MyFillRow),
+  myInferenceAttempt: __table({
+    name: 'my_inference_attempt',
     indexes: [
-      { accessor: 'id', name: 'trade_proposal_id_idx_btree', algorithm: 'btree', columns: [
-        'id',
-      ] },
-      { accessor: 'runId', name: 'trade_proposal_run_id_idx_btree', algorithm: 'btree', columns: [
-        'runId',
-      ] },
     ],
     constraints: [
-      { name: 'trade_proposal_id_key', constraint: 'unique', columns: ['id'] },
     ],
-  }, TradeProposalRow),
+  }, MyInferenceAttemptRow),
+  myMarketClock: __table({
+    name: 'my_market_clock',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMarketClockRow),
+  myMarketObservation: __table({
+    name: 'my_market_observation',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMarketObservationRow),
+  myMessage: __table({
+    name: 'my_message',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMessageRow),
+  myPaperOrder: __table({
+    name: 'my_paper_order',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPaperOrderRow),
+  myReconciliation: __table({
+    name: 'my_reconciliation',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyReconciliationRow),
+  myRiskDecision: __table({
+    name: 'my_risk_decision',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRiskDecisionRow),
+  myRiskDecisionHistory: __table({
+    name: 'my_risk_decision_history',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRiskDecisionHistoryRow),
+  myRiskPolicy: __table({
+    name: 'my_risk_policy',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRiskPolicyRow),
+  myRiskReservation: __table({
+    name: 'my_risk_reservation',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRiskReservationRow),
+  myRun: __table({
+    name: 'my_run',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRunRow),
+  myRunConfig: __table({
+    name: 'my_run_config',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRunConfigRow),
+  myRunMetric: __table({
+    name: 'my_run_metric',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyRunMetricRow),
+  mySource: __table({
+    name: 'my_source',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MySourceRow),
+  myTask: __table({
+    name: 'my_task',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTaskRow),
+  myThesis: __table({
+    name: 'my_thesis',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyThesisRow),
+  myTradeProposal: __table({
+    name: 'my_trade_proposal',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTradeProposalRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("add_fact", AddFactReducer),
+  __reducerSchema("add_risk_policy", AddRiskPolicyReducer),
   __reducerSchema("add_source", AddSourceReducer),
   __reducerSchema("approve_proposal", ApproveProposalReducer),
+  __reducerSchema("begin_inference", BeginInferenceReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
   __reducerSchema("complete_task", CompleteTaskReducer),
+  __reducerSchema("configure_run_limits", ConfigureRunLimitsReducer),
   __reducerSchema("create_run", CreateRunReducer),
   __reducerSchema("create_task", CreateTaskReducer),
   __reducerSchema("fail_task", FailTaskReducer),
+  __reducerSchema("finish_inference", FinishInferenceReducer),
+  __reducerSchema("grant_account_access", GrantAccountAccessReducer),
   __reducerSchema("grant_agent", GrantAgentReducer),
+  __reducerSchema("grant_run_access", GrantRunAccessReducer),
   __reducerSchema("heartbeat", HeartbeatReducer),
   __reducerSchema("post_message", PostMessageReducer),
   __reducerSchema("propose_trade", ProposeTradeReducer),
   __reducerSchema("publish_thesis", PublishThesisReducer),
   __reducerSchema("record_account_snapshot", RecordAccountSnapshotReducer),
   __reducerSchema("record_decision", RecordDecisionReducer),
+  __reducerSchema("record_decision_input", RecordDecisionInputReducer),
   __reducerSchema("record_fill", RecordFillReducer),
+  __reducerSchema("record_market_clock", RecordMarketClockReducer),
   __reducerSchema("record_reconciliation", RecordReconciliationReducer),
   __reducerSchema("record_risk_decision", RecordRiskDecisionReducer),
   __reducerSchema("record_run_metric", RecordRunMetricReducer),
+  __reducerSchema("record_trade_decision", RecordTradeDecisionReducer),
   __reducerSchema("renew_task_lease", RenewTaskLeaseReducer),
   __reducerSchema("reserve_paper_order", ReservePaperOrderReducer),
+  __reducerSchema("revoke_account_access", RevokeAccountAccessReducer),
   __reducerSchema("revoke_agent", RevokeAgentReducer),
+  __reducerSchema("revoke_run_access", RevokeRunAccessReducer),
   __reducerSchema("set_run_status", SetRunStatusReducer),
   __reducerSchema("update_paper_order", UpdatePaperOrderReducer),
 );
@@ -283,3 +375,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+

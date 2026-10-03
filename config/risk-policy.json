@@ -1,0 +1,13 @@
+{
+  "version": "paper-pilot-1",
+  "allowedSymbols": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "SPY", "QQQ"],
+  "longOnly": true,
+  "maxOrderNotional": 1000,
+  "maxPositionNotional": 2500,
+  "maxQuoteAgeMs": 120000,
+  "maxAccountAgeMs": 60000,
+  "maxLimitDeviation": 0.03,
+  "approvalTtlMs": 300000,
+  "maxProposalAgeMs": 900000,
+  "requireMarketOpen": true
+}

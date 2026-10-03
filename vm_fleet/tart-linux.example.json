@@ -1,0 +1,8 @@
+{
+  "provider": "tart",
+  "guest_os": "linux",
+  "template": "qs-linux-template",
+  "name_prefix": "qs-linux-agent",
+  "count": 1,
+  "state_file": ".tart-linux-fleet-state.json"
+}

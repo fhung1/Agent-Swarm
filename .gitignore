@@ -1,6 +1,8 @@
 node_modules
 dist
 *.log
+__pycache__/
+*.pyc
 
 .DS_Store
 
@@ -8,7 +10,16 @@ spacetime.local.json
 .env*
 .tokens/
 .spacetimedb-data/
+.game-runs/
 
 # Local libvirt fleet connection details and managed-domain UUIDs.
 vm_fleet/config.json
 vm_fleet/.vm-fleet-state.json*
+vm_fleet/tart-macos.json
+vm_fleet/tart-linux.json
+vm_fleet/.tart-*-fleet-state.json*
+vm_fleet/*.tart.log
+
+# Swarm supervisor logs and local config (copy config/swarm.example.json).
+logs/
+config/swarm.json

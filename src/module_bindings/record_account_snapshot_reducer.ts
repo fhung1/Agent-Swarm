@@ -10,12 +10,20 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+import {
+  MarketObservationInput,
+} from "./types";
+
 export default {
   id: __t.string(),
+  accountId: __t.string(),
+  accountStatus: __t.string(),
   cash: __t.string(),
   buyingPower: __t.string(),
   equity: __t.string(),
-  positionsRef: __t.string(),
-  openOrdersRef: __t.string(),
-  capturedAt: __t.timestamp(),
+  positionsJson: __t.string(),
+  openOrdersJson: __t.string(),
+  get observations() {
+    return __t.array(MarketObservationInput);
+  },
 };

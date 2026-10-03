@@ -13,6 +13,7 @@ import {
 export default {
   id: __t.string(),
   runId: __t.string(),
+  taskId: __t.string(),
   symbol: __t.string(),
   bullCase: __t.string(),
   bearCase: __t.string(),

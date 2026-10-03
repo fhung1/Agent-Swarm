@@ -11,14 +11,8 @@ import {
 } from "spacetimedb";
 
 export default __t.row({
-  id: __t.string().primaryKey(),
-  runId: __t.string().name("run_id"),
-  symbol: __t.string(),
-  author: __t.identity(),
-  bullCase: __t.string().name("bull_case"),
-  bearCase: __t.string().name("bear_case"),
-  assumptions: __t.string(),
-  invalidation: __t.string(),
-  evidenceRefs: __t.string().name("evidence_refs"),
-  createdAt: __t.timestamp().name("created_at"),
+  name: __t.string().primaryKey(),
+  tool: __t.string(),
+  focus: __t.string(),
+  lastSeen: __t.timestamp().name("last_seen"),
 });

@@ -14,6 +14,8 @@ export default {
   id: __t.string(),
   runId: __t.string(),
   taskId: __t.string(),
+  symbol: __t.string(),
+  recipientRole: __t.string(),
   kind: __t.string(),
   body: __t.string(),
   evidenceRef: __t.string(),
