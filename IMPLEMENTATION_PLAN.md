@@ -1,6 +1,6 @@
 # Quant Swarm: Alpaca paper trading implementation plan
 
-SpacetimeDB and Alpaca paper trading are confirmed choices. The first strategy, symbols, risk settings, model provider, and order approval policy are open decisions. This plan describes a research-led US equity pilot that can be narrowed or changed without replacing the swarm core.
+SpacetimeDB and Alpaca paper trading are confirmed choices. There is no human approval in the trade path: the deterministic risk gate is the only gate before paper execution. The first strategy, symbols, risk settings, and model provider are open decisions. This plan describes a research-led US equity pilot that can be narrowed or changed without replacing the swarm core.
 
 ## 1. Product workflow
 
@@ -8,8 +8,8 @@ SpacetimeDB and Alpaca paper trading are confirmed choices. The first strategy, 
 2. Data services collect current account state, prices, and company filings. Each fact carries a source, retrieval time, and as-of time.
 3. Specialist agents independently analyze filings, valuation, market context, and portfolio exposure. A skeptic agent challenges assumptions and missing evidence.
 4. The coordinator creates an evidence-linked investment thesis and either a paper order proposal or an explicit no-trade decision. A proposal includes target size, reason, invalidation condition, review trigger, and expected holding horizon.
-5. A deterministic risk gate checks symbol eligibility, buying power, open orders, position and portfolio limits, data age, market hours, and whether the run is paused. Operator approval is required for every order in the first pilot.
-6. The execution adapter submits an approved order to Alpaca's paper API with a unique `client_order_id`. It records Alpaca's order ID and request ID where available.
+5. A deterministic risk gate checks symbol eligibility, buying power, open orders, position and portfolio limits, data age, market hours, and whether the run is paused. It is the only gate before execution; there is no per-order operator approval.
+6. The execution adapter submits a risk-passed order to Alpaca's paper API with a unique `client_order_id`. It records Alpaca's order ID and request ID where available.
 7. Trade updates and periodic reconciliation update the order lifecycle, fills, positions, and cash. Agents review open positions on a schedule and when thesis conditions change, then propose holds, reductions, or exits. The operator sees a complete decision trace.
 
 Alpaca uses separate paper credentials and a paper trading endpoint at `https://paper-api.alpaca.markets`; market data uses a separate data service. The execution adapter will have a fixed paper endpoint and no live account credentials. Paper fills are simulated and omit some live effects such as market impact and latency slippage, so evaluation must report that limitation. [Authentication](https://docs.alpaca.markets/us/v1.1/docs/authentication-1) · [Paper trading](https://docs.alpaca.markets/us/v1.4.2/docs/paper-trading)
@@ -64,7 +64,7 @@ Index run and symbol fields used by subscriptions and lookups. Keep account, ord
 
 ## 5. Order and risk state machine
 
-Keep proposal approval, submission attempts, Alpaca order status, and reconciliation as separate state fields; Alpaca has intermediate statuses such as `pending_cancel`, `done_for_day`, and `replaced` in addition to filled, canceled, and rejected. A risk approval expires after a configured interval or a material change in account, quote, or thesis. The risk gate is code with versioned configuration. It should reject stale account or market snapshots, unknown symbols, duplicate pending intent, excessive exposure including pending orders, and proposals outside the run's policy. Neither the proposing agent nor the coordinator can mark its own proposal as risk passed. The execution adapter rechecks the active approval and latest account state immediately before submission. [Alpaca order lifecycle](https://docs.alpaca.markets/us/docs/orders-at-alpaca)
+Keep the risk verdict, submission attempts, Alpaca order status, and reconciliation as separate state fields; Alpaca has intermediate statuses such as `pending_cancel`, `done_for_day`, and `replaced` in addition to filled, canceled, and rejected. A risk pass expires after a configured interval or a material change in account, quote, or thesis. The risk gate is code with versioned configuration. It should reject stale account or market snapshots, unknown symbols, duplicate pending intent, excessive exposure including pending orders, and proposals outside the run's policy. Neither the proposing agent nor the coordinator can mark its own proposal as risk passed. The execution adapter rechecks the unexpired risk pass and latest account state immediately before submission. [Alpaca order lifecycle](https://docs.alpaca.markets/us/docs/orders-at-alpaca)
 
 Use a deterministic, unique `client_order_id` for every order intent. Alpaca supports tracking orders by this ID and streaming order updates. On timeout, query Alpaca by client order ID before retrying; never assume a failed HTTP response means no order was accepted. If submission remains uncertain, block another submission for that intent until reconciliation resolves it. Reconcile open orders, positions, account state, and account activities on startup and periodically, because a streaming connection can drop and manual paper-account activity can occur outside this app. Record partial fills once using Alpaca activity IDs. [Working with orders](https://docs.alpaca.markets/us/docs/working-with-orders) · [Trade update stream](https://docs.alpaca.markets/us/docs/websocket-streaming) · [Account activities](https://docs.alpaca.markets/us/docs/account-activities)
 
@@ -74,7 +74,7 @@ The operator can pause new proposals and submissions and can request cancellatio
 
 Before judging a trade, define the pilot's eligible symbols, long-only or other side permissions, intended holding period, maximum order frequency, allowed order types and time-in-force, market-hours behavior, thesis review schedule, and what merits a no-trade decision. Treat these as versioned configuration, not ad hoc agent instructions. A thesis must cite source IDs and include dates for both the underlying company facts and the market price. A pre-trade snapshot freezes the evidence available when the decision was made, so later filings cannot leak into historical evaluation. For SEC XBRL facts, preserve reporting period, filing date, units, and amended-filing status; flag inconsistent or missing facts for review. [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
 
-Market-hours logic should use Alpaca's clock/calendar rather than local weekday assumptions, including early closes. After entry, the position monitor revisits the thesis on its review date, a new filing, a risk breach, or an invalidation trigger. Holds and exits go through the same evidence, risk, approval, and order path as entries. Corporate actions or symbol changes must prompt reconciliation and a new review rather than a silent adjustment to the thesis. [Alpaca calendar](https://docs.alpaca.markets/us/v1.4.2/reference/getcalendar-1) · [Corporate actions](https://docs.alpaca.markets/us/docs/mandatory-corporate-actions)
+Market-hours logic should use Alpaca's clock/calendar rather than local weekday assumptions, including early closes. After entry, the position monitor revisits the thesis on its review date, a new filing, a risk breach, or an invalidation trigger. Holds and exits go through the same evidence, risk, and order path as entries. Corporate actions or symbol changes must prompt reconciliation and a new review rather than a silent adjustment to the thesis. [Alpaca calendar](https://docs.alpaca.markets/us/v1.4.2/reference/getcalendar-1) · [Corporate actions](https://docs.alpaca.markets/us/docs/mandatory-corporate-actions)
 
 ### Operating controls
 
@@ -87,12 +87,12 @@ Fail closed for new paper submissions when Alpaca, SpacetimeDB, the risk gate, o
 | 0. Connectivity | Pin compatible SpacetimeDB CLI and SDK versions; connect read-only to Alpaca paper account and data API. | Read account, positions, open orders, and selected market data without sending an order. |
 | 1. Swarm core | Module tables, reducers, subscriptions/views, identities, task leases, and message protocol. | Three workers can exchange a sourced thesis and recover after a worker restart. |
 | 2. Research | SEC filing ingestor, source store, dated fact extraction, evidence links, and skeptic review. | A thesis or no-trade decision can be traced to information available at its decision time. |
-| 3. Risk and review | Versioned paper strategy/risk policy, approval expiry, and operator approval screen. | Tests reject stale, duplicate, over-limit, unauthorized, and expired proposals. |
-| 4. Paper execution | Fixed paper endpoint, order submission, client IDs, trade updates, account-activity reconciliation, and cancel workflow. | One approved test order reaches a reconciled state with no duplicate submission after a simulated timeout; partial fill and external activity are handled. |
-| 5. Position monitoring | Scheduled thesis reviews and event-triggered hold/exit proposals. | A held paper position gets reviewed and a proposed exit follows the same approval and risk path as entry. |
+| 3. Risk and review | Versioned paper strategy/risk policy, risk-pass expiry, and an authoritative risk gate that is the only check before execution. | Tests reject stale, duplicate, over-limit, unauthorized, and expired proposals. |
+| 4. Paper execution | Fixed paper endpoint, order submission, client IDs, trade updates, account-activity reconciliation, and cancel workflow. | One risk-passed test order reaches a reconciled state with no duplicate submission after a simulated timeout; partial fill and external activity are handled. |
+| 5. Position monitoring | Scheduled thesis reviews and event-triggered hold/exit proposals. | A held paper position gets reviewed and a proposed exit follows the same risk path as entry. |
 | 6. Evaluation and operations | Paper run reports, baseline comparison, alerting, failure drills, backup/restore, and cost accounting. | Report decision quality, no-trade rate, policy compliance, paper P&L and drawdown, order discrepancies, model/API cost, and a successful restore drill. |
 
-Start with a tiny watchlist and a low paper notional cap. The first end-to-end demo is complete when an agent-generated thesis passes independent review, a human approves one paper order, Alpaca records it, and the dashboard shows the resulting order and position state. Compare decisions with a declared baseline over the same dates and symbols; report both accepted trades and abstentions, and separate research errors from broker simulation effects. Only then consider automatic approval within a bounded paper policy. Paper performance is an experiment, not evidence of future live returns. Alpaca states that paper trading does not simulate dividends or several live execution effects, so the evaluation must account for those limits. [Alpaca paper trading limitations](https://docs.alpaca.markets/us/v1.4.2/docs/paper-trading)
+Start with a tiny watchlist and a low paper notional cap. The first end-to-end demo is complete when an agent-generated thesis passes independent review, the risk gate passes one paper order, Alpaca records it, and the dashboard shows the resulting order and position state. Compare decisions with a declared baseline over the same dates and symbols; report both accepted trades and abstentions, and separate research errors from broker simulation effects. Paper performance is an experiment, not evidence of future live returns. Alpaca states that paper trading does not simulate dividends or several live execution effects, so the evaluation must account for those limits. [Alpaca paper trading limitations](https://docs.alpaca.markets/us/v1.4.2/docs/paper-trading)
 
 ## 7. Proposed repository layout
 
@@ -114,10 +114,9 @@ docs/decisions/              Architecture and policy decisions
 
 - Starting universe, strategy hypothesis, holding horizon, research cadence, baseline, and explicit no-trade criteria; choose a narrow, testable strategy rather than an open-ended search for trades.
 - Paper account credentials and available market-data feed; confirm entitlements before relying on a quote or bar.
-- Initial per-order notional, per-symbol exposure, total exposure, daily loss, maximum open-order limits, and approval lifetime.
+- Initial per-order notional, per-symbol exposure, total exposure, daily loss, maximum open-order limits, and risk-pass lifetime.
 - Whether the first pilot covers long-only stocks/ETFs, which is the proposed narrow scope, or other asset classes.
 - Model provider, spending limit, run schedule, and deployment location.
-- Whether bounded automatic paper execution is desired after the first demo; per-order operator approval is the first-pilot default.
 
 ## 9. How the agents connect to SpacetimeDB
 
