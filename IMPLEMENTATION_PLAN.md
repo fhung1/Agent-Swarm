@@ -55,7 +55,8 @@ For the first pilot, combine roles where needed to keep the worker count small. 
 | `risk_decision` | Proposal, policy version, checks, result, reviewer, time. |
 | `paper_order` | Proposal, client order ID, Alpaca order ID, request ID, status, submitted/updated times. |
 | `fill` | Order, event ID, quantity, price, time; deduplicated on Alpaca identifiers. |
-| `account_snapshot` | Cash, buying power, equity, positions, open orders, source time. |
+| `account_snapshot` | Private account ID/status, cash, buying power, equity, JSON position/order snapshots, capture time. |
+| `market_observation` | Public symbol/feed bid and ask observations with Alpaca source time and SpacetimeDB capture time. |
 | `reconciliation` | Snapshot time, source IDs, discrepancies, resolution status, operator acknowledgement. |
 | `run_metric` | Research cost, latency, policy failures, order discrepancies, and portfolio metrics. |
 
@@ -139,4 +140,4 @@ Build the smallest vertical slice before integrating Alpaca: one module with `ag
 
 ### Implemented backend snapshot
 
-The repository now contains the SpacetimeDB 2.10.2 TypeScript module, generated bindings, and a Node.js coordination worker. The module defines 18 tables spanning owner/agent access, runs, tasks and lease schedules, messages, research sources/facts/theses/decisions, proposals, risk and approval records, paper orders/fills, account snapshots, reconciliations, and metrics. The reducer inventory and argument-level workflow are in [README.md](README.md). The two-worker check has been run locally: both clients observed one task, one claim committed, the winner published a message/result, and a restarted worker reused its identity. `AUTO_CLAIM=1` is a synthetic demo mode, not an analyst implementation. Alpaca adapters, live model calls, recipient-addressed messages, and scoped read views remain to be implemented.
+The repository contains the SpacetimeDB 2.10.2 TypeScript module, generated client bindings, and a Node.js coordination worker. The module defines 19 tables across owner/agent access, runs, tasks and leases, messages, research records, proposals and decisions, paper orders/fills, account snapshots, market observations, reconciliations, and metrics. The two-worker check has been run locally: both clients observed one task, one claim committed, the winner published a result, and a restarted worker reused its identity. `AUTO_CLAIM=1` remains a synthetic demo mode. A one-shot read-only Alpaca adapter now fetches paper account state and selected stock quotes, then records them in SpacetimeDB; its paper API calls are fixed to the paper host and use `GET` only. The Phase 0 live-account acceptance check has not been run. Live model calls, recipient-addressed messages, and scoped read views remain unimplemented.

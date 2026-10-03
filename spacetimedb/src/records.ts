@@ -2,6 +2,11 @@ import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb from './schema';
 import { requireId, requireRole, requireRun, requireText } from './access';
 
+const marketObservationInput = t.object('MarketObservationInput', {
+  id: t.string(), symbol: t.string(), feed: t.string(), bidPrice: t.string(), bidSize: t.string(),
+  askPrice: t.string(), askSize: t.string(), asOf: t.timestamp(),
+});
+
 export const addSource = spacetimedb.reducer(
   { id: t.string(), runId: t.string(), symbol: t.string(), kind: t.string(), uri: t.string(),
     asOf: t.timestamp(), checksum: t.string(), artifactRef: t.string() },
@@ -140,12 +145,51 @@ export const recordFill = spacetimedb.reducer(
 );
 
 export const recordAccountSnapshot = spacetimedb.reducer(
-  { id: t.string(), cash: t.string(), buyingPower: t.string(), equity: t.string(),
-    positionsRef: t.string(), openOrdersRef: t.string(), capturedAt: t.timestamp() },
+  { id: t.string(), accountId: t.string(), accountStatus: t.string(), cash: t.string(),
+    buyingPower: t.string(), equity: t.string(), positionsJson: t.string(), openOrdersJson: t.string(),
+    observations: t.array(marketObservationInput) },
   (ctx, value) => {
-    requireRole(ctx, ['executor']); requireId(value.id);
+    requireRole(ctx, ['executor', 'market_data']); requireId(value.id);
+    requireText(value.accountId, 'Account ID', 128); requireText(value.accountStatus, 'Account status', 64);
+    requireText(value.cash, 'Cash', 64); requireText(value.buyingPower, 'Buying power', 64);
+    requireText(value.equity, 'Equity', 64);
+    if (value.positionsJson.length > 1_000_000 || value.openOrdersJson.length > 1_000_000) {
+      throw new SenderError('Account snapshot payload is too large');
+    }
+    try {
+      if (!Array.isArray(JSON.parse(value.positionsJson)) || !Array.isArray(JSON.parse(value.openOrdersJson))) {
+        throw new Error('expected arrays');
+      }
+    } catch {
+      throw new SenderError('Positions and open orders must be JSON arrays');
+    }
+    if (value.observations.length > 50) throw new SenderError('Too many market observations');
+    if (ctx.db.agent.identity.find(ctx.sender)?.role === 'market_data' && value.observations.length === 0) {
+      throw new SenderError('Market-data snapshots must include observations');
+    }
+    const symbols = new Set<string>();
+    for (const observation of value.observations) {
+      requireId(observation.id);
+      if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(observation.symbol)) throw new SenderError('Invalid symbol');
+      if (symbols.has(observation.symbol)) throw new SenderError('Duplicate market observation symbol');
+      symbols.add(observation.symbol);
+      if (!['sip', 'iex', 'delayed_sip', 'boats', 'overnight', 'otc'].includes(observation.feed)) {
+        throw new SenderError('Invalid market-data feed');
+      }
+      for (const [label, amount] of [['Bid price', observation.bidPrice], ['Ask price', observation.askPrice]] as const) {
+        if (!/^(0|[1-9]\d*)(\.\d{1,12})?$/.test(amount)) throw new SenderError(`${label} is invalid`);
+      }
+      for (const [label, amount] of [['Bid size', observation.bidSize], ['Ask size', observation.askSize]] as const) {
+        if (!/^(0|[1-9]\d*)$/.test(amount)) throw new SenderError(`${label} is invalid`);
+      }
+      if (ctx.db.marketObservation.id.find(observation.id)) throw new SenderError('Market observation already exists');
+    }
     if (ctx.db.accountSnapshot.id.find(value.id)) throw new SenderError('Snapshot already exists');
-    ctx.db.accountSnapshot.insert(value);
+    const { observations, ...snapshot } = value;
+    ctx.db.accountSnapshot.insert({ ...snapshot, capturedAt: ctx.timestamp });
+    for (const observation of observations) {
+      ctx.db.marketObservation.insert({ ...observation, snapshotId: value.id, capturedAt: ctx.timestamp });
+    }
   }
 );
 

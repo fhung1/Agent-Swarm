@@ -50,6 +50,7 @@ import PublishThesisReducer from "./publish_thesis_reducer";
 import RecordAccountSnapshotReducer from "./record_account_snapshot_reducer";
 import RecordDecisionReducer from "./record_decision_reducer";
 import RecordFillReducer from "./record_fill_reducer";
+import RecordMarketObservationReducer from "./record_market_observation_reducer";
 import RecordReconciliationReducer from "./record_reconciliation_reducer";
 import RecordRiskDecisionReducer from "./record_risk_decision_reducer";
 import RecordRunMetricReducer from "./record_run_metric_reducer";
@@ -65,6 +66,7 @@ import UpdatePaperOrderReducer from "./update_paper_order_reducer";
 import AgentRow from "./agent_table";
 import DecisionRow from "./decision_table";
 import FactRow from "./fact_table";
+import MarketObservationRow from "./market_observation_table";
 import MessageRow from "./message_table";
 import RunRow from "./run_table";
 import SourceRow from "./source_table";
@@ -116,6 +118,23 @@ const tablesSchema = __schema({
       { name: 'fact_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, FactRow),
+  marketObservation: __table({
+    name: 'market_observation',
+    indexes: [
+      { accessor: 'id', name: 'market_observation_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'snapshotId', name: 'market_observation_snapshot_id_idx_btree', algorithm: 'btree', columns: [
+        'snapshotId',
+      ] },
+      { accessor: 'symbol', name: 'market_observation_symbol_idx_btree', algorithm: 'btree', columns: [
+        'symbol',
+      ] },
+    ],
+    constraints: [
+      { name: 'market_observation_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, MarketObservationRow),
   message: __table({
     name: 'message',
     indexes: [
@@ -217,6 +236,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_account_snapshot", RecordAccountSnapshotReducer),
   __reducerSchema("record_decision", RecordDecisionReducer),
   __reducerSchema("record_fill", RecordFillReducer),
+  __reducerSchema("record_market_observation", RecordMarketObservationReducer),
   __reducerSchema("record_reconciliation", RecordReconciliationReducer),
   __reducerSchema("record_risk_decision", RecordRiskDecisionReducer),
   __reducerSchema("record_run_metric", RecordRunMetricReducer),
@@ -283,3 +303,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+

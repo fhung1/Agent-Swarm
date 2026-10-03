@@ -1,6 +1,6 @@
 # Quant Swarm backend
 
-This repository contains a SpacetimeDB 2.10.2 module and a Node.js worker that demonstrates agent coordination. The module stores runs, agents, leased tasks, messages, research evidence, theses, decisions, trade proposals, risk decisions, operator approvals, and a paper-order ledger. It does not connect to Alpaca or place orders; those adapters are separate delivery phases in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+This repository contains a SpacetimeDB 2.10.2 module, a Node.js coordination worker, and the read-only phase of the Alpaca paper adapter. The module stores runs, agents, leased tasks, messages, research evidence, theses, decisions, trade proposals, risk decisions, operator approvals, paper-account snapshots, and market observations. The adapter reads the paper account and selected market quotes; this slice has no order submission or cancellation path.
 
 Agents should record task progress and next steps in the shared [handoff log](HANDOFF.md) when finishing or pausing work.
 
@@ -25,6 +25,28 @@ npm run build
 ```
 
 The `db:start` process is the backend database server. It listens only on `127.0.0.1:3000`; local database files go in ignored `.spacetimedb-data/`. Keep that terminal open while using the backend. Stop it with Ctrl+C; data persists between starts. The generated client bindings in `src/module_bindings/` are committed source. Regenerate them after changing `spacetimedb/src/`.
+
+### Read-only Alpaca snapshot
+
+The adapter makes `GET` requests to Alpaca's fixed paper trading host for the account, positions, and open orders, and to the market-data host for latest stock quotes. It writes account totals and JSON position/order snapshots to the private `account_snapshot` table, then writes normalized quote observations to the public `market_observation` table. Each observation has both Alpaca's quote timestamp and the SpacetimeDB capture timestamp.
+
+Publish the current module and generate bindings first. Build the adapter and register its SpacetimeDB identity without contacting Alpaca, then grant that identity only the `market_data` role using the module owner:
+
+```sh
+npm run build
+npm run alpaca:read -- --register
+spacetime call --server local quant-swarm grant_agent <READER_IDENTITY> market_data
+```
+
+Set `ALPACA_API_KEY` and `ALPACA_API_SECRET` in your local shell or secret manager, then run a one-shot read with a selected feed and small symbol list:
+
+```sh
+ALPACA_DATA_FEED=iex ALPACA_SYMBOLS=AAPL,MSFT npm run alpaca:read
+```
+
+The valid `ALPACA_DATA_FEED` values are `sip`, `iex`, `delayed_sip`, `boats`, `overnight`, and `otc`; access depends on the Alpaca subscription. `ALPACA_SYMBOLS` accepts 1–50 comma-separated US equity symbols. The adapter uses the same key and secret for both Alpaca APIs. It is the only process that reads Alpaca credentials; its paper trading origin is fixed in code and cannot be overridden by environment variables. Its HTTP helper allows only `GET`, and the adapter defines no order-writing calls. `SPACETIMEDB_HOST` and `SPACETIMEDB_DB_NAME` can point to the local database defaults; `SPACETIMEDB_TOKEN_FILE` can override the private token-file path. By default, the adapter stores its SpacetimeDB token in `~/.local/share/quant-swarm/tokens/alpaca-reader.token` with owner-only permissions.
+
+The account snapshot includes account ID/status, cash, buying power, equity, and JSON arrays for positions and open orders. It is private and requires authorized access; scoped read views are not implemented yet. Market observations are public in the current local-development schema, so keep the database host local as described below. Grant the adapter only `market_data`; order-writing reducers still require the separate `executor` role.
 
 ### Run a worker
 
@@ -149,4 +171,30 @@ This is a **local development module**. Its public agent, run, task, message, so
 
 ## Game-agent VM fleet
 
-The later vision-only game-agent prototype includes a libvirt tool for cloning and managing isolated desktop VMs. See [the VM fleet setup guide](vm_fleet/README.md) for host requirements, desktop-template preparation, configuration, lifecycle commands, and recovery. The broader [game-agent plan](GAME_AGENT_IMPLEMENTATION_PLAN.md) describes how the VMs fit into that application; they are not needed for the current SpacetimeDB worker demo.
+The repository can clone and manage desktop VMs, but **it cannot run Minecraft or Factorio agents yet**. There is no game server launcher, screenshot/input adapter, model loop, or game worker. The steps below start a prepared desktop VM; you must install and launch the game and connect to a server yourself.
+
+### Start one prepared desktop VM
+
+This requires a remote Linux host with `qemu:///system` libvirt access over SSH and a shut-off desktop template. Prepare the template with a desktop, the game client you want to use, and QEMU Guest Agent. The manager does not install or configure any of these. See the [full VM fleet setup guide](vm_fleet/README.md) for host and template requirements.
+
+Copy the sample configuration, then set `ssh_target` to your SSH host, `template` to the prepared libvirt domain name, and `count` to `1`:
+
+```sh
+cp vm_fleet/config.example.json vm_fleet/config.json
+```
+
+Preview and start the VM from the repository root:
+
+```sh
+python3 vm_fleet/fleet.py --config vm_fleet/config.json plan
+python3 vm_fleet/fleet.py --config vm_fleet/config.json up --wait-ip
+python3 vm_fleet/fleet.py --config vm_fleet/config.json status
+```
+
+Open the VM's graphical console with your libvirt/desktop access tools. Start the game client there and connect it to a game server that you have set up separately. The fleet manager reports guest IPs but does not provide remote desktop access or game input control. Shut the VM down with:
+
+```sh
+python3 vm_fleet/fleet.py --config vm_fleet/config.json stop
+```
+
+This is infrastructure for the later game-agent application, separate from the current SpacetimeDB worker demo. Factorio is the planned first vision-control target; Minecraft is a later adapter. See the [game-agent plan](GAME_AGENT_IMPLEMENTATION_PLAN.md) for the missing implementation phases and intended architecture.

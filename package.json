@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/worker.ts --bundle --platform=node --outfile=dist/worker.js --format=esm",
+    "build": "esbuild src/worker.ts src/alpaca-paper-adapter.ts --bundle --platform=node --outdir=dist --format=esm",
     "worker": "node dist/worker.js",
+    "alpaca:read": "node dist/alpaca-paper-adapter.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p spacetimedb/tsconfig.json",
     "db:start": "spacetime start --listen-addr 127.0.0.1:3000 --data-dir .spacetimedb-data --non-interactive",
     "db:publish": "spacetime publish --module-path spacetimedb --server local quant-swarm",

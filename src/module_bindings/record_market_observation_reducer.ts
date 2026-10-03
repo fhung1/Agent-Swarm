@@ -12,11 +12,12 @@ import {
 
 export default {
   id: __t.string(),
-  accountId: __t.string(),
-  accountStatus: __t.string(),
-  cash: __t.string(),
-  buyingPower: __t.string(),
-  equity: __t.string(),
-  positionsJson: __t.string(),
-  openOrdersJson: __t.string(),
+  snapshotId: __t.string(),
+  symbol: __t.string(),
+  feed: __t.string(),
+  bidPrice: __t.string(),
+  bidSize: __t.string(),
+  askPrice: __t.string(),
+  askSize: __t.string(),
+  asOf: __t.timestamp(),
 };

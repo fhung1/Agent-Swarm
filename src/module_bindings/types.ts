@@ -12,11 +12,13 @@ import {
 
 export const AccountSnapshot = __t.object("AccountSnapshot", {
   id: __t.string(),
+  accountId: __t.string(),
+  accountStatus: __t.string(),
   cash: __t.string(),
   buyingPower: __t.string(),
   equity: __t.string(),
-  positionsRef: __t.string(),
-  openOrdersRef: __t.string(),
+  positionsJson: __t.string(),
+  openOrdersJson: __t.string(),
   capturedAt: __t.timestamp(),
 });
 export type AccountSnapshot = __Infer<typeof AccountSnapshot>;
@@ -69,6 +71,20 @@ export const Fill = __t.object("Fill", {
   filledAt: __t.timestamp(),
 });
 export type Fill = __Infer<typeof Fill>;
+
+export const MarketObservation = __t.object("MarketObservation", {
+  id: __t.string(),
+  snapshotId: __t.string(),
+  symbol: __t.string(),
+  feed: __t.string(),
+  bidPrice: __t.string(),
+  bidSize: __t.string(),
+  askPrice: __t.string(),
+  askSize: __t.string(),
+  asOf: __t.timestamp(),
+  capturedAt: __t.timestamp(),
+});
+export type MarketObservation = __Infer<typeof MarketObservation>;
 
 export const Message = __t.object("Message", {
   id: __t.string(),
@@ -201,3 +217,4 @@ export const TradeProposal = __t.object("TradeProposal", {
   createdAt: __t.timestamp(),
 });
 export type TradeProposal = __Infer<typeof TradeProposal>;
+

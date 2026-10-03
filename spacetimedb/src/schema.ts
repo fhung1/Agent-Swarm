@@ -63,8 +63,14 @@ export const fill = table({ name: 'fill' }, {
   quantity: t.string(), price: t.string(), filledAt: t.timestamp(),
 });
 export const accountSnapshot = table({ name: 'account_snapshot' }, {
-  id: t.string().primaryKey(), cash: t.string(), buyingPower: t.string(), equity: t.string(),
-  positionsRef: t.string(), openOrdersRef: t.string(), capturedAt: t.timestamp(),
+  id: t.string().primaryKey(), accountId: t.string(), accountStatus: t.string(),
+  cash: t.string(), buyingPower: t.string(), equity: t.string(),
+  positionsJson: t.string(), openOrdersJson: t.string(), capturedAt: t.timestamp(),
+});
+export const marketObservation = table({ name: 'market_observation', public: true }, {
+  id: t.string().primaryKey(), snapshotId: t.string().index('btree'), symbol: t.string().index('btree'),
+  feed: t.string(), bidPrice: t.string(), bidSize: t.string(), askPrice: t.string(), askSize: t.string(),
+  asOf: t.timestamp(), capturedAt: t.timestamp(),
 });
 export const reconciliation = table({ name: 'reconciliation' }, {
   id: t.string().primaryKey(), status: t.string(), details: t.string(), capturedAt: t.timestamp(),
@@ -76,6 +82,6 @@ export const runMetric = table({ name: 'run_metric' }, {
 const spacetimedb = schema({
   ownerConfig, agent, run, task, taskLease, message, source, fact, thesis,
   decision, tradeProposal, riskDecision, approval, paperOrder, fill, accountSnapshot,
-  reconciliation, runMetric,
+  marketObservation, reconciliation, runMetric,
 });
 export default spacetimedb;
