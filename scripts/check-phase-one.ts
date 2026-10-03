@@ -21,7 +21,7 @@ const clients: any[] = [];
 const workers: ChildProcess[] = [];
 const logs = new Map<ChildProcess, string>();
 const call = (...args: string[]) => execFileSync(cli, [...cliConfig, 'call', '--server', server, database, ...args], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] });
-const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','order_cancel_request','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt'];
+const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','order_cancel_request','trade_update','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt'];
 const now = () => Timestamp.fromDate(new Date());
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(fn: () => unknown, label: string, timeout = 20000) {
@@ -193,6 +193,12 @@ try {
   await assert.rejects(unrelatedExecutor.conn.reducers.reservePaperOrder({id:orderId,proposalId,clientOrderId:`${runId}.client`}),/Account access required/);
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'filled'}),/reconciled fills/);
   await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'accepted'});
+  const streamed = {id:`${runId}.trade-update`,orderId,alpacaOrderId:'fixture-broker',event:'partial_fill',brokerStatus:'partially_filled',executionId:'fixture-execution',brokerTimestamp:now()};
+  await executor.conn.reducers.recordTradeUpdate(streamed); await executor.conn.reducers.recordTradeUpdate(streamed);
+  await executor.conn.reducers.recordTradeUpdate({...streamed,id:`${runId}.trade-update.older`,event:'new',brokerStatus:'new',executionId:'',brokerTimestamp:Timestamp.fromDate(new Date(Date.now()-1000))});
+  await assert.rejects(stranger.conn.reducers.recordTradeUpdate({...streamed,id:`${runId}.trade-update.unauthorized`}),/Role not authorized/);
+  await waitFor(()=>op.conn.db.myTradeUpdate.id.find(streamed.id),'durable trade update');
+  assert.equal(op.conn.db.myPaperOrder.id.find(orderId)?.status,'accepted');
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'',status:'rejected'}),/Alpaca order ID|identity cannot change/);
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'different-broker',status:'accepted'}),/identity cannot change/);
   const fill = {id:`${runId}.fill`,orderId,alpacaActivityId:`${runId}.activity`,quantity:'1',price:'100',filledAt:now()};
@@ -213,7 +219,7 @@ try {
   await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'canceled'});
   await executor.conn.reducers.updateOrderCancel({orderId,status:'resolved',detail:'Broker order reached terminal state canceled'});
   await waitFor(()=>op.conn.db.myOrderCancelRequest.orderId.find(orderId)?.status==='resolved','resolved cancellation audit');
-  console.log('PASS authoritative risk, ledger validation, durable cancellation request and partial-fill cancellation race');
+  console.log('PASS durable duplicate/out-of-order trade updates, REST-ledger validation, and partial-fill cancellation race');
   // A refused request before broker order creation has no ID, but is still terminal.
   const refusedProposal = await propose('refused','QPHASE');
   await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.refused`,proposalId:refusedProposal});

@@ -274,6 +274,35 @@ export const updateOrderCancel = spacetimedb.reducer(
   },
 );
 
+export const recordTradeUpdate = spacetimedb.reducer(
+  { id: t.string(), orderId: t.string(), alpacaOrderId: t.string(), event: t.string(), brokerStatus: t.string(),
+    executionId: t.string(), brokerTimestamp: t.timestamp() },
+  (ctx, value) => {
+    requireRole(ctx, ['executor']); requireId(value.id);
+    const order = ctx.db.paperOrder.id.find(value.orderId);
+    if (!order || !order.alpacaOrderId || order.alpacaOrderId !== value.alpacaOrderId) throw new SenderError('Broker order mismatch');
+    const proposal = ctx.db.tradeProposal.id.find(order.proposalId);
+    const reservation = ctx.db.riskReservation.proposalId.find(order.proposalId);
+    if (!proposal || !reservation) throw new SenderError('Order linkage missing');
+    requireRunAccess(ctx, proposal.runId); requireAccountAccess(ctx, reservation.accountId);
+    if (!['new', 'fill', 'partial_fill', 'canceled', 'expired', 'done_for_day', 'replaced', 'rejected',
+      'pending_new', 'pending_cancel', 'order_replace_rejected', 'order_cancel_rejected'].includes(value.event)) {
+      throw new SenderError('Invalid trade update event');
+    }
+    requireText(value.brokerStatus, 'Broker status', 64);
+    if (value.executionId.length > 128) throw new SenderError('Execution ID too long');
+    const existing = ctx.db.tradeUpdate.id.find(value.id);
+    if (existing) {
+      if (existing.orderId === value.orderId && existing.alpacaOrderId === value.alpacaOrderId &&
+          existing.event === value.event && existing.brokerStatus === value.brokerStatus &&
+          existing.executionId === value.executionId &&
+          existing.brokerTimestamp.microsSinceUnixEpoch === value.brokerTimestamp.microsSinceUnixEpoch) return;
+      throw new SenderError('Trade update ID already used');
+    }
+    ctx.db.tradeUpdate.insert({ ...value, receivedAt: ctx.timestamp });
+  },
+);
+
 export const recordFill = spacetimedb.reducer(
   { id: t.string(), orderId: t.string(), alpacaActivityId: t.string(), quantity: t.string(),
     price: t.string(), filledAt: t.timestamp() },
