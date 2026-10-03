@@ -21,4 +21,5 @@ export default __t.row({
   invalidation: __t.string(),
   evidenceRefs: __t.string().name("evidence_refs"),
   createdAt: __t.timestamp().name("created_at"),
+  taskId: __t.string().name("task_id"),
 });

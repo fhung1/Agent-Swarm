@@ -10,6 +10,10 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+import {
+  MarketObservationInput,
+} from "./types";
+
 export default {
   id: __t.string(),
   accountId: __t.string(),
@@ -19,4 +23,7 @@ export default {
   equity: __t.string(),
   positionsJson: __t.string(),
   openOrdersJson: __t.string(),
+  get observations() {
+    return __t.array(MarketObservationInput);
+  },
 };

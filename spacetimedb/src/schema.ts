@@ -14,6 +14,7 @@ export const task = table({ public: true }, {
   kind: t.string(), objective: t.string(), status: t.string(), assignee: t.option(t.identity()),
   leaseUntil: t.option(t.timestamp()), version: t.u64(), result: t.string(),
   createdAt: t.timestamp(), updatedAt: t.timestamp(),
+  role: t.string().default(''), dependsOn: t.string().default(''),
 });
 export const taskLease = table({ name: 'task_lease' }, {
   id: t.u64().primaryKey().autoInc(), scheduledAt: t.scheduleAt(), taskId: t.string(), version: t.u64(),
@@ -21,6 +22,7 @@ export const taskLease = table({ name: 'task_lease' }, {
 export const message = table({ public: true }, {
   id: t.string().primaryKey(), runId: t.string().index('btree'), taskId: t.string(),
   sender: t.identity(), kind: t.string(), body: t.string(), evidenceRef: t.string(), createdAt: t.timestamp(),
+  symbol: t.string().default(''), recipientRole: t.string().default(''),
 });
 export const source = table({ public: true }, {
   id: t.string().primaryKey(), runId: t.string().index('btree'), symbol: t.string(),
@@ -35,6 +37,7 @@ export const thesis = table({ public: true }, {
   id: t.string().primaryKey(), runId: t.string().index('btree'), symbol: t.string(), author: t.identity(),
   bullCase: t.string(), bearCase: t.string(), assumptions: t.string(), invalidation: t.string(),
   evidenceRefs: t.string(), createdAt: t.timestamp(),
+  taskId: t.string().default(''),
 });
 export const decision = table({ public: true }, {
   id: t.string().primaryKey(), thesisId: t.string().unique(), reviewer: t.identity(),

@@ -1,7 +1,8 @@
 import { ScheduleAt, Timestamp } from 'spacetimedb';
 import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb, { taskLease } from './schema';
-import { ROLES, requireId, requireOwner, requireRole, requireRun, requireText, type Ctx, type Role } from './access';
+import { MESSAGE_KINDS, ROLES, WORKER_ROLES, parseRefs, requireEvidence, requireId, requireOwner, requireRole, requireRun,
+  requireSymbol, requireText, type Ctx, type Role } from './access';
 
 export default spacetimedb;
 export * from './records';
@@ -63,14 +64,28 @@ export const setRunStatus = spacetimedb.reducer(
 );
 
 export const createTask = spacetimedb.reducer(
-  { id: t.string(), runId: t.string(), symbol: t.string(), kind: t.string(), objective: t.string() },
-  (ctx, { id, runId, symbol, kind, objective }) => {
+  { id: t.string(), runId: t.string(), symbol: t.string(), kind: t.string(), objective: t.string(),
+    role: t.string(), dependsOn: t.string() },
+  (ctx, { id, runId, symbol, kind, objective, role, dependsOn }) => {
     requireRole(ctx, ['operator', 'coordinator']);
-    requireId(id); requireText(kind, 'Kind', 64); requireText(objective, 'Objective');
+    requireId(id); requireSymbol(symbol); requireText(kind, 'Kind', 64); requireText(objective, 'Objective');
     requireRun(ctx, runId);
-    if (ctx.db.task.id.find(id)) throw new SenderError('Task already exists');
+    if (role && !WORKER_ROLES.includes(role as Role)) throw new SenderError('Task role must be coordinator, analyst, or skeptic');
+    if (dependsOn) {
+      const dependency = ctx.db.task.id.find(dependsOn);
+      if (!dependency || dependency.runId !== runId) throw new SenderError('Dependency is not in run');
+      if (dependency.symbol !== symbol) throw new SenderError('Dependency is for a different symbol');
+    }
+    const existing = ctx.db.task.id.find(id);
+    if (existing) {
+      // Identical retries are accepted so a coordinator can safely re-issue after reconnecting.
+      if (existing.runId === runId && existing.symbol === symbol && existing.kind === kind &&
+          existing.objective === objective && existing.role === role && existing.dependsOn === dependsOn) return;
+      throw new SenderError('Task already exists');
+    }
     ctx.db.task.insert({ id, runId, symbol, kind, objective, status: 'open', assignee: undefined,
-      leaseUntil: undefined, version: 0n, result: '', createdAt: ctx.timestamp, updatedAt: ctx.timestamp });
+      leaseUntil: undefined, version: 0n, result: '', createdAt: ctx.timestamp, updatedAt: ctx.timestamp,
+      role, dependsOn });
   }
 );
 
@@ -82,6 +97,8 @@ export const claimTask = spacetimedb.reducer(
     if (!existing) throw new SenderError('Task not found');
     requireRun(ctx, existing.runId);
     if (existing.version !== expectedVersion || existing.status !== 'open') throw new SenderError('Task already claimed or changed');
+    if (existing.role && ctx.db.agent.identity.find(ctx.sender)?.role !== existing.role) throw new SenderError(`Task requires role ${existing.role}`);
+    if (existing.dependsOn && ctx.db.task.id.find(existing.dependsOn)?.status !== 'completed') throw new SenderError('Task dependency is not completed');
     const until = new Timestamp(ctx.timestamp.microsSinceUnixEpoch + LEASE_MICROS);
     const version = existing.version + 1n;
     ctx.db.task.id.update({ ...existing, status: 'claimed', assignee: ctx.sender, leaseUntil: until,
@@ -141,17 +158,28 @@ export const expireTaskLease = spacetimedb.reducer(
 );
 
 export const postMessage = spacetimedb.reducer(
-  { id: t.string(), runId: t.string(), taskId: t.string(), kind: t.string(), body: t.string(), evidenceRef: t.string() },
-  (ctx, { id, runId, taskId, kind, body, evidenceRef }) => {
+  { id: t.string(), runId: t.string(), taskId: t.string(), symbol: t.string(), recipientRole: t.string(),
+    kind: t.string(), body: t.string(), evidenceRef: t.string() },
+  (ctx, { id, runId, taskId, symbol, recipientRole, kind, body, evidenceRef }) => {
     requireRole(ctx, ['operator', 'coordinator', 'analyst', 'skeptic', 'ingestor', 'risk']);
-    requireId(id); requireRun(ctx, runId); requireText(kind, 'Kind', 64); requireText(body, 'Body');
-    if (taskId && ctx.db.task.id.find(taskId)?.runId !== runId) throw new SenderError('Task is not in run');
+    requireId(id); requireRun(ctx, runId); requireText(body, 'Body');
+    if (!MESSAGE_KINDS.includes(kind)) throw new SenderError(`Kind must be one of: ${MESSAGE_KINDS.join(', ')}`);
+    if (recipientRole && !ROLES.includes(recipientRole as Role)) throw new SenderError('Unknown recipient role');
+    if (symbol) requireSymbol(symbol);
+    if (taskId) {
+      const linkedTask = ctx.db.task.id.find(taskId);
+      if (linkedTask?.runId !== runId) throw new SenderError('Task is not in run');
+      if (symbol && linkedTask.symbol !== symbol) throw new SenderError('Task is for a different symbol');
+    }
+    requireEvidence(ctx, parseRefs(evidenceRef), symbol, ['source', 'fact', 'thesis']);
     const existing = ctx.db.message.id.find(id);
     if (existing) {
       if (existing.sender.equals(ctx.sender) && existing.body === body && existing.runId === runId &&
-          existing.taskId === taskId && existing.kind === kind && existing.evidenceRef === evidenceRef) return;
+          existing.taskId === taskId && existing.kind === kind && existing.evidenceRef === evidenceRef &&
+          existing.symbol === symbol && existing.recipientRole === recipientRole) return;
       throw new SenderError('Message ID already used');
     }
-    ctx.db.message.insert({ id, runId, taskId, sender: ctx.sender, kind, body, evidenceRef, createdAt: ctx.timestamp });
+    ctx.db.message.insert({ id, runId, taskId, symbol, recipientRole, sender: ctx.sender, kind, body, evidenceRef,
+      createdAt: ctx.timestamp });
   }
 );

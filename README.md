@@ -56,7 +56,7 @@ After publishing the module and building the worker, start a worker in another t
 AGENT_NAME=analyst-a RUN_ID=demo npm run worker
 ```
 
-The process connects to the configured database, saves its token on first connection, subscribes to its run, and prints task and message updates. It retries dropped connections with backoff. Stop it with Ctrl+C. The worker does not run an LLM or research source; set `AUTO_CLAIM=1` only for the synthetic claim/result demo below.
+The process connects to the configured database, saves its token on first connection, subscribes to its run, and prints task and message updates. It retries dropped connections with backoff. Stop it with Ctrl+C. With `AUTO_CLAIM=1` it acts according to the role the owner granted its identity (see [Three-agent thesis check](#three-agent-thesis-check)). Those role behaviors are deterministic placeholders: the worker does not call an LLM yet.
 
 Worker settings are environment variables. Defaults are defined in `src/worker.ts`:
 
@@ -67,7 +67,8 @@ Worker settings are environment variables. Defaults are defined in `src/worker.t
 | `SPACETIMEDB_HOST` | `ws://localhost:3000` | SpacetimeDB websocket URI. |
 | `SPACETIMEDB_DB_NAME` | `quant-swarm` | Published database name. |
 | `AGENT_TOKEN_FILE` | `~/.local/share/quant-swarm/tokens/<AGENT_NAME>.token` | Optional token file override. Use a different file per logical worker and keep it private. |
-| `AUTO_CLAIM` | `0` | Set to `1` to claim open tasks and post a synthetic result automatically. |
+| `AUTO_CLAIM` | `0` | Set to `1` to act on tasks for the worker's granted role. Without it, the worker only observes and logs. |
+| `WORK_DELAY_MS` | `0` | Test-only delay before each task's work, simulating a slow model call (0–600000). |
 
 The token file preserves a worker's SpacetimeDB identity across restarts. If you change `AGENT_NAME`, the worker connects as a new identity and must be granted a role separately. Do not commit token files or put broker credentials in worker environment variables.
 
@@ -118,50 +119,64 @@ Publishing updates the existing `quant-swarm` database; keep the CLI's migration
 - **Worker connects but does not claim tasks:** check that `RUN_ID` matches an active run and that `AUTO_CLAIM=1` is set. Without auto-claim, the worker only observes and logs.
 - **Two processes act as the same worker:** give each process a distinct `AGENT_NAME` and token file. Existing token files intentionally reuse their saved identity.
 
-## Two-agent check
+## Three-agent thesis check
 
-The publisher is the module owner. Grant its CLI identity the `operator` role so it can create runs and tasks:
+This is the Phase 1 exit check: a coordinator, an analyst, and a skeptic exchange a sourced thesis, and a worker restart does not lose its task. The SEC ingestor does not exist yet, so evidence comes from a fixture ingestor whose rows are labeled `fixture`. The skeptic flags them, so the expected decision is `revise`.
+
+The publisher is the module owner. Grant its CLI identity the `operator` role, create a run, then register the fixture ingestor and grant it `ingestor`:
 
 ```sh
 spacetime login show
 spacetime call --server local quant-swarm grant_agent <OWNER_IDENTITY> operator
-spacetime call --server local quant-swarm create_run demo 'Verify two-agent coordination'
+spacetime call --server local quant-swarm create_run phase1 'Sourced thesis across three workers'
+npm run ingest:fixture -- --register
+spacetime call --server local quant-swarm grant_agent <INGESTOR_IDENTITY> ingestor
+RUN_ID=phase1 SYMBOL=AAPL npm run ingest:fixture
 ```
 
-Start two terminals. On first connection, each worker prints a distinct identity and saves its token under `~/.local/share/quant-swarm/tokens/` (or the `AGENT_TOKEN_FILE` path you provide):
+Start three workers in separate terminals. Each prints its identity on first connection; grant each the matching role:
 
 ```sh
-AGENT_NAME=analyst-a RUN_ID=demo AUTO_CLAIM=1 npm run worker
+AGENT_NAME=coord-1 RUN_ID=phase1 AUTO_CLAIM=1 npm run worker
+AGENT_NAME=analyst-a RUN_ID=phase1 AUTO_CLAIM=1 WORK_DELAY_MS=8000 npm run worker
+AGENT_NAME=skeptic-1 RUN_ID=phase1 AUTO_CLAIM=1 npm run worker
 ```
 
 ```sh
-AGENT_NAME=analyst-b RUN_ID=demo AUTO_CLAIM=1 npm run worker
+spacetime call --server local quant-swarm grant_agent <COORD_IDENTITY> coordinator
+spacetime call --server local quant-swarm grant_agent <ANALYST_IDENTITY> analyst
+spacetime call --server local quant-swarm grant_agent <SKEPTIC_IDENTITY> skeptic
+spacetime call --server local quant-swarm create_task thesis-aapl-1 phase1 AAPL thesis 'Write an evidence-linked thesis for AAPL' analyst ''
 ```
 
-Grant both printed identities the `analyst` role, then create a task:
+The flow is:
+
+1. The analyst claims `thesis-aapl-1`, publishes `thesis.thesis-aapl-1` citing the stored sources and facts, and posts a `claim` message to the coordinator.
+2. The coordinator creates `review.thesis-aapl-1` for the `skeptic` role, depending on the thesis task.
+3. The skeptic claims the review once its dependency completes, checks the cited evidence (fixture data, sources older than 400 days, non-`ok` fact quality, fewer than two sources), and posts a `challenge` message.
+4. The coordinator records a decision (`revise` if the skeptic raised concerns, otherwise `abstain`) and posts a `decision` message. It never decides `trade` in this phase.
+
+To check recovery, stop the analyst with Ctrl+C during its 8-second delay and start it again without `WORK_DELAY_MS`. It reconnects with the same identity, finds the task it still holds, and resumes it; each step uses a stable ID, so a retry does not duplicate the thesis or message. If two workers share a role, they race for each task and exactly one claim commits. Inspect the result:
 
 ```sh
-spacetime call --server local quant-swarm grant_agent <ANALYST_A_IDENTITY> analyst
-spacetime call --server local quant-swarm grant_agent <ANALYST_B_IDENTITY> analyst
-spacetime call --server local quant-swarm create_task demo-task-1 demo AAPL research 'Review the latest filing'
-spacetime sql --server local quant-swarm 'SELECT * FROM task'
+spacetime sql --server local quant-swarm "SELECT id, kind, role, depends_on, status FROM task WHERE run_id = 'phase1'"
+spacetime sql --server local quant-swarm "SELECT id, kind, recipient_role, body FROM message WHERE run_id = 'phase1'"
+spacetime sql --server local quant-swarm 'SELECT id, outcome, rationale FROM decision'
 ```
-
-Both workers receive the task. One claim commits; the other gets a conflict. The winner posts a message and completes the task. Every worker subscribed to `demo` receives that message as a live row update; messages have no recipient field, so the current routing is run-wide. Restarting a worker uses its saved token, so it keeps its identity and receives the completed task and existing messages in its initial subscription snapshot. `AUTO_CLAIM=1` performs a synthetic result for this check; it does not run a model, research a filing, or start an agent conversation.
 
 ## Database behavior
 
-The owner uses `grant_agent` and `revoke_agent` to assign roles; a worker cannot assign itself a role. Granted workers call `heartbeat`; the demo repeats it every 15 seconds. `create_run` and `set_run_status` require `operator`. Coordinators or operators create tasks; analysts, skeptics, and coordinators compete for them. A claim checks the task's expected version and open status in an atomic reducer, assigns a 60-second lease, and schedules expiry. The module exposes `renew_task_lease` for long work, but the demo does not call it because its synthetic result is immediate. Lease expiry reopens the task only if the scheduled version still matches. `complete_task` and `fail_task` require the current assignee and an unexpired lease. Message IDs are stable and retry-safe when the repeated request has the same sender and payload.
+The owner uses `grant_agent` and `revoke_agent` to assign roles; a worker cannot assign itself a role. Granted workers call `heartbeat`; the demo repeats it every 15 seconds. `create_run` and `set_run_status` require `operator`. Coordinators or operators create tasks; analysts, skeptics, and coordinators compete for them. A claim checks the task's expected version and open status in an atomic reducer, assigns a 60-second lease, and schedules expiry. A worker renews its lease every 20 seconds while working; a 70-second simulated call has been verified to complete without losing the lease. A task can name a required `role` and a `depends_on` task for the same run and symbol; `claim_task` rejects other roles and waits for the dependency to complete. When a worker hits a permanent error on a task it holds, it records `fail_task` instead of retrying. Lease expiry reopens the task only if the scheduled version still matches. `complete_task` and `fail_task` require the current assignee and an unexpired lease. Message IDs are stable and retry-safe when the repeated request has the same sender and payload.
 
-Agents communicate through `post_message`, which inserts a durable row into `message`. The module fills in the sender identity from the authenticated caller; the caller supplies message ID, run ID, optional task ID, kind, body, and evidence reference. The worker subscribes to messages for its configured run and logs incoming rows. SpacetimeDB pushes each inserted row to connected clients whose subscriptions match; on reconnect, the initial subscription snapshot includes existing messages. This is shared run-level publish/subscribe: there is no recipient field, direct-message reducer, or model-driven reply loop yet. `post_message` requires an active run and an allowed role; if a task ID is given, it must belong to that run. Repeating the same ID with the same sender and payload is idempotent; reusing it for different content is rejected.
+Agents communicate through `post_message`, which inserts a durable row into `message`. The module fills in the sender identity from the authenticated caller; the caller supplies message ID, run ID, optional task ID and symbol, recipient role, kind, body, and evidence reference. `kind` must be one of `observation`, `claim`, `question`, `challenge`, `answer`, `result`, `decision`, or `status`. Evidence references are comma-separated source, fact, or thesis IDs; each must exist and match the message symbol. The worker subscribes to messages for its configured run and logs incoming rows. SpacetimeDB pushes each inserted row to connected clients whose subscriptions match; on reconnect, the initial subscription snapshot includes existing messages. `recipient_role` addresses a message to a role (empty means everyone), but it is a routing label, not access control: every client subscribed to the run still receives the row. There is no model-driven reply loop yet. `post_message` requires an active run and an allowed role; if a task ID is given, it must belong to that run. Repeating the same ID with the same sender and payload is idempotent; reusing it for different content is rejected.
 
 ### Reducer inventory
 
 | Area | Reducers and rules |
 | --- | --- |
 | Agent and run administration | `grant_agent` / `revoke_agent` are owner-only. `heartbeat` requires a granted role. `create_run` and `set_run_status` require `operator`. |
-| Tasks and messages | `create_task` requires operator/coordinator. `claim_task`, `renew_task_lease`, `complete_task`, and `fail_task` enforce role, ownership, version, and lease rules. `expire_task_lease` is scheduled by the database. `post_message` writes run-scoped messages. |
-| Research and decisions | `add_source` / `add_fact` require `ingestor`; `publish_thesis` allows analyst/skeptic/coordinator; `record_decision` requires coordinator/operator; `propose_trade` requires coordinator and a trade decision. |
+| Tasks and messages | `create_task` requires operator/coordinator and takes an optional required role and same-symbol dependency; identical retries are accepted. `claim_task`, `renew_task_lease`, `complete_task`, and `fail_task` enforce role, ownership, version, and lease rules. `expire_task_lease` is scheduled by the database. `post_message` writes run-scoped messages. |
+| Research and decisions | `add_source` / `add_fact` require `ingestor`; `publish_thesis` allows analyst/skeptic/coordinator, requires at least one same-symbol source or fact reference, and, when given a task ID, requires the caller to hold that task; `record_decision` requires coordinator/operator; `propose_trade` requires coordinator and a trade decision. |
 | Risk and paper order ledger | `record_risk_decision` requires `risk`; `approve_proposal` requires `operator`; order reservation, status updates, fills, account snapshots, and reconciliations require `executor`. Reservation requires an active run, fresh risk pass, and operator approval. Unique proposal, client-order, and fill activity IDs prevent duplicate ledger entries. |
 | Metrics | `record_run_metric` requires operator/coordinator/risk and an existing run. |
 

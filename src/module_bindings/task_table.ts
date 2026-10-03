@@ -23,4 +23,6 @@ export default __t.row({
   result: __t.string(),
   createdAt: __t.timestamp().name("created_at"),
   updatedAt: __t.timestamp().name("updated_at"),
+  role: __t.string(),
+  dependsOn: __t.string().name("depends_on"),
 });

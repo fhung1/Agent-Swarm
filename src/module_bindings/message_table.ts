@@ -19,4 +19,6 @@ export default __t.row({
   body: __t.string(),
   evidenceRef: __t.string().name("evidence_ref"),
   createdAt: __t.timestamp().name("created_at"),
+  symbol: __t.string(),
+  recipientRole: __t.string().name("recipient_role"),
 });

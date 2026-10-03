@@ -50,7 +50,6 @@ import PublishThesisReducer from "./publish_thesis_reducer";
 import RecordAccountSnapshotReducer from "./record_account_snapshot_reducer";
 import RecordDecisionReducer from "./record_decision_reducer";
 import RecordFillReducer from "./record_fill_reducer";
-import RecordMarketObservationReducer from "./record_market_observation_reducer";
 import RecordReconciliationReducer from "./record_reconciliation_reducer";
 import RecordRiskDecisionReducer from "./record_risk_decision_reducer";
 import RecordRunMetricReducer from "./record_run_metric_reducer";
@@ -236,7 +235,6 @@ const reducersSchema = __reducers(
   __reducerSchema("record_account_snapshot", RecordAccountSnapshotReducer),
   __reducerSchema("record_decision", RecordDecisionReducer),
   __reducerSchema("record_fill", RecordFillReducer),
-  __reducerSchema("record_market_observation", RecordMarketObservationReducer),
   __reducerSchema("record_reconciliation", RecordReconciliationReducer),
   __reducerSchema("record_risk_decision", RecordRiskDecisionReducer),
   __reducerSchema("record_run_metric", RecordRunMetricReducer),

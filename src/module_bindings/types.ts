@@ -86,6 +86,18 @@ export const MarketObservation = __t.object("MarketObservation", {
 });
 export type MarketObservation = __Infer<typeof MarketObservation>;
 
+export const MarketObservationInput = __t.object("MarketObservationInput", {
+  id: __t.string(),
+  symbol: __t.string(),
+  feed: __t.string(),
+  bidPrice: __t.string(),
+  bidSize: __t.string(),
+  askPrice: __t.string(),
+  askSize: __t.string(),
+  asOf: __t.timestamp(),
+});
+export type MarketObservationInput = __Infer<typeof MarketObservationInput>;
+
 export const Message = __t.object("Message", {
   id: __t.string(),
   runId: __t.string(),
@@ -95,6 +107,8 @@ export const Message = __t.object("Message", {
   body: __t.string(),
   evidenceRef: __t.string(),
   createdAt: __t.timestamp(),
+  symbol: __t.string(),
+  recipientRole: __t.string(),
 });
 export type Message = __Infer<typeof Message>;
 
@@ -178,6 +192,8 @@ export const Task = __t.object("Task", {
   result: __t.string(),
   createdAt: __t.timestamp(),
   updatedAt: __t.timestamp(),
+  role: __t.string(),
+  dependsOn: __t.string(),
 });
 export type Task = __Infer<typeof Task>;
 
@@ -200,6 +216,7 @@ export const Thesis = __t.object("Thesis", {
   invalidation: __t.string(),
   evidenceRefs: __t.string(),
   createdAt: __t.timestamp(),
+  taskId: __t.string(),
 });
 export type Thesis = __Infer<typeof Thesis>;
 

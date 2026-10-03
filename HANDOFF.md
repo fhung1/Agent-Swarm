@@ -24,6 +24,18 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 — Claude Code — Phase 1 part A: protocol and three-role worker
+
+- **Status:** part A committed and verified; part B (scoped read views) waits until the AI roles are wired into `src/worker.ts`
+- **Goal:** Phase 1 exit check: three workers exchange a sourced thesis and recover after a worker restart.
+- **Work completed:** Schema adds `task.role`/`depends_on`, `message.symbol`/`recipient_role`, `thesis.task_id` (defaults, migrated in place). `create_task` takes role and same-symbol dependency and accepts identical retries; `claim_task` enforces both; `post_message` enforces a kind enum and validates evidence IDs against source/fact/thesis rows of the same symbol; `publish_thesis` requires same-symbol evidence and task ownership and is retry-idempotent, as is `record_decision`. Worker acts on its granted role (analyst/skeptic/coordinator placeholder logic, no LLM), renews leases every 20 s, resumes its own claimed tasks after restart, and fails a held task on permanent error. New `src/fixture-ingestor.ts` (`npm run ingest:fixture`) and `src/tokens.ts`.
+- **Files / references:** `spacetimedb/src/{schema,access,index,records}.ts`, `src/worker.ts`, `src/fixture-ingestor.ts`, `src/tokens.ts`, `src/module_bindings/`, README "Three-agent thesis check".
+- **Checks run:** typecheck/build pass. Run `phase1`: analyst killed mid-task resumed with same identity; review queued, challenged, decided `revise`. 70 s task renewed lease 3× and completed. Rejections verified: bad kind, unknown/cross-symbol evidence, bad task role, missing/cross-symbol dependency, wrong-role claim, evidence-less thesis, thesis on unowned task. Found and fixed an infinite resume-retry loop on permanent errors.
+- **Open issues:** Public tables are still readable by any connecting client; `recipient_role` is a label, not access control. Role logic is placeholder. The worker subscribes to all `fact` and `decision` rows (no run column).
+- **Next steps:** Part B: make swarm tables private and expose identity-scoped views (`spacetimedb.view`, `ctx.sender`) for granted agents; switch worker subscriptions to the views; verify an ungranted client sees nothing. Then add an LLM-backed analyst behind the same task flow.
+- **Coordination with "Claude-backed role logic" entry:** the schema change it was waiting on has landed and is published: `postMessage` takes `symbol`/`recipientRole`, `publishThesis` takes `taskId`, `createTask` takes `role`/`dependsOn`. `src/worker.ts` was rewritten here and now dispatches on the granted role (from the `agent` table, not an env var) via `writeThesis`/`reviewThesis`/`coordinate`; plug the `src/agents/roles.ts` logic into those three functions rather than adding a parallel `AGENT_ROLE` path. Its open issue (1) still stands: `requireEvidence` does not accept `market_observation` IDs. Not changed here; deciding between accepting observations and having the adapter record sources is still open. Full typecheck, build, and `npm test` (19/19) pass with both sets of changes.
+- **Context:** Local DB contains test runs `demo` and `phase1` (including failed `t-dep`). Workers coord-1, analyst-a, skeptic-1 and the fixture ingestor have tokens under `~/.local/share/quant-swarm/tokens/`.
+
 ## 2026-10-03 19:35 UTC — Codex — Local Tart fleet
 
 - **Status:** implementation complete; Tart runtime check pending

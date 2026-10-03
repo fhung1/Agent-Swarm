@@ -1,6 +1,6 @@
 import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb from './schema';
-import { requireId, requireRole, requireRun, requireText } from './access';
+import { parseRefs, requireEvidence, requireId, requireRole, requireRun, requireSymbol, requireText } from './access';
 
 const marketObservationInput = t.object('MarketObservationInput', {
   id: t.string(), symbol: t.string(), feed: t.string(), bidPrice: t.string(), bidSize: t.string(),
@@ -31,13 +31,30 @@ export const addFact = spacetimedb.reducer(
 );
 
 export const publishThesis = spacetimedb.reducer(
-  { id: t.string(), runId: t.string(), symbol: t.string(), bullCase: t.string(), bearCase: t.string(),
+  { id: t.string(), runId: t.string(), taskId: t.string(), symbol: t.string(), bullCase: t.string(), bearCase: t.string(),
     assumptions: t.string(), invalidation: t.string(), evidenceRefs: t.string() },
   (ctx, value) => {
     requireRole(ctx, ['analyst', 'skeptic', 'coordinator']); requireRun(ctx, value.runId); requireId(value.id);
+    requireSymbol(value.symbol);
     requireText(value.bullCase, 'Bull case'); requireText(value.bearCase, 'Bear case');
-    requireText(value.evidenceRefs, 'Evidence references');
-    if (ctx.db.thesis.id.find(value.id)) throw new SenderError('Thesis already exists');
+    requireText(value.invalidation, 'Invalidation');
+    // A thesis must cite at least one stored source or fact for its own symbol.
+    const refs = parseRefs(value.evidenceRefs);
+    if (refs.length === 0) throw new SenderError('Thesis needs at least one evidence reference');
+    requireEvidence(ctx, refs, value.symbol, ['source', 'fact']);
+    if (value.taskId) {
+      const linkedTask = ctx.db.task.id.find(value.taskId);
+      if (!linkedTask || linkedTask.runId !== value.runId || linkedTask.symbol !== value.symbol) throw new SenderError('Task mismatch');
+      if (linkedTask.status !== 'claimed' || !linkedTask.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
+    }
+    const existing = ctx.db.thesis.id.find(value.id);
+    if (existing) {
+      if (existing.author.equals(ctx.sender) && existing.runId === value.runId && existing.taskId === value.taskId &&
+          existing.symbol === value.symbol && existing.bullCase === value.bullCase && existing.bearCase === value.bearCase &&
+          existing.assumptions === value.assumptions && existing.invalidation === value.invalidation &&
+          existing.evidenceRefs === value.evidenceRefs) return;
+      throw new SenderError('Thesis already exists');
+    }
     ctx.db.thesis.insert({ ...value, author: ctx.sender, createdAt: ctx.timestamp });
   }
 );
@@ -50,7 +67,12 @@ export const recordDecision = spacetimedb.reducer(
     const linkedThesis = ctx.db.thesis.id.find(value.thesisId);
     if (!linkedThesis) throw new SenderError('Thesis not found');
     requireRun(ctx, linkedThesis.runId); requireText(value.rationale, 'Rationale');
-    if (ctx.db.decision.thesisId.find(value.thesisId)) throw new SenderError('Thesis already decided');
+    const existing = ctx.db.decision.thesisId.find(value.thesisId);
+    if (existing) {
+      if (existing.id === value.id && existing.reviewer.equals(ctx.sender) && existing.outcome === value.outcome &&
+          existing.rationale === value.rationale) return;
+      throw new SenderError('Thesis already decided');
+    }
     ctx.db.decision.insert({ ...value, reviewer: ctx.sender, createdAt: ctx.timestamp });
   }
 );

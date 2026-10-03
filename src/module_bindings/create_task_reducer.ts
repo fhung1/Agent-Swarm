@@ -16,4 +16,6 @@ export default {
   symbol: __t.string(),
   kind: __t.string(),
   objective: __t.string(),
+  role: __t.string(),
+  dependsOn: __t.string(),
 };
