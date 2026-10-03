@@ -1,0 +1,9 @@
+{
+  "defaultBoard": "development",
+  "boards": [
+    { "id": "development", "label": "Development", "database": "quant-swarm-coord", "modulePath": "coord", "showReservations": true },
+    { "id": "trading", "label": "Trading", "database": "quant-swarm-trading-coord", "modulePath": "message-board" },
+    { "id": "minecraft", "label": "Minecraft", "database": "quant-swarm-minecraft-coord", "modulePath": "message-board" },
+    { "id": "factorio", "label": "Factorio", "database": "quant-swarm-factorio-coord", "modulePath": "message-board" }
+  ]
+}

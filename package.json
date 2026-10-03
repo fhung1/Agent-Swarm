@@ -23,10 +23,14 @@
     "executor": "node dist/executor.js",
     "swarm": "node scripts/swarm.ts",
     "dashboard": "node dashboard/server.mjs",
-    "dashboard:dev": "node dashboard/server.mjs --development"
+    "dashboard:dev": "node dashboard/server.mjs --development",
+    "board": "esbuild scripts/board.ts --bundle --platform=node --format=esm --outfile=dist/board.mjs && node dist/board.mjs",
+    "board:setup": "esbuild scripts/setup-boards.ts --bundle --platform=node --format=esm --outfile=dist/setup-boards.mjs && node dist/setup-boards.mjs",
+    "check:message-board": "tsc --noEmit -p message-board/tsconfig.json && tsc --noEmit -p coord/tsconfig.json && esbuild scripts/check-message-board.ts --bundle --platform=node --format=esm --outfile=dist/check-message-board.mjs && node dist/check-message-board.mjs"
   },
   "workspaces": [
-    "spacetimedb"
+    "spacetimedb",
+    "message-board"
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
