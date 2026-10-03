@@ -49,6 +49,14 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
 - **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
 
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation and acceptance checks complete; publication commit recorded on the board after push
+- **Goal:** Complete `sec-filing-excerpts`; push when finished.
+- **Work completed:** Risk-factor/MD&A extraction with document checksums, normalized offsets, deterministic <=240-character excerpt fact chunks and richer bounded artifacts. Verified source-matched reads stay inside SEC_ARTIFACT_DIR, reject symlinks and report unavailable/truncated evidence. Legacy manifests use original verified documents. Citation/prompt budgets remain enforced; inference audit uses `research-v3-sec-excerpts`.
+- **Checks:** Trimmed real AAPL 10-K/10-Q fixtures and corruption/path/offset/budget checks pass. Isolated database replay of saved real AAPL/MSFT filings produced 4 sources/56 facts including 16 excerpts; verified all offsets, recovered an interrupted ingestion and proved duplicate-free reruns. Full typecheck/build/unit checks pass; exact publication checkout checks are recorded on the board. No new SEC download or provider/broker calls.
+- **Limitations:** Heading matching is heuristic, full excerpt cap 3,200 characters per section, hot fact cap 240 characters/two chunks per section. Fresh SEC endpoint acceptance still needs a real contact User-Agent. Shared worker artifact access is required.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:

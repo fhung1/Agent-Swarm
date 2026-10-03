@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { evidenceText, type EvidenceOmissions } from './evidence.ts';
+import type { QualitativeEvidence } from '../sec-excerpts.js';
 
 // Plain views of authorized swarm rows. Workers map generated binding rows into these shapes.
 export interface ObservationView { id: string; symbol: string; feed: string; bidPrice: string; askPrice: string; asOf: string }
-export interface SourceView { id: string; symbol: string; kind: string; uri: string; asOf: string }
+export interface SourceView { id: string; symbol: string; kind: string; uri: string; asOf: string; qualitative?: QualitativeEvidence }
 export interface FactView { id: string; sourceId: string; symbol: string; metric: string; value: string; unit: string; period: string; quality: string }
 export interface ThesisView {
   id: string; runId: string; symbol: string; bullCase: string; bearCase: string;

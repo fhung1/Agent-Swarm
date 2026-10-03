@@ -279,7 +279,11 @@ spacetime sql --server local quant-swarm "SELECT id, kind, recipient_role, body 
 spacetime sql --server local quant-swarm 'SELECT id, outcome, rationale FROM decision'
 ```
 
-### Model-backed roles
+#### SEC cache and qualitative excerpts
+
+The SEC ingestor caches verified ticker/submissions/company-facts responses and filing bytes with conditional revalidation and bounded transient retries; see [SEC cache policy](docs/sec-cache.md) for `SEC_CACHE_DIR`, TTLs and retry behavior. Risk-factor and MD&A excerpts are saved with document checksums and manifest offsets. Each found section records at most two deterministic 240-character text fact chunks, while bounded 3,200-character excerpts remain in verified artifacts for analyst/skeptic prompts. Share `SEC_ARTIFACT_DIR` with research workers; missing sections and truncation are explicit. See [qualitative filing evidence](docs/sec-excerpts.md) for limits, real-filing fixtures, artifact verification and isolated ingestion/restart checks.
+
+## Model-backed roles
 
 Set `AGENT_BRAIN=claude` or `AGENT_BRAIN=codex` on any worker to replace its placeholder logic with a model call. Both use the same prompts, output schemas, and validation:
 

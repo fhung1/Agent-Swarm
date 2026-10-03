@@ -7,6 +7,7 @@ import { DbConnection } from './module_bindings/index.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { recordId } from './ids.js';
 import { SecClient } from './sec-client.js';
+import { extractFilingExcerpts, excerptArtifactName, excerptFactChunks } from './sec-excerpts.js';
 
 // Records the latest 10-K and 10-Q for each symbol as sources, with reported XBRL facts for each filing's own period.
 // Each source's checksum is the SHA-256 of the filing document its URI names. Its artifact is a manifest that points to
@@ -194,14 +195,20 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
     const document = await getSec(uri, userAgent, 'text/html,application/xhtml+xml,*/*');
     const checksum = sha256(document);
     const documentPath = saveArtifact(`${checksum}${path.extname(filing.primaryDocument) || '.htm'}`, document);
+    const excerpts = extractFilingExcerpts(document, filing.form);
+    const excerptArtifact = excerptArtifactName(excerpts);
+    const excerptPath = saveArtifact(excerptArtifact.name, excerptArtifact.data);
+    const excerptChunks = excerptFactChunks(excerpts, sourceId);
     const xbrl = JSON.stringify(filingFacts(companyFacts, filing.accession));
     const xbrlChecksum = sha256(xbrl);
     const xbrlPath = saveArtifact(`${xbrlChecksum}.json`, xbrl);
     const manifest = JSON.stringify({
-      accession: filing.accession, form: filing.form, cik, symbol, reportDate: filing.reportDate,
+      sourceId, accession: filing.accession, form: filing.form, cik, symbol, reportDate: filing.reportDate,
       acceptedAt: filing.acceptedAt,
       document: { uri, sha256: checksum, bytes: document.length, path: documentPath },
       xbrlFacts: { derivedFrom: companyFactsUrl, accession: filing.accession, sha256: xbrlChecksum, path: xbrlPath },
+      qualitativeExcerpts: { derivedFrom: uri, sha256: excerptArtifact.checksum, path: excerptPath,
+        offsetsIn: 'normalized visible text, sec-text-v1', chunks: excerptChunks.map(({ value, ...chunk }) => ({ ...chunk, sha256: sha256(value) })) },
     }, null, 2);
     const manifestPath = saveArtifact(`${sha256(manifest)}.manifest.json`, manifest);
     const added = await idempotent(sourceId, () => conn.reducers.addSource({
@@ -220,6 +227,11 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
         period: `${period} (${concept})`, quality: 'ok',
       }))) recorded++;
     }
+    for (const chunk of excerptChunks) {
+      if (await idempotent(chunk.id, () => conn.reducers.addFact({ id: chunk.id, sourceId, symbol,
+        metric: chunk.metric, value: chunk.value, unit: 'text', period: filing.reportDate, quality: chunk.quality }))) recorded++;
+    }
+    if (excerpts.missing.length) console.log(`${symbol} ${filing.form}: excerpt sections not found: ${excerpts.missing.join(', ')}`);
     console.log(`${symbol} ${filing.form} ${filing.accession} (period ${filing.reportDate}, accepted ${filing.acceptedAt}): ` +
       `${added ? 'source recorded' : 'source already recorded'}, ${recorded} new facts` +
       (missing.length ? `; not reported: ${missing.join(', ')}` : ''));
