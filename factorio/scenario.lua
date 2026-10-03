@@ -27,5 +27,5 @@ script.on_init(function()
 end)
 
 remote.add_interface("qs_world", {metadata=function()
-  return {worldId="WORLD_ID",historyId="HISTORY_ID",scenario="SCENARIO_NAME",seed=424242,spawn=storage.qs_spawn}
+  return {worldId="WORLD_ID",historyId="HISTORY_ID",scenario="SCENARIO_NAME",seed=game.surfaces[1].map_gen_settings.seed,spawn=storage.qs_spawn}
 end})
