@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
 import { deliverResearchCycle, planResearchCycle, type ScheduleSnapshot } from '../src/research-schedule.ts';
 
-// fileURLToPath decodes the URL, so paths with spaces ("Quant Swarm") resolve correctly.
+// fileURLToPath decodes the URL, so paths with spaces (for example, "Agent Swarm") resolve correctly.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = process.env.SPACETIME_CLI ?? 'spacetime';
 const ENV = { ...process.env, PATH: `${process.env.PATH ?? ''}:${path.join(os.homedir(), '.local', 'bin')}` };
