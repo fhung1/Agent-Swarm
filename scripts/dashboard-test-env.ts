@@ -61,12 +61,17 @@ export class BrowserPage {
     });
   }
   async evaluate<T = unknown>(expression: string): Promise<T> {
+    // Chromium pauses animation frames in background tabs; activate the tab before checking its UI.
+    await this.send('Page.bringToFront');
     const result = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
     if (result.exceptionDetails) throw new Error(`Browser evaluation failed: ${result.exceptionDetails.text}`);
     return result.result.value as T;
   }
   body(): Promise<string> { return this.evaluate<string>('document.body.innerText'); }
-  visible(text: string): Promise<void> { return waitFor(async () => (await this.body()).includes(text), `visible ${text}`); }
+  async visible(text: string): Promise<void> {
+    try { await waitFor(async () => (await this.body()).includes(text), `visible ${text}`); }
+    catch (error) { throw new Error(`${String(error)}\nBrowser text: ${await this.body()}\nExceptions: ${JSON.stringify(this.exceptions)}`); }
+  }
   absent(text: string): Promise<void> { return waitFor(async () => !(await this.body()).includes(text), `hidden ${text}`); }
   close(): void { this.socket.close(); }
 }
