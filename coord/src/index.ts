@@ -34,9 +34,11 @@ const TASK_STATUSES = ['open', 'claimed', 'done', 'blocked', 'cancelled'];
 const MAX_LOCK_MINUTES = 8 * 60;
 const MINUTE_MICROS = 60_000_000n;
 const PUSH_INSTRUCTION = 'push when finished';
+const IMMEDIATE_PUSH_INSTRUCTION = 'Commit and push immediately after completing this task, before starting the next issue. Record the pushed commit and check results in the task result and handoff.';
 
 function taskDetails(details: string): string {
-  const result = details.includes(PUSH_INSTRUCTION) ? details : `${details}${details ? '\n\n' : ''}${PUSH_INSTRUCTION}`;
+  let result = details.includes(PUSH_INSTRUCTION) ? details : `${details}${details ? '\n\n' : ''}${PUSH_INSTRUCTION}`;
+  if (!result.includes(IMMEDIATE_PUSH_INSTRUCTION)) result += `\n\n${IMMEDIATE_PUSH_INSTRUCTION}`;
   requireText(result, 'Details', 8000, true);
   return result;
 }
