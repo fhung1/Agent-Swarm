@@ -30,3 +30,13 @@
 - Check: ten live worker processes, ten distinct recorded identities and owners, ten avatars with five plates each, fifty matched engine/board transfer receipts, expected source depletion, scope, contention and development separation all PASS. Checked directly against engine and database, not only launcher report.
 - Added: factorio/verify-live.py; docs/factorio-live-verification.md. Viewer mod/checksum/report served from dedicated public artifact directory /tmp/factorio-viewer-public on Tailscale4180. Verified HTTP download, archive files and SHA-256; no private state served.
 - Remaining release work: shared client/launcher owner must push final integration; graphical join must be confirmed by operator/client. Current ten-worker world and board are live, owned by merge-fix; this session does not modify their controls.
+
+## Dashboard routing and interruption-resistant live session
+
+- Tasks: factorio-tailnet-board and factorio-live-restart; push when finished.
+- Findings: tailnet100.107.208.76:3000 served an unrelated Next.js application, so browser/SDK WebSocket subscriptions hung despite HTTP200. Live viewing game had also ended abruptly; its pending view tasks reported connection-refused blockers. Production evidence from run3 remains valid.
+- Work in progress: dedicated validated tailnet TCP relay3001 to actual loopback SpacetimeDB3000; restarted4175 dashboard with correct remote URI. Real SDK and Chromium now receive live snapshots.
+- Durability: user-manager services agent-swarm-db-relay, agent-swarm-board, and agent-swarm-factorio-demo4 preserve processes across assistant turn interruptions. Fresh run4 world preserves previous worlds, ten workers, fixed fixture grants and bounded60minute deadline23:56UTC/19:56Eastern.
+- Checks: fresh run4 independent engine/board verification PASS (ten workers/identities/tasks, fifty plates and fifty matched receipts). Real Chromium shows LIVE data and current ten workers; SDK relay restart recovered same identity and fresh snapshot. Relay address/port refusal checks PASS.
+- Publication: access fix prepared; waiting for codex-queue MERGE COMPLETE before direct-main push to avoid disrupting the explicitly coordinated merge.
+- Next: push access/restart documentation after merge, preserve active user services and verify launcher/framework publication with owners.
