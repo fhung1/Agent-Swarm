@@ -1,7 +1,7 @@
 import { DbConnection } from '../src/module_bindings/index.js';
 import type { AccountSnapshot, Decision, Fact, Message, PaperOrder, Run, Source, Thesis } from '../src/module_bindings/types.js';
 
-const HOST = 'ws://127.0.0.1:3000';
+const HOST = decodeURIComponent(document.documentElement.dataset.host ?? 'ws://127.0.0.1:3000');
 const DATABASE = 'quant-swarm';
 const TOKEN_KEY = 'quant-swarm:dashboard:token';
 const root = document.querySelector<HTMLElement>('#app');

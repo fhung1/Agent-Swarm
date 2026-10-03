@@ -150,26 +150,31 @@ spacetime call --server local quant-swarm set_run_status demo paused
 spacetime call --server local quant-swarm set_run_status demo active
 ```
 
-### Local operator dashboard
+### General-purpose message board
 
-Start the local SpacetimeDB server and publish the module, then run:
+Development is one configured instance of the shared message-board framework. Trading, Minecraft and Factorio use the same backend, worker API, CLI and dashboard with their own database and label.
 
 ```sh
+npm run db:start
+# In another terminal:
+npm run board:setup
 npm run dashboard
 ```
 
-Open `http://127.0.0.1:4173`. The server binds to `127.0.0.1`; the browser connects to the local `quant-swarm` database at `ws://127.0.0.1:3000`. On its first connection the page shows its SpacetimeDB identity. From the **owner's CLI identity**, grant that browser identity the operator role:
+Open **http://127.0.0.1:4174**. Choose an instance in the sidebar or use `/?board=minecraft`, `/?board=factorio`, or `/?board=trading`. `dashboard:dev` is a compatibility alias for this same UI. Add applications through [message-board/instances.json](message-board/instances.json), without adding application-specific UI or client branches.
+
+Workers use `MessageBoardClient` or `npm run board -- <command> --as <name> --board <instance>`. Existing development commands via `scripts/coord.ts` still work. Only the development instance adds the project's "push when finished" task instruction. See [message-board/README.md](message-board/README.md) for the reusable API, policies and adoption steps. Existing domain workers are not automatically rerouted; their execution/audit stores remain unchanged.
+
+### Paper portfolio console
+
+Run `npm run dashboard:portfolio` and open **http://127.0.0.1:4173** for portfolio, research, risk and order oversight. This application-specific console uses `quant-swarm` and scoped `my_*` views; it is separate from the reusable communication board. The database owner grants the browser identity shown on the page:
 
 ```sh
 spacetime call --server local quant-swarm grant_agent <DASHBOARD_IDENTITY> operator
 spacetime call --server local quant-swarm grant_account_access <DASHBOARD_IDENTITY> <ALPACA_ACCOUNT_ID>
 ```
 
-Reload after granting. The dashboard reads only the scoped `my_*` views. It shows live runs, task and message timeline with sender roles, linked research evidence, decisions and frozen inputs, risk checks, paper orders and fills, reconciliations, and the latest account snapshot. Pause and resume use the operator reducer. The cancel button remains disabled until the executor exposes a cancel-request path. The browser saves only its SpacetimeDB identity token in local storage; Alpaca keys belong in the risk/executor processes and are never entered into the page. A fresh browser identity without an operator grant sees no run data.
-
-### Development coordination dashboard
-
-Run `npm run dashboard:dev` and open `http://127.0.0.1:4174` for the separate `quant-swarm-coord` development board. It shares the trading dashboard's styling and has its own browser identity token. It displays sessions, tasks, messages and locks, with task filters/actions and a message composer. The trading dashboard runs at port 4173 against `quant-swarm`; both use the local SpacetimeDB server at port 3000.
+Reload after granting. Pause/resume use the operator reducer; cancellation stays disabled until the executor exposes a cancel-request path. Alpaca credentials remain in the broker adapters.
 
 ### Offline backup and restore
 

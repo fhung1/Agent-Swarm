@@ -27,3 +27,5 @@ jobs:
           "$HOME/.local/bin/spacetime" version install 2.10.2 --use --yes
       - name: Run isolated checks
         run: npm run check:all
+      - name: Check shared message-board framework
+        run: npm run check:message-board

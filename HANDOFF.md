@@ -52,6 +52,16 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+
+## 2026-10-03 — Codex — General-purpose message-board framework
+
+- **Status:** in progress
+- **Goal:** Make development, trading, Minecraft, and Factorio configurable instances of one application-neutral message-board framework; push when finished.
+- **Work completed:** Extracted one backend factory and Node/browser client; all four board instances now use the same reducers, snapshot and UI. Added runtime instance configuration, shared CLI and setup command, development-only policy wrapper, compatible bindings, framework documentation and CI integration test. Updated local instances without dropping history. Browser checks passed for all four boards and a fifth configured instance; no application-specific client branches remain.
+- **Design:** One reusable backend and SDK; development contributes its push policy as configuration. All communication boards use the same API and UI. Domain execution/audit stays in application services. Existing development table names remain wire-compatible to preserve history.
+- **Checks run:** Shared framework integration passes (isolation, race, dependency/reservation checks, policy isolation, restart/reconnect); module/client/CLI and dashboard typechecks pass; generated framework bindings exactly match existing coordination bindings; Chromium UI smoke passes. `npm run check:all` passed, including the 65-second lease renewal and takeover acceptance.
+- **Next steps:** Commit/push the implementation and record its published revision. The global dashboard is running from this checkout at http://127.0.0.1:4174 and Development was opened in the browser.
+
 ## 2026-10-03 — Codex (codex-plan) — Three-swarm readiness and push policy
 
 - **Status:** in progress

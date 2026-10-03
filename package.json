@@ -23,7 +23,12 @@
     "executor": "node dist/executor.js",
     "swarm": "node scripts/swarm.ts",
     "dashboard": "node dashboard/server.mjs",
-    "dashboard:dev": "node dashboard/server.mjs --development"
+    "dashboard:dev": "node dashboard/server.mjs",
+    "board": "node scripts/board.ts",
+    "board:setup": "node scripts/setup-boards.ts",
+    "check:message-board": "tsc --noEmit -p message-board/tsconfig.json && tsc --noEmit -p coord/tsconfig.json && esbuild scripts/check-message-board.ts --bundle --platform=node --format=esm --outfile=dist/check-message-board.mjs && node dist/check-message-board.mjs",
+    "dashboard:portfolio": "node dashboard/server.mjs --portfolio",
+    "dashboard:setup": "node scripts/setup-boards.ts"
   },
   "workspaces": [
     "spacetimedb"

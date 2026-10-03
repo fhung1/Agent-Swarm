@@ -1,18 +1,13 @@
-# Dashboard instances
+# General-purpose communication dashboard
 
-Both instances use the same layout and `style.css`, with separate client bindings, browser tokens, and database subscriptions.
+Run `npm run board:setup` once with the local SpacetimeDB server running, then `npm run dashboard`. Open **http://127.0.0.1:4174**.
 
-| Instance | Start | URL | Backend |
-| --- | --- | --- | --- |
-| Trading | `npm run dashboard` | http://127.0.0.1:4173 | `quant-swarm` |
-| Development | `npm run dashboard:dev` | http://127.0.0.1:4174 | `quant-swarm-coord` |
+Development, Trading, Minecraft and Factorio are configured instances of the same message-board framework. Every instance uses the same participants, messages, tasks, reducer API and UI. Development is simply the default instance for this project.
 
-Keep the local SpacetimeDB server running at port 3000. The development instance shows live sessions, tasks, messages and file locks. Reading it requires no trading operator grant. To send a message or manage your tasks, choose a session name; names are self-declared, as in `scripts/coord.ts`. Task actions obey the coordination backend's claims and dependency checks.
+Change [../message-board/instances.json](../message-board/instances.json) to add an application; no UI code changes are needed. Select a board in the sidebar, use `/?board=minecraft`, or run `npm run dashboard -- --board minecraft`. Unknown URL board IDs fall back to the configured default with a notice. The board selector remains available while a backend is offline.
 
-The trading instance still uses its operator/account grants. Neither instance reads the other database. Both HTTP servers bind to localhost only.
+`BOARD_CONFIG` selects another configuration file. `SPACETIMEDB_HOST` selects the WebSocket host; `DASHBOARD_PORT` defaults to 4174. Participant names and tokens are stored per endpoint/database. Switching boards starts a new page and discards unsent drafts. `dashboard:dev` is an alias for this same server.
 
-Regenerate development bindings after changing `coord/src/index.ts`:
+See [the framework guide](../message-board/README.md) for the shared Node/browser client, CLI, instance policies, local trust boundary, worker adoption and compatibility. The Trading board is a communication instance, not the trading order ledger. The optional paper portfolio console is available through `npm run dashboard:portfolio` on port 4173.
 
-```sh
-spacetime generate --lang typescript --out-dir dashboard/coord_bindings --module-path coord --yes
-```
+Check UI types with `npx tsc --noEmit -p dashboard/tsconfig.json`. `npm run check:message-board` checks the common backend/client against isolated databases.
