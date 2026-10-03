@@ -25,16 +25,16 @@ The shared dashboard and launcher are currently being integrated by their owners
 The deployed services are owned by the Linux user manager. They survive the assistant ending or interrupting a turn; they are transient test services, not reboot provisioning.
 
 ```sh
-systemctl --user is-active agent-swarm-db-relay agent-swarm-board agent-swarm-factorio-demo4
-journalctl --user -u agent-swarm-factorio-demo4 -n 30 --no-pager
+systemctl --user is-active agent-swarm-db-relay agent-swarm-board agent-swarm-factorio-demo5
+journalctl --user -u agent-swarm-factorio-demo5 -n 30 --no-pager
 ```
 
-The current fixture is `/home/cig/.local/share/agent-swarm/live-demo-4`. Its ten-worker launcher runs for 60 minutes, until 2026-10-03 23:56UTC (7:56 PM Eastern), and then saves/stops its owned game. It uses ten rules workers, no paid model requests, a declared chest containing 50 ore/20 coal, and two shared furnaces. The game endpoint is **100.107.208.76:34198**. RCON remains on loopback 27016. Use a legally obtained graphical **Factorio 2.0.77 base-game** client with the exact `agent-swarm` mod; disable expansion mods. Download the matching ZIP from http://100.107.208.76:4180/agent-swarm_0.1.0.zip and put it in the client mods directory. Join through Multiplayer → Connect to address. The public artifact directory contains only the mod, checksum, safe report, board screenshot and HTML; the private world is never served.
+The current fixture is `/home/cig/.local/share/agent-swarm/live-demo-5`. Its ten-worker launcher runs for 60 minutes, until 2026-10-04 00:05:58UTC (8:06 PM Eastern on October 3), and then saves/stops its owned game. It uses ten rules workers, no paid model requests, a declared chest containing 50 ore/20 coal, and two shared furnaces. The game endpoint is **100.107.208.76:34198**. RCON remains on loopback 27016. Use a legally obtained graphical **Factorio 2.0.77 base-game** client with the exact `agent-swarm` mod; disable expansion mods. Download the matching ZIP from http://100.107.208.76:4180/agent-swarm_0.1.0.zip and put it in the client mods directory. Join through Multiplayer → Connect to address. The public artifact directory contains only the mod, checksum, safe report, board screenshot and HTML; the private world is never served.
 
 For a graceful early stop, create the launcher's stop marker:
 
 ```sh
-python3 -c 'from pathlib import Path; Path("/home/cig/.local/share/agent-swarm/live-demo-4/stop").write_text("Operator stop\n")'
+python3 -c 'from pathlib import Path; Path("/home/cig/.local/share/agent-swarm/live-demo-5/stop").write_text("Operator stop\n")'
 ```
 
-The launcher stops workers and saves/stops its own game. Existing worlds are preserved; use a new directory for a fresh fixture. Runtime corruption/unknown action recovery and natural-map progression remain separate acceptance tasks. The public artifact server also runs as the user service `agent-swarm-viewer-artifacts`. The previous run3 production independently passed ten tasks, fifty actual plates and fifty matched receipts; run4 independently passed the same ten-worker/fifty-plate checks after restart. Its evidence is `/tmp/factorio-live4-independent-evidence/verification.json` and the public artifact copy. Graphical client joining must still be confirmed on the operator's client.
+The launcher stops workers and saves/stops its own game. Existing worlds are preserved; use a new directory for a fresh fixture. Runtime corruption/unknown action recovery and natural-map progression remain separate acceptance tasks. The public artifact server also runs as the user service `agent-swarm-viewer-artifacts`. The current run5 independently passed ten live workers, ten distinct recorded identities/tasks, fifty actual plates and fifty matched engine/board receipts. Its evidence is `/tmp/factorio-live5-independent-evidence/verification.json` and the public artifact copy. Previous run3/run4 evidence remains preserved. A subsequent prolonged shared-database outage stopped run4 workers conservatively; recovery beyond sixty seconds is tracked separately in `factorio-board-outage-recovery`. The game/database availability must be coordinated across sessions. Graphical client joining must still be confirmed on the operator's client.

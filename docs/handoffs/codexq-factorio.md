@@ -40,3 +40,12 @@
 - Checks: fresh run4 independent engine/board verification PASS (ten workers/identities/tasks, fifty plates and fifty matched receipts). Real Chromium shows LIVE data and current ten workers; SDK relay restart recovered same identity and fresh snapshot. Relay address/port refusal checks PASS.
 - Publication: access fix prepared; waiting for codex-queue MERGE COMPLETE before direct-main push to avoid disrupting the explicitly coordinated merge.
 - Next: push access/restart documentation after merge, preserve active user services and verify launcher/framework publication with owners.
+
+## Final active test session after shared database outage
+
+- Task: factorio-live-restart; push when finished.
+- Network fix published: authored1d6be72 via00cbf4a to main; real SDK/browser and same-identity relay restart checks passed.
+- Incident: shared loopback database disappeared. Another session restarted it concurrently; my attempted agent-swarm-local-db unit failed on its data lock and changed no data. Corrected the earlier board attribution immediately. Long outage caused run4 workers to stop/quarantine instead of replaying uncertain work. Production proof and worlds remain preserved.
+- Resolution: gracefully saved/stopped run4, created declared fixture run5 under user service agent-swarm-factorio-demo5; directory /home/cig/.local/share/agent-swarm/live-demo-5, run demo-mut03ct1. Active until00:05:58UTC October4 /20:05:58Eastern October3.
+- Checks: fresh run5 independently PASS: ten live workers/distinct recorded identities/tasks/avatars, fifty actual plates and fifty matched engine/board receipts, source depletion, sharing contention and development isolation. Evidence /tmp/factorio-live5-independent-evidence/verification.json. Actual server bound100.107.208.76:34198; board4175, relay3001 and public artifacts4180 active under user services.
+- Follow-up: factorio-board-outage-recovery records missing prolonged-disconnect restart/phase reconciliation; graphical client join remains unverified. Launcher/dashboard source publication remains with merge-fix; generic framework now pulled from main. No claims of model-driven behavior or natural-map progression.
