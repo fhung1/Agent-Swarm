@@ -96,6 +96,12 @@ local function submit(raw)
   local inserted=dest.insert{name=command.item,count=removed}
   if inserted<removed then source.insert{name=command.item,count=removed-inserted} end
   receipt.quantity=inserted;receipt.item=command.item;receipt.targetId=target.unit_number
+  if inserted>0 then
+    local position=command.kind=="put" and target.position or a.position
+    rendering.draw_text{surface=a.surface,target=position,time_to_live=240,scale=1.5,
+      text=(command.kind=="take" and "+" or "-")..inserted.." "..command.item,
+      color=command.item=="iron-plate" and {r=0.8,g=0.9,b=1} or {r=1,g=0.85,b=0.35}}
+  end
   return finish(req.operationId,inserted==command.quantity and "completed" or "failed",inserted==command.quantity and "Transferred" or "Capacity changed")
 end
 script.on_event(defines.events.on_tick,function()
