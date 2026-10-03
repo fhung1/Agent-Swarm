@@ -1,151 +1,132 @@
-# Ten vision-only agents in one game world
+# Ten Minecraft agents sharing information through SpacetimeDB
 
 ## Goal and boundary
 
-Run ten independent AI players concurrently in one Factorio or Minecraft multiplayer world. Each player controls a normal graphical client. An agent observes only screenshots of its own client, its assigned goal, its own prior actions, and permitted messages from other players. It acts only through mouse and keyboard events. No agent receives server APIs, world files, memory reads, packet data, map coordinates from an adapter, inventories from an adapter, or administrative commands.
+Run ten independent AI agents at the same time in one private Minecraft Java world and study **information sharing**: what agents tell each other through SpacetimeDB, whether others act on it, and whether sharing makes the group faster or more reliable than agents working alone. SpacetimeDB is the only communication channel between agents and the audit record of everything they observed, shared and did. This is a later application of the swarm core in [AGENTS.md](AGENTS.md); it does not change the Alpaca paper-trading pilot in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-The game server exists to host the shared world. The operator may administer it and evaluate outcomes, but its internal state is never exposed to an agent. SpacetimeDB is the coordination and audit backbone described in [AGENTS.md](AGENTS.md); it carries tasks, agent-authored messages, and action traces, not privileged game telemetry. This is a later application of the swarm core. It does not change the Alpaca paper-trading pilot in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+**Owner decisions (2026-10-03):**
 
-**First pilot target: Factorio.** Its top-down view and screen-coordinate building make the first vision-only control experiment simpler than Minecraft's three-dimensional camera and aiming. The one-client Mac control prototype now has profiles for both games, including bounded relative camera movement for Minecraft. This is an engineering hypothesis to test in the pilot, not a claim that Factorio will perform better on every task.
+| Decision | Choice |
+| --- | --- |
+| Game | Minecraft Java Edition first (replaces the earlier Factorio-first recommendation). |
+| Server version | **1.21.11**, the newest version [Mindcraft](https://github.com/mindcraft-bots/mindcraft) supports ("up to v1.21.11"). Needs Java 21. |
+| Model | **GPT-6 Astra** (`gpt-6-astra` on the OpenAI API), called through the Responses API with JSON-schema structured output. The repo's existing OpenAI path (`AGENT_BRAIN=codex` with `AGENT_MODEL=gpt-6-astra`) already uses that API. |
+| Scale | Ten agents from the start. |
+| Orchestration | None. No orchestrator, coordinator role, assigned roles or prescribed coordination pattern. Agents decide what to do; any division of labor must emerge from what they share. |
+| Accounts | [Mineflayer](https://prismarinejs.github.io/mineflayer/) bots on a private offline-mode server, so the ten agents do not need ten Microsoft accounts. |
+| Perception and action | Privileged game state through the Mineflayer API is allowed. No screenshots, rendering or computer use. |
+| Communication | Through SpacetimeDB only. Agents have no in-game chat action. |
+| VMs | Tart is approved, but this pilot does not need VMs: each bot is a Node process and the server runs on the host Mac. |
 
-## System architecture
+## Accounts, licensing and the server
+
+Mineflayer connects to a server set to `online-mode=false` with `auth: 'offline'` and only a username, so no Microsoft account is involved ([Mineflayer](https://github.com/PrismarineJS/mineflayer); [offline-mode discussion](https://github.com/PrismarineJS/mineflayer/discussions/2488)). [Mindcraft](https://github.com/mindcraft-bots/mindcraft), the LLM agent framework built on Mineflayer, uses the same mechanism for local play.
+
+Offline mode disables authentication, so anyone who can reach the server can join under any name. It is also widely used for piracy, and Mojang publishes no clear statement on automated players on a private offline server ([offline-mode overview](https://madelinemiller.dev/blog/minecraft-offline-mode/)). The owner accepts this for a private research world. To keep the setup clearly private:
+
+- Bind the server to `127.0.0.1` (or a private LAN interface) and never expose or list it publicly.
+- Enable the whitelist with exactly the ten agent names plus the operator's name. In offline mode the whitelist matches names only, which is acceptable because the server is not reachable from outside.
+- No human joins with an unlicensed client. The operator observes with their own licensed client.
+- The operator downloads the official server jar and accepts the Minecraft EULA themselves (`eula=true`).
+
+**Server choice:** vanilla Java server **1.21.11**, pinned in `config/minecraft-pilot.json`. Mindcraft supports up to 1.21.11 and recommends 1.21.6, so if Mineflayer or its plugins misbehave on 1.21.11, record the problem and fall back to 1.21.6 with the owner's agreement. Minecraft 1.20.5 and later need **Java 21**; the host Mac currently has Java 20, so install Java 21 first. Start the first runs on peaceful difficulty with a fixed seed, so runs are comparable and agents do not die while the communication layer is being tested.
+
+## Architecture
 
 ```text
-                           Operator dashboard
+               Operator dashboard (read-only views, pause, stop)
                                   |
-                       SpacetimeDB swarm module
-                    tasks | messages | audit | health
-                                  |
-               Orchestrator: starts and monitors 10 workers
-                                  |
-                +-----------------+-----------------+
-                |                                   |
-        Agent worker 1 ...                  Agent worker 10
-        model context 1                     model context 10
-        desktop adapter 1                   desktop adapter 10
-                |                                   |
-         isolated desktop 1                  isolated desktop 10
-         graphical client 1                  graphical client 10
-                +-----------------+-----------------+
-                                  |
-                         Shared game server
-                    (no agent-facing state feed)
+          SpacetimeDB: runs, agents, messages, shared knowledge,
+                   actions, observations, incidents
+                     |                         |
+   Agent 1 process ... (each: one model conversation,     ... Agent 10 process
+   one Mineflayer bot, one SpacetimeDB identity)
+                     |                         |
+               Private Minecraft server (offline mode, localhost)
 ```
 
-One worker owns exactly one client and one desktop for the duration of a run. The workers operate asynchronously: no global step barrier waits for all ten model calls. A separate supervisor handles lifecycle and quotas, but it never merges the ten screens into one agent's observation.
+Each agent is one long-running Node process that owns exactly one Mineflayer bot, one model conversation and one SpacetimeDB identity and token. Agents run asynchronously; nothing waits for all ten. A **launcher** starts the ten processes, restarts any that crash and stops them all. It makes no decisions and assigns no work, so it is not an orchestrator. A global cap on concurrent model requests and per-agent and per-run spend limits are safety limits, not coordination.
 
-### Runtime placement
+## Observation and action contract
 
-1. Start one dedicated multiplayer server. Factorio has an official headless server; Minecraft has official dedicated server software. The server need not render a screen. [Factorio multiplayer](https://wiki.factorio.com/Multiplayer) · [Minecraft server](https://www.minecraft.net/en-us/download/server)
-2. Run one graphical game client per agent, each connected as a distinct player. Give every client its own persistent game profile and save-independent desktop environment. **Player identity, account authentication, and game license are separate questions.** Factorio can use distinct local player names on a private LAN/direct-connect server without account verification; an authenticated server requires valid accounts. Minecraft Java's normal authenticated multiplayer setup requires a distinct entitled Microsoft account for each simultaneous player. Decide the account and license arrangement before procuring ten clients. [Factorio multiplayer](https://wiki.factorio.com/Multiplayer) · [Factorio staff reply](https://forums.factorio.com/viewtopic.php?t=30722) · [Minecraft EULA](https://www.minecraft.net/en-us/eula)
-3. Isolate displays and input. Prefer one Linux VM or graphical session per client for the first implementation. Containers with separate X displays are an optimization to assess only after graphics and input isolation pass the two-client test. Do not put ten clients in ten windows on one ordinary desktop: focus, mouse capture, and held keys would collide.
-4. The orchestrator can run on the current Mac while game clients run on one or more graphics-capable hosts. Benchmark CPU, RAM, graphics utilization, frame rate, and server tick performance with 1, 2, 5, then 10 clients. Choose the number of hosts from measured headroom; no fixed VM size is assumed.
+Agents receive privileged state, but only **local** state: what is within a fixed radius of their own bot. This is deliberate. If every agent could query the whole world, there would be nothing worth sharing. Information sharing is the experiment, so each agent knows its own surroundings and must learn about anything farther away from other agents.
 
-The [VM fleet managers](vm_fleet/README.md) support local Tart VMs on Apple silicon Macs (macOS or Linux guests) and remote libvirt VMs on Linux hosts. They clone a prepared desktop template, start and stop guest VMs, and report status and available guest IPs. They do not prepare the template or provide guest screenshot/input control.
+**Each step, an agent observes:**
 
-A separate [one-client Mac Factorio and Minecraft prototype](src/game/README.md) implements a local screenshot/input adapter and model loop for the Phase 1 experiment. Its local build passes, but the live gameplay exit check has not run because neither game client is available on the development Mac. Minecraft camera response remains unverified in a live client. It does not yet connect to the VM fleet or publish game actions to SpacetimeDB.
+- Its own position, health, food, held item and full inventory.
+- Blocks of interest within a configured radius (default 16 blocks), summarized by type with nearest positions, and entities within the same radius.
+- Time of day, whether it is underwater or in danger, and the result of its last action.
+- New SpacetimeDB messages and shared-knowledge entries from other agents since its last step, each labeled with the author and age as reported information, not verified fact.
 
-## Desktop adapter contract
+**An agent may perform a fixed set of validated commands:** go to a position (pathfinding); collect N of a block type within its radius; craft an item (with or without a crafting table); place a block; equip an item; eat; attack a nearby entity; deposit to or withdraw from a chest; give items to a nearby agent; wait; and post to SpacetimeDB (see below). Commands have bounded arguments and time limits, and each returns a success or failure result.
 
-Build a small service inside each desktop, reachable only by its assigned worker. It exposes only:
+**Not allowed:** the model never writes or runs code. Mindcraft's optional code-writing mode is not used ([Mindcraft security warning](https://github.com/mindcraft-bots/mindcraft)). There are no server commands, no operator privileges and no in-game chat. The Mineflayer bot object is never exposed to the model; only the command layer is.
 
-| Operation | Input or output | Rules |
+## Information sharing through SpacetimeDB
+
+SpacetimeDB carries two kinds of shared information, so the experiment can compare them:
+
+| Kind | What it is | Examples |
 | --- | --- | --- |
-| `capture` | Screenshot, width, height, timestamp | Capture the game client, including visible UI; no OCR or hidden-state enrichment in the adapter. |
-| `click` / `drag` / `scroll` | Screen coordinates, button, bounded amount | Reject out-of-bounds coordinates and actions outside the game window. |
-| `key` | Press or release a permitted key | Track held keys; release all on timeout, disconnect, pause, or worker crash. |
-| `move_mouse` | Screen or bounded relative motion | Relative motion is needed for Minecraft's captured camera. |
-| `wait` | Bounded duration | The game continues running while the agent waits or reasons. |
-| `health` | Desktop and client process status | Supervisor-only; never added to model observations as game state. |
+| **Messages** | Agent-authored posts to one agent, a topic, or everyone in the run. Kinds: `observation`, `request`, `offer`, `commitment`, `result`, `warning`. | "Iron ore at (120, 12, -40), about 8 blocks"; "I need 3 sticks"; "I will build the shelter at spawn". |
+| **Shared knowledge** | Persistent, structured entries that any agent can read, confirm or mark stale: resource locations, landmarks, built structures, chests and their contents, hazards. | `resource: iron_ore @ (120,12,-40), reported by agent-3, confirmed by agent-7, last seen 2 min ago`. |
 
-The action executor accepts a short, validated sequence such as `hold(W, 600 ms)`, `release(W)`, `capture`. Cap sequence length and wall time, then return a screenshot. The model cannot submit arbitrary shell commands or Python to the desktop. A validated mouse/keyboard action schema is still computer use; it keeps the agent's effective privileges equal to the permitted human UI. OpenAI's computer-use guide supports application-owned action handlers and screenshots. Its listed structured actions do not themselves specify timed held keys, so this game-specific adapter must implement them. [OpenAI computer use](https://developers.openai.com/api/docs/guides/tools-computer-use)
+Rules enforced by reducers:
 
-Use a fixed desktop resolution and UI scale for the pilot. Include screenshot dimensions with every image. If the image is resized before inference, transform coordinates back before input. Keep the real screenshot available at original resolution for ambiguous UI elements. Never assume a click succeeded without a subsequent screenshot.
+- Every entry records its author (the authenticated identity), the time and the run. An agent cannot write as another agent.
+- Positions and quantities are structured fields, not just text, so the evaluation can check whether a report was true and whether anyone used it.
+- Agents may confirm or dispute entries. A confirmation is only accepted if the confirming agent is within its observation radius of that position, so it has actually seen it.
+- Payload sizes are bounded, and each run's information mode is recorded with its results.
 
-## Agent loop and concurrency
-
-Each worker has a stable `agent_id`, role instructions, one model conversation, one desktop connection, and one SpacetimeDB identity. The loop is:
-
-1. Capture the current screen.
-2. Assemble only permitted context: own screenshot, current goal, own recent actions and failures, and permitted teammate messages.
-3. Request one short action sequence or a message from the model.
-4. Validate and execute actions on that agent's desktop only.
-5. Capture again and record action/result references. Repeat until the goal is complete, the agent is paused, or a time/step/budget limit is reached.
-
-Run the ten loops as ten independent processes or asynchronous tasks. Keep `response_id`/conversation history separate for every agent. Bound concurrent model requests with a configurable semaphore, but do not serialize desktop actions across agents. Stagger initial calls and screenshot intervals to avoid synchronized load. Preserve each desktop's state across calls: API conversation state alone does not restore the game client. [OpenAI computer use state guidance](https://developers.openai.com/api/docs/guides/tools-computer-use)
-
-Initial control policy: request a screenshot after every short action sequence; allow the model to ask for a fresh screenshot without acting; place hard bounds on hold duration and consecutive actions without visual feedback. Measure model latency before choosing the action duration. A vision model will not control the game at frame rate, so give tasks that tolerate seconds between decisions. Avoid combat and precision platforming in the first experiments.
-
-### Agent roles and communication
-
-Start with two non-overlapping roles, then expand to ten. A Factorio example is: iron mining, copper mining, smelting, power, belts/logistics, assembly, research, defense, exploration, and coordinator. Roles are goals and responsibilities, not privileged abilities. In Minecraft, equivalent roles could cover gathering, farming, building, crafting, transport, scouting, and defense.
-
-Use task claims and leases from the existing swarm architecture to avoid two agents unknowingly taking the same job. A message includes `run_id`, `sender`, `recipient` or topic, task ID, timestamp, kind (`request`, `offer`, `observation`, `commitment`, `result`), and a concise text payload. Messages may assert only what an agent saw or did; label uncertain claims as such. A recipient treats a teammate's claim as reported information, not authoritative world state.
-
-Define the information policy before the run:
-
-- **Strict screen-only mode:** agents communicate through the game's visible chat/UI. SpacetimeDB may archive those messages and coordinate the operator, but it does not inject messages into prompts unless they appeared on that player's screen.
-- **Swarm communication mode:** SpacetimeDB delivers agent-authored messages to teammates' prompts. This gives them an out-of-game communication channel, while still prohibiting server-derived facts. Use this mode when testing the Quant Swarm communication system rather than a pure human-interface benchmark.
-
-Record the mode with each run. Do not mix results from the two modes as if the agents had the same information.
+There is no required protocol: agents are told what the tools do, not how to cooperate. Task claims and commitments are available as messages, and agents may use them or ignore them.
 
 ## SpacetimeDB extension
 
-Reuse the existing `run`, `agent`, `task`, and `message` concepts. Add game-specific tables or fields without making screenshots or full model traces hot subscription data:
+Reuse `run`, `agent` and `message` where they fit; add game tables (all private, read through scoped views):
 
-| Record | Essential fields |
+| Table | Essential fields |
 | --- | --- |
-| `game_run` | Game, server identifier, scenario/version, information mode, model/prompt version, status, limits. |
-| `game_client` | Agent ID, desktop ID, connection state, last screenshot time, health; no server world state. |
-| `game_task` | Goal, assigned role, dependencies, lease, status, claimed/completed time. |
-| `game_message` | Sender, recipient/topic, task, kind, body, source observation reference. |
-| `game_action` | Agent, sequence ID, requested actions, validation result, start/end time, screenshot-before/after references. |
-| `game_observation` | Agent, capture time, image hash, artifact reference, dimensions, optional agent-authored summary. |
-| `game_incident` | Disconnect, death observed on screen, stuck state, timeout, invalid action, recovery action. |
+| `game_run` | Server version, seed, goal, information mode (none / messages / messages plus shared knowledge), model and prompt versions, limits, status. |
+| `game_agent_state` | Agent, latest position, health, food, inventory summary, current command, last step time, connection state. |
+| `game_knowledge` | ID, run, kind, item or block, position, quantity, author, created time, confirmations, disputes, stale flag. |
+| `game_action` | Agent, step ID, command and arguments, validation result, outcome, start and end time, knowledge or message IDs the agent cited as its reason. |
+| `game_observation` | Agent, step ID, observation summary (bounded), hash of the full observation stored as an artifact. |
+| `game_incident` | Agent, kind (death, disconnect, stuck, timeout, invalid command, crash), details, recovery. |
 
-Store screenshot blobs in an artifact store and keep immutable references and hashes in SpacetimeDB. Give each worker a distinct identity and scope its reads and writes; the supervisor and dashboard can read health and traces. Reducers validate ownership, payload size, run status, and deduplication IDs. A worker may claim a task and report its own actions, but it may not invent another worker's observation or mark its own unverified result as authoritative. SpacetimeDB reducers are the write boundary; scoped views can limit what workers read. [SpacetimeDB reducers](https://spacetimedb.com/docs/functions/reducers/) · [table access](https://spacetimedb.com/docs/tables/access-permissions/)
-
-## Recovery and operator controls
-
-- On a model timeout, stop that agent's current action, release held inputs, retain its client, and retry with a fresh screenshot after bounded backoff.
-- On desktop failure, mark the agent unavailable and release its task lease. Recreate only that desktop, reconnect the same game identity where possible, capture the login/world screen, and let the model reorient.
-- On game-server failure, stop all input, keep traces, restore the server from its normal save, and resume only after each client has visibly rejoined. The world may have changed; discard stale planned actions.
-- On SpacetimeDB disconnect, freeze new task claims/messages and buffer a bounded local action trace. Reconnect with the same worker identity, reconcile operation IDs, then resume.
-- Provide pause/resume for one agent or the whole run, a hard stop that releases all keys, per-agent time and API budgets, and a live grid of ten screens. The operator can inspect an agent's last screenshot, action, message, and error.
-
-The executor must reject attempts to leave the game window, use an in-game administrative console, enter credentials, or invoke a shell. Server setup and account sign-in are operator tasks. Game chat or signs can contain prompt-injection text; treat them as untrusted observations. The operator may manually intervene in a desktop, but that intervention is logged and the agent receives a fresh screenshot before continuing. [OpenAI computer-use safety and bounded-run guidance](https://developers.openai.com/api/docs/guides/tools-computer-use)
+`game_action` records which shared entries an agent cited, which is what lets the evaluation measure whether shared information was used.
 
 ## Delivery sequence and exit checks
 
 | Phase | Build | Exit check |
 | --- | --- | --- |
-| 0. Scenario and resources | Select Factorio or Minecraft, game/server version, ten player names, authentication and license arrangement, host plan, starter task, information mode, and budget. | One human-operated client joins the dedicated server; the ten-client account, licensing, and host plan is feasible. |
-| 1. One vision agent | One isolated desktop, one graphical client, screenshot/action adapter, one model loop, local action trace. | Agent navigates the UI and completes a simple visible task using only screenshots and input; all held keys release on stop. |
-| 2. Two concurrent agents | Two independent desktops, sessions, and workers in one world; distinct roles. | Both act during overlapping wall-clock intervals without focus/input leakage; pausing one does not pause the other. |
-| 3. Swarm coordination | SpacetimeDB task claims, role messages, observation/action references, dashboard grid. | Exactly one worker claims a contested task; a message is delivered only under the chosen information policy; every action has a before/after image. |
-| 4. Game reliability | Reconnect, crash handling, stuck detection, action timeouts, server save/restore drill. | Kill one worker and one client in separate drills; unaffected agents continue; restarted worker reorients from a fresh screenshot. |
-| 5. Scale to ten | Add clients incrementally; tune display resolution, screenshot rate, model concurrency, host distribution, and server settings. | Ten clients stay connected and ten independent loops run for a sustained test without cross-control; host and API load remain within configured limits. |
-| 6. Cooperative task | Give a goal that requires different roles and exchanged information, then compare with an uncoordinated baseline. | Audit reconstructs who observed, claimed, messaged, acted, and achieved each visible milestone; report completion, time, errors, and cost. |
+| M0. Server and connectivity | Java 21; pinned server version and config (offline mode, whitelist, localhost, peaceful, fixed seed); start/stop/backup scripts; a connectivity script that joins ten idle Mineflayer bots. | Ten bots join, stay connected for 10 minutes, and leave cleanly; the operator's own client can observe. |
+| M1. One agent | Command layer, observation builder, model loop with budgets, local trace. | One agent collects five oak logs and crafts a crafting table using only the command set. |
+| M2. SpacetimeDB integration | Game tables, reducers and views; agents publish state, actions and observations; messages and shared-knowledge tools. | Every action is recorded with its result; an agent reads and cites another agent's entry; a forged author or oversized payload is rejected. |
+| M3. Ten agents, no orchestrator | Launcher; global request cap; per-agent and run spend limits; shared goal for the run. | Ten agents act concurrently for 30 minutes on one goal with no coordinator; every message and shared entry is attributable. |
+| M4. Information-sharing experiment | Same seed, goal and budget under three modes: no sharing, messages only, messages plus shared knowledge. | Report time to goal, redundant exploration, how often shared entries were used, false or stale reports, and cost for each mode. |
+| M5. Reliability | Death and respawn, bot disconnect and reconnect, agent crash and restart, server restart from backup, SpacetimeDB disconnect. | Each drill recovers without losing the agent's identity or duplicating actions; unaffected agents continue. |
 
-### Suggested first tasks
+**Suggested first goals:** each agent gathers a full set of stone tools (shared knowledge of tree and stone locations helps); the group builds a shelter with beds for ten (requires sharing resources); the group finds and mines 20 iron ore (rewards sharing locations).
 
-- **Factorio, one agent:** open inventory, mine visible ore, place a furnace, fuel it, and verify the output on screen. **Two agents:** one mines iron while the other builds a small smelting line and requests materials. **Ten agents:** build a modest production chain with role-specific tasks. Avoid using map-reveal or admin commands.
-- **Minecraft, one agent:** navigate to a visible tree and gather wood. **Two agents:** gather wood and stone, meet at a named visible location, and build a shelter. Add camera control and pathing tests before expanding.
+## Measurements
 
-## Measurements and failure tests
+Per agent: steps, commands by type and outcome, invalid commands, time stuck, deaths, model requests and tokens, cost. Per run: time to goal and milestones, redundant work (two agents mining the same resource or exploring the same area), messages and knowledge entries posted, the share of entries later cited by another agent, the share confirmed or disputed, how many reports were false when checked against the world, and the dashboard and trace needed to reconstruct who knew what and when. The evaluation may check reports against server or bot state after a run; that check is never fed back to agents during the run.
 
-Track per-agent screenshot-to-action latency, actions/minute, invalid actions, time spent stuck, client frame rate, disconnects, model requests/tokens/images, and estimated cost. Track team task completion, duplicate work, conflicting actions, message usefulness, time to first milestone, and operator interventions. Keep game-specific success judgments separate from the agent prompts; an operator can judge from screen recordings, or an evaluator can inspect server state after a run without sending it back to agents.
+Capacity and cost: ten agents each making one model request every 10 seconds is about 60 requests per minute before retries. At GPT-6 Astra's standard API price ($10 per million input tokens, $1 cached, $50 output), a step of about 3,000 input and 300 output tokens costs about $0.045 uncached, so ten agents at that cadence cost roughly **$2.70 per minute, about $160 per hour**. Cached prompt prefixes (stable system prompt and tool definitions first, changing observation last) can cut input cost substantially. These are estimates: measure actual tokens per step in M1, then set the step interval and spend ceilings before the first ten-agent run.
 
-Run targeted tests for: focus/input isolation; keys left held after a crash; screenshot from the wrong desktop; wrong action coordinates after resizing; model calls returning out of order; duplicate task claims; stale teammate messages; a client reconnecting to a changed world; rate-limit errors; and one agent blocking the others. Fail closed on desktop identity mismatch or missing screenshot provenance.
+## Decisions still open
 
-For capacity planning, if ten agents each make one model request every `T` seconds, baseline request rate is `600/T` requests per minute; tool continuation calls and retries add to that. At `T = 10`, the baseline is about 60 requests/minute before those extras. Measure actual image/token use and check project/model limits before a ten-agent run. Apply per-agent and global budgets; back off on temporary rate limits instead of retrying all ten at once. [OpenAI rate limits](https://developers.openai.com/api/docs/guides/rate-limits)
+1. The first world seed. (Server version decided: 1.21.11.)
+2. Per-agent and per-run spend ceilings, step cadence and the global concurrent-request cap. (Model decided: GPT-6 Astra.)
+3. Observation radius (default 16 blocks) and whether it differs by experiment.
+4. The first run goal from the suggested list.
+5. Whether to build directly on Mineflayer and its plugins (recommended, for full control of the communication channel and logging) or adapt Mindcraft's MIT-licensed skill library with its code mode disabled and its chat replaced by SpacetimeDB.
 
-## Decisions to lock before implementation
+## Deferred: real-client vision track
 
-1. First game and scenario. Factorio is the recommended vision-only pilot; Minecraft's one-client Mac adapter is implemented but awaits live gameplay verification.
-2. Strict screen-only mode or swarm communication mode.
-3. Game client host: local machines, VMs, or a dedicated graphics host; decide after a one-client graphics test.
-4. Agent model, per-agent spend ceiling, screenshot cadence, and maximum action duration.
-5. How ten distinct player identities will be authenticated and licensed for the selected game; a private Factorio server and an authenticated Minecraft Java server have different account requirements.
+The earlier design used real graphical game clients, one isolated desktop per agent, screenshot-only observation and mouse/keyboard input. It is deferred while the pilot focuses on information sharing. What already exists for it:
 
-The first engineering milestone is **two concurrent agents with separate desktops and auditable, screen-only actions**. It proves the difficult isolation boundary before resources are committed to ten clients.
+- [src/game/](src/game/README.md): a one-client macOS agent for Factorio or Minecraft that captures the game window, calls a vision model and sends validated input through a Swift helper. It builds and its action schema is tested, but it has not run against a live game.
+- [vm_fleet/](vm_fleet/README.md): local Tart (macOS or Linux guests) and remote libvirt VM lifecycle tools. Neither installs games or runs agents. The Tart Homebrew formula currently fails to install with the current Homebrew; install from the cirruslabs GitHub release if this track resumes.
+
+If this track resumes, its open work is: a live one-agent check, a Linux screenshot/input adapter, a per-desktop control service, two-agent input-isolation tests, and the account and licensing plan for real clients.

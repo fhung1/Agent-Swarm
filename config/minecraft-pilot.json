@@ -1,0 +1,36 @@
+{
+  "version": "minecraft-pilot-1",
+  "decidedAt": "2026-10-03",
+  "server": {
+    "edition": "java",
+    "version": "1.21.11",
+    "versionRationale": "Newest version Mindcraft supports ('up to v1.21.11', https://github.com/mindcraft-bots/mindcraft)",
+    "javaRequired": 21,
+    "onlineMode": false,
+    "bindAddress": "127.0.0.1",
+    "difficulty": "peaceful",
+    "seed": null
+  },
+  "agents": {
+    "count": 10,
+    "namePrefix": "qs-agent-",
+    "orchestration": "none",
+    "communication": "spacetimedb-only",
+    "observationRadiusBlocks": 16
+  },
+  "model": {
+    "provider": "openai",
+    "id": "gpt-6-astra",
+    "api": "responses",
+    "structuredOutput": "json_schema",
+    "pricingUsdPerMillionTokens": { "input": 10, "cachedInput": 1, "output": 50, "source": "OpenAI standard API pricing as reported 2026-10-03" }
+  },
+  "budgets": {
+    "perAgentUsd": null,
+    "perRunUsd": null,
+    "stepIntervalSeconds": null,
+    "maxConcurrentRequests": null
+  },
+  "firstGoal": null,
+  "agentFramework": null
+}

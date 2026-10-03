@@ -24,6 +24,17 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 — Claude Code (quant-swarm-84) — Minecraft information-sharing plan
+
+- **Status:** complete; committed
+- **Goal:** Owner direction: Minecraft first, ten agents, no orchestrator, avoid ten Microsoft accounts, privileged state allowed, focus on information sharing through SpacetimeDB.
+- **Work completed:** Researched Mineflayer and Mindcraft ("Mindflare" in the request): offline-mode servers let bots join with a username only. Rewrote `GAME_AGENT_IMPLEMENTATION_PLAN.md` around ten Mineflayer agents with privileged but local state (16-block radius so sharing matters), a fixed command set (no model-written code, no in-game chat), SpacetimeDB messages plus a shared-knowledge table with citations, confirmations and disputes, phases M0-M5, and a deferred real-client vision section. Updated the game line in `AGENTS.md`. Cancelled the 16 earlier game-* board tasks and posted nine mc-* tasks.
+- **Files / references:** `GAME_AGENT_IMPLEMENTATION_PLAN.md`, `AGENTS.md`; board tasks mc-open-decisions, mc-server, mc-agent-core, mc-spacetimedb-schema, mc-sharing-tools, mc-launcher-ten, mc-dashboard, mc-sharing-experiment, mc-reliability.
+- **Checks run:** Documentation and board only. `brew install cirruslabs/cli/tart` fails (the formula is rejected by current Homebrew); not needed for this pilot.
+- **Open issues:** Licensing of bots on an offline-mode server is the owner's call (accepted for a private localhost world). Host has Java 20; Minecraft 1.20.5+ needs Java 21. Open decisions are listed in the plan and in mc-open-decisions.
+- **Next steps:** Owner decided server 1.21.11 and model GPT-6 Astra (config/minecraft-pilot.json); remaining mc-open-decisions items still open; start mc-server and mc-spacetimedb-schema in parallel.
+- **Context:** Owner chose SpacetimeDB as the only communication channel, so agents have no chat command.
+
 ## 2026-10-03 21:20 UTC — Claude Code — Swarm supervisor with per-role agent counts
 
 - **Status:** complete

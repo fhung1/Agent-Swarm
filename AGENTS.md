@@ -54,7 +54,7 @@ Alpaca paper trading simulates fills and does not reproduce every live-market ef
 
 ## Later applications
 
-- **Factorio or Minecraft:** Replace the research and broker adapters with game observation and action adapters. Reuse goals, task allocation, messages, proposals, and outcome tracking; add world-specific data and action types. The vision-only, ten-client design is in [GAME_AGENT_IMPLEMENTATION_PLAN.md](GAME_AGENT_IMPLEMENTATION_PLAN.md).
+- **Minecraft:** Ten Mineflayer agents on a private offline-mode server, with privileged local game state, a fixed command set, no orchestrator, and SpacetimeDB as their only communication channel. The pilot studies information sharing between agents. The plan is in [GAME_AGENT_IMPLEMENTATION_PLAN.md](GAME_AGENT_IMPLEMENTATION_PLAN.md); the earlier screenshot-only, real-client design is deferred there.
 - **Live trading:** A possible separate product phase only after paper evaluation, an independent risk design, and explicit owner authorization. The paper trading service must not have live credentials or a configurable live endpoint.
 
 ## Operating principles
