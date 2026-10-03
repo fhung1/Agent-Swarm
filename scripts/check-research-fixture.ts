@@ -7,15 +7,18 @@ import { modelWriteThesis, modelReviewThesis, modelDecide } from '../src/agents/
 // Requires a running local database and its publisher's CLI login. Uses synthetic QFIX evidence.
 // No model credentials or broker API calls are needed; temporary roles are revoked after the check.
 const cli = process.env.SPACETIME_CLI ?? 'spacetime';
+const cliConfig = process.env.SPACETIME_CONFIG_PATH ? ['--config-path', process.env.SPACETIME_CONFIG_PATH] : [];
+const server = process.env.SPACETIME_SERVER ?? 'local';
+const host = process.env.SPACETIMEDB_HOST ?? 'ws://localhost:3000';
 const database = process.env.SPACETIMEDB_DB_NAME ?? 'quant-swarm';
 let runCreated = false;
 const runId = `model-fixture-${Date.now()}`;
 const clients: any[] = [];
-const call = (...args: string[]) => execFileSync(cli, ['call', '--server', 'local', database, ...args], {encoding:'utf8'});
+const call = (...args: string[]) => execFileSync(cli, [...cliConfig, 'call', '--server', server, database, ...args], {encoding:'utf8'});
 async function connect(role: string, token?: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('connection timeout')), 15000);
-    DbConnection.builder().withUri('ws://localhost:3000').withDatabaseName(database).withToken(token)
+    DbConnection.builder().withUri(host).withDatabaseName(database).withToken(token)
       .onConnect((conn, identity, savedToken) => {
         clients.push(conn);
         call('grant_agent', identity.toHexString(), role);

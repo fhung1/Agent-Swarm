@@ -4,7 +4,7 @@ import { recordId } from './ids.js';
 import { isPermanent } from './work-errors.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { createAsker } from './agents/llm.js';
-import { modelDecide, modelReviewThesis, modelWriteThesis } from './agents/model-handlers.js';
+import { evidenceFor, modelDecide, modelReviewThesis, modelWriteThesis } from './agents/model-handlers.js';
 
 const name = process.env.AGENT_NAME ?? 'analyst-a';
 const runId = process.env.RUN_ID ?? 'demo';
@@ -153,24 +153,19 @@ function clip(text: string, max = 4000): string {
 
 // Placeholder analyst: summarizes stored evidence deterministically. A model call replaces this later.
 async function writeThesis(conn: DbConnection, task: Task): Promise<Outcome> {
-  const sources = [...conn.db.mySource.iter()]
-    .filter(source => source.runId === runId && source.symbol === task.symbol)
-    .sort((a, b) => a.id.localeCompare(b.id));
-  if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
-  const sourceIds = new Set(sources.map(source => source.id));
-  const facts = [...conn.db.myFact.iter()]
-    .filter(fact => sourceIds.has(fact.sourceId))
-    .sort((a, b) => a.id.localeCompare(b.id));
   const thesisId = recordId('thesis.', task.id);
   if (!conn.db.myThesis.id.find(thesisId)) {
+    const { sources, facts, refs, omitted } = evidenceFor(conn,runId,task.symbol);
+    if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
     const factText = facts.map(fact => `${fact.metric}=${fact.value} ${fact.unit} (${fact.period})`).join('; ') || 'no extracted facts';
     await conn.reducers.publishThesis({
       id: thesisId, runId, taskId: task.id, symbol: task.symbol,
       bullCase: clip(`Placeholder summary, no model analysis: ${sources.length} source(s); ${factText}.`),
-      bearCase: 'No valuation, competitive, or counter-evidence analysis has been run.',
+      bearCase: clip('No valuation, competitive, or counter-evidence analysis has been run.' +
+        ` Omitted evidence IDs: ${[...omitted.sources,...omitted.facts,...omitted.observations].join(', ') || '(none)'}`),
       assumptions: 'Cited sources are accurate as of their as-of dates.',
       invalidation: 'A cited source is superseded, amended, or contradicted by newer evidence.',
-      evidenceRefs: [...sourceIds, ...facts.map(fact => fact.id)].slice(0, 30).join(','),
+      evidenceRefs: refs,
     });
   }
   if (!conn.db.myMessage.id.find(recordId('', thesisId, '.claim'))) await conn.reducers.postMessage({

@@ -4,6 +4,7 @@ import { recordId } from '../ids.js';
 import { accountedAsk, PROMPT_VERSION } from './accounted-ask.js';
 import { isPermanent } from '../work-errors.js';
 import type { Ask } from './llm.js';
+import { selectEvidence, assertPromptBudget } from './evidence.js';
 import {
   ANALYST_SYSTEM, AnalystOutput, COORDINATOR_SYSTEM, CoordinatorOutput, SKEPTIC_SYSTEM, SkepticOutput,
   analystPrompt, coordinatorPrompt, skepticPrompt, toCritiqueMessageArgs, toDecisionArgs, toProposalArgs,
@@ -38,9 +39,7 @@ const observationView = (o: MarketObservation): ObservationView => ({
   id: o.id, symbol: o.symbol, feed: o.feed, bidPrice: o.bidPrice, askPrice: o.askPrice, asOf: o.asOf.toISOString(),
 });
 
-function evidenceFor(conn: DbConnection, runId: string, symbol: string): {
-  sources: Source[]; facts: Fact[]; observations: MarketObservation[]
-} {
+export function evidenceFor(conn: DbConnection, runId: string, symbol: string) {
   const sources = [...conn.db.mySource.iter()]
     .filter(source => source.runId === runId && source.symbol === symbol)
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -50,21 +49,20 @@ function evidenceFor(conn: DbConnection, runId: string, symbol: string): {
     .sort((a, b) => a.id.localeCompare(b.id));
   const observations = [...conn.db.myMarketObservation.iter()]
     .filter(observation => observation.symbol === symbol)
-    .sort((a, b) => Number(a.asOf.microsSinceUnixEpoch - b.asOf.microsSinceUnixEpoch))
-    .slice(-20);
-  return { sources: sources.slice(-10), facts: facts.slice(-10), observations: observations.slice(-10) };
+    .sort((a, b) => Number(a.asOf.microsSinceUnixEpoch - b.asOf.microsSinceUnixEpoch));
+  return selectEvidence(sources.map(sourceView),facts.map(factView),observations.map(observationView));
 }
 
 export async function modelWriteThesis(ask: Ask, conn: DbConnection, task: Task, runId: string, signal?: AbortSignal): Promise<Outcome> {
-  const { sources, facts, observations } = evidenceFor(conn, runId, task.symbol);
-  if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
   const thesisId = recordId('thesis.', task.id);
   // A resumed task may already have published its thesis; do not pay for a second model call.
   if (!conn.db.myThesis.id.find(thesisId)) {
-    const refs = [...sources, ...facts, ...observations].map(row => row.id).join(',');
+    const { sources, facts, observations, omitted, allowedIds: allowed, refs } = evidenceFor(conn, runId, task.symbol);
+    if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
+    const prompt = analystPrompt(task.symbol, task.objective, sources, facts, observations, omitted);
+    assertPromptBudget(ANALYST_SYSTEM,prompt);
     const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(AnalystOutput, ANALYST_SYSTEM,
-      analystPrompt(task.symbol, task.objective, sources.map(sourceView), facts.map(factView), observations.map(observationView)));
-    const allowed = new Set([...sources.map(s => s.id), ...facts.map(f => f.id), ...observations.map(o => o.id)]);
+      prompt);
     await conn.reducers.publishThesis(
       toPublishThesisArgs(output, { thesisId, runId, taskId: task.id, symbol: task.symbol }, allowed));
   }
@@ -84,10 +82,11 @@ export async function modelReviewThesis(ask: Ask, conn: DbConnection, task: Task
   let body = conn.db.myMessage.id.find(messageId)?.body;
   if (!body) {
     // The skeptic sees all run evidence for the symbol, so it can point out what the thesis left out.
-    const { sources, facts, observations } = evidenceFor(conn, runId, task.symbol);
+    const { sources, facts, observations, omitted } = evidenceFor(conn, runId, task.symbol);
     const refs = [thesisId, ...sources.map(s => s.id), ...facts.map(f => f.id), ...observations.map(o => o.id)].join(',');
-    const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(SkepticOutput, SKEPTIC_SYSTEM,
-      skepticPrompt(thesisView(thesis), sources.map(sourceView), facts.map(factView), observations.map(observationView)));
+    const prompt = skepticPrompt(thesisView(thesis), sources, facts, observations, omitted);
+    assertPromptBudget(SKEPTIC_SYSTEM,prompt);
+    const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(SkepticOutput, SKEPTIC_SYSTEM,prompt);
     const args = toCritiqueMessageArgs(output, { messageId, runId, taskId: task.id, symbol: task.symbol, thesisId });
     await conn.reducers.postMessage(args);
     body = args.body;

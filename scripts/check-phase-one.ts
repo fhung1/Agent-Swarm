@@ -9,6 +9,9 @@ import { recordId } from '../src/ids.ts';
 
 // Real local reducers and worker processes; synthetic evidence, no provider or broker calls.
 const cli = process.env.SPACETIME_CLI ?? 'spacetime';
+const cliConfig = process.env.SPACETIME_CONFIG_PATH ? ['--config-path', process.env.SPACETIME_CONFIG_PATH] : [];
+const server = process.env.SPACETIME_SERVER ?? 'local';
+const host = process.env.SPACETIMEDB_HOST ?? 'ws://localhost:3000';
 const database = process.env.SPACETIMEDB_DB_NAME ?? 'quant-swarm';
 const runId = `phase-one-${Date.now()}`;
 const otherRun = `${runId}.other`;
@@ -17,7 +20,7 @@ const dir = mkdtempSync(join(tmpdir(), 'quant-phase-one-'));
 const clients: any[] = [];
 const workers: ChildProcess[] = [];
 const logs = new Map<ChildProcess, string>();
-const call = (...args: string[]) => execFileSync(cli, ['call', '--server', 'local', database, ...args], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] });
+const call = (...args: string[]) => execFileSync(cli, [...cliConfig, 'call', '--server', server, database, ...args], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] });
 const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt'];
 const now = () => Timestamp.fromDate(new Date());
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -28,7 +31,7 @@ async function waitFor(fn: () => unknown, label: string, timeout = 20000) {
 async function connect(role?: string, token?: string): Promise<any> {
   return new Promise((resolve,reject) => {
     const timer = setTimeout(() => reject(new Error('Connection timeout')),15000);
-    DbConnection.builder().withUri('ws://localhost:3000').withDatabaseName(database).withToken(token)
+    DbConnection.builder().withUri(host).withDatabaseName(database).withToken(token)
       .onConnect((conn, identity, savedToken) => {
         clients.push(conn);
         if (role) call('grant_agent',identity.toHexString(),role);
@@ -42,7 +45,7 @@ function grantAccount(client: any, account = accountId) { call('grant_account_ac
 function start(client: any, name: string, workDelay = 0, workerRun = runId) {
   const file = join(dir,`${name}.token`); writeFileSync(file, client.token, {mode:0o600});
   const child = spawn(process.execPath,['dist/worker.js'], { env: { ...process.env, AGENT_NAME:name, RUN_ID:workerRun,
-    AUTO_CLAIM:'1', AGENT_BRAIN:'rules', AGENT_TOKEN_FILE:file, WORK_DELAY_MS:String(workDelay), SPACETIMEDB_DB_NAME:database }, stdio:['ignore','pipe','pipe'] });
+    AUTO_CLAIM:'1', AGENT_BRAIN:'rules', AGENT_TOKEN_FILE:file, WORK_DELAY_MS:String(workDelay), SPACETIMEDB_DB_NAME:database, SPACETIMEDB_HOST:host }, stdio:['ignore','pipe','pipe'] });
   workers.push(child); logs.set(child,'');
   for (const stream of [child.stdout,child.stderr]) stream!.on('data',chunk => logs.set(child, logs.get(child)! + String(chunk)));
   return child;
@@ -190,6 +193,7 @@ try {
   await assert.rejects(unrelatedExecutor.conn.reducers.reservePaperOrder({id:orderId,proposalId,clientOrderId:`${runId}.client`}),/Account access required/);
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'filled'}),/reconciled fills/);
   await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'accepted'});
+  await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'',status:'rejected'}),/Alpaca order ID|identity cannot change/);
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'different-broker',status:'accepted'}),/identity cannot change/);
   const fill = {id:`${runId}.fill`,orderId,alpacaActivityId:`${runId}.activity`,quantity:'1',price:'100',filledAt:now()};
   await executor.conn.reducers.recordFill(fill); await executor.conn.reducers.recordFill(fill);
@@ -201,6 +205,21 @@ try {
   const duplicate = await propose('duplicate','QPHASE');
   await assert.rejects(risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.dup`,proposalId:duplicate}),/authoritative evaluation/);
   await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.dup`,proposalId:duplicate,outcome:'reject'});
+  // A refused request before broker order creation has no ID, but is still terminal.
+  await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'canceled'});
+  const refusedProposal = await propose('refused','QPHASE');
+  await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.refused`,proposalId:refusedProposal});
+  const refusedOrder = `${runId}.order.refused`;
+  await executor.conn.reducers.reservePaperOrder({id:refusedOrder,proposalId:refusedProposal,clientOrderId:`${runId}.client.refused`});
+  await assert.rejects(executor.conn.reducers.updatePaperOrder({id:refusedOrder,alpacaOrderId:'',status:'new'}),/Alpaca order ID/);
+  await executor.conn.reducers.updatePaperOrder({id:refusedOrder,alpacaOrderId:'',status:'rejected'});
+  await waitFor(()=>executor.conn.db.myPaperOrder.id.find(refusedOrder)?.status==='rejected','refused order terminal state');
+  assert.equal(executor.conn.db.myPaperOrder.id.find(refusedOrder)?.alpacaOrderId,'');
+  const afterRefusal = await propose('after-refusal','QPHASE');
+  await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.after-refusal`,proposalId:afterRefusal});
+  await waitFor(()=>risk.conn.db.myRiskDecision.id.find(`${runId}.risk.after-refusal`),'exposure released after refusal');
+  assert.equal(risk.conn.db.myRiskDecision.id.find(`${runId}.risk.after-refusal`)?.outcome,'pass');
+  console.log('PASS pre-creation refusal releases exposure; nonterminal states require IDs; existing broker IDs cannot be cleared');
   call('revoke_account_access',risk.identity.toHexString(),accountId);
   await waitFor(()=>!risk.conn.db.myAccountSnapshot.id.find(snapshotId),'account revocation');
   await assert.rejects(risk.conn.reducers.recordMarketClock({accountId,isOpen:true,asOf:now()}),/Account access required/);
