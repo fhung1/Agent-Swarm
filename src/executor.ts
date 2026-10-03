@@ -10,6 +10,8 @@ import { recordId } from './ids.js';
 import { submissionBlock } from './agents/submission.js';
 import { parseRiskPolicy, pendingIntentsFor } from './agents/risk-review.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
+import { startTradeStream, type TradeStream } from './alpaca-stream.js';
+import type { TradeUpdate } from './agents/trade-updates.js';
 
 // Paper executor: submits risk-passed proposals to Alpaca's paper trading API and keeps the order ledger reconciled.
 // No human approves orders; a fresh risk pass from the risk broker is the only requirement. Each proposal gets one
@@ -43,6 +45,7 @@ try {
 let connection: DbConnection | undefined;
 let retryTimer: NodeJS.Timeout | undefined;
 let cycleTimer: NodeJS.Timeout | undefined;
+let tradeStream: TradeStream | undefined;
 let attempts = 0;
 let ready = false;
 let stopped = false;
@@ -268,6 +271,42 @@ async function cycle(conn: DbConnection): Promise<void> {
   }
 }
 
+async function receiveTradeUpdate(conn: DbConnection, update: TradeUpdate): Promise<void> {
+  if (!ready || connection !== conn || !conn.isActive) return;
+  const order = [...conn.db.myPaperOrder.iter()].find(row =>
+    row.alpacaOrderId === update.alpacaOrderId || row.clientOrderId === update.clientOrderId);
+  if (!order || order.alpacaOrderId !== update.alpacaOrderId) {
+    console.error(`Trade update for unknown order ${update.clientOrderId} (${update.alpacaOrderId}); REST reconciliation will inspect it`);
+    void cycle(conn);
+    return;
+  }
+  try {
+    await conn.reducers.recordTradeUpdate({
+      id: update.id, orderId: order.id, alpacaOrderId: update.alpacaOrderId, event: update.event,
+      brokerStatus: update.brokerStatus, executionId: update.executionId,
+      brokerTimestamp: Timestamp.fromDate(update.brokerTimestamp),
+    });
+    console.log(`Trade update ${update.event} for ${order.id}; reconciling through broker REST state`);
+  } catch (error) {
+    console.error(`Could not record trade update ${update.id}: ${String(error)}`);
+  }
+  void cycle(conn);
+}
+
+function syncTradeStream(conn: DbConnection): void {
+  const authorized = ready && connection === conn && conn.isActive &&
+    [...conn.db.myAgent.iter()].some(agent => agent.identity.equals(conn.identity!) && agent.role === 'executor');
+  if (!authorized) {
+    tradeStream?.stop();
+    tradeStream = undefined;
+    return;
+  }
+  if (tradeStream) return;
+  tradeStream = startTradeStream(credentials!, update => void receiveTradeUpdate(conn, update), (connected, detail) => {
+    console.log(`Trade update stream ${connected ? 'connected' : 'disconnected'}: ${detail}; REST polling remains active`);
+  });
+}
+
 function beforeSubmission(conn: DbConnection, order: PaperOrderRow, account: string): string | undefined {
   try {
     const proposal = [...conn.db.myTradeProposal.iter()].find(p => p.id === order.proposalId);
@@ -317,6 +356,8 @@ function scheduleReconnect(reason: unknown): void {
   if (stopped || retryTimer) return;
   ready = false;
   if (cycleTimer) clearInterval(cycleTimer);
+  tradeStream?.stop();
+  tradeStream = undefined;
   console.error('Connection lost:', reason);
   const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempts++, 5));
   retryTimer = setTimeout(() => { retryTimer = undefined; connect(); }, delay);
@@ -340,6 +381,10 @@ function connect(): void {
         return;
       }
       const run = () => void cycle(conn);
+      const syncStream = () => syncTradeStream(conn);
+      conn.db.myAgent.onInsert(syncStream);
+      conn.db.myAgent.onUpdate(syncStream);
+      conn.db.myAgent.onDelete(syncStream);
       conn.db.myTradeProposal.onUpdate(run);
       conn.db.myRiskDecision.onInsert(run);
       conn.subscriptionBuilder()
@@ -347,6 +392,7 @@ function connect(): void {
           ready = true;
           console.log(`Subscription ready (role: ${[...conn.db.myAgent.iter()].find(a => a.identity.equals(conn.identity!))?.role ?? 'not granted'})`);
           cycleTimer = setInterval(run, CYCLE_MS);
+          syncTradeStream(conn);
           run();
         })
         .onError(ctx => {
@@ -356,7 +402,8 @@ function connect(): void {
         })
         .subscribe([
           'SELECT * FROM my_agent', 'SELECT * FROM my_run', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
-          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request', 'SELECT * FROM my_fill',
+          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request',
+          'SELECT * FROM my_trade_update', 'SELECT * FROM my_fill',
           'SELECT * FROM my_run_config', 'SELECT * FROM my_risk_policy', 'SELECT * FROM my_account_snapshot',
           'SELECT * FROM my_market_observation', 'SELECT * FROM my_market_clock', 'SELECT * FROM my_reconciliation',
         ]);
@@ -370,6 +417,7 @@ process.on('SIGINT', () => {
   stopped = true;
   if (retryTimer) clearTimeout(retryTimer);
   if (cycleTimer) clearInterval(cycleTimer);
+  tradeStream?.stop();
   connection?.disconnect();
   process.exit(0);
 });

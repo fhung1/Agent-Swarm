@@ -62,6 +62,7 @@ import RecordReconciliationReducer from "./record_reconciliation_reducer";
 import RecordRiskDecisionReducer from "./record_risk_decision_reducer";
 import RecordRunMetricReducer from "./record_run_metric_reducer";
 import RecordTradeDecisionReducer from "./record_trade_decision_reducer";
+import RecordTradeUpdateReducer from "./record_trade_update_reducer";
 import RenewTaskLeaseReducer from "./renew_task_lease_reducer";
 import RequestOrderCancelReducer from "./request_order_cancel_reducer";
 import ReservePaperOrderReducer from "./reserve_paper_order_reducer";
@@ -101,6 +102,7 @@ import MySourceRow from "./my_source_table";
 import MyTaskRow from "./my_task_table";
 import MyThesisRow from "./my_thesis_table";
 import MyTradeProposalRow from "./my_trade_proposal_table";
+import MyTradeUpdateRow from "./my_trade_update_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -288,6 +290,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyTradeProposalRow),
+  myTradeUpdate: __table({
+    name: 'my_trade_update',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyTradeUpdateRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -320,6 +329,7 @@ const reducersSchema = __reducers(
   __reducerSchema("record_risk_decision", RecordRiskDecisionReducer),
   __reducerSchema("record_run_metric", RecordRunMetricReducer),
   __reducerSchema("record_trade_decision", RecordTradeDecisionReducer),
+  __reducerSchema("record_trade_update", RecordTradeUpdateReducer),
   __reducerSchema("renew_task_lease", RenewTaskLeaseReducer),
   __reducerSchema("request_order_cancel", RequestOrderCancelReducer),
   __reducerSchema("reserve_paper_order", ReservePaperOrderReducer),
