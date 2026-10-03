@@ -129,4 +129,18 @@ The earlier design used real graphical game clients, one isolated desktop per ag
 - [src/game/](src/game/README.md): a one-client macOS agent for Factorio or Minecraft that captures the game window, calls a vision model and sends validated input through a Swift helper. It builds and its action schema is tested, but it has not run against a live game.
 - [vm_fleet/](vm_fleet/README.md): local Tart (macOS or Linux guests) and remote libvirt VM lifecycle tools. Neither installs games or runs agents. The Tart Homebrew formula currently fails to install with the current Homebrew; install from the cirruslabs GitHub release if this track resumes.
 
+- [game/](game/README.md): a graphical Factorio prerequisite checker with unit tests; passing it does not prove a client joined.
+
 If this track resumes, its open work is: a live one-agent check, a Linux screenshot/input adapter, a per-desktop control service, two-agent input-isolation tests, and the account and licensing plan for real clients.
+
+### Historical graphical connection tasks — 2026-10-03
+
+These tasks belong to the deferred vision track, not the current headless Factorio plan. Historical tracking was in SpacetimeDB database `quant-swarm`, run `demo`:
+
+| Task ID | Status | Deliverable and acceptance |
+| --- | --- | --- |
+| `factorio-preflight` | Completed | Local prerequisite checker and guide in `game/`; tests cover missing runtime, timeout, and preventing false connection success. |
+| `factorio-client-join` | Open; blocked on environment details | Identify server and graphical desktop, install/configure the client there as needed, join one player, and record screenshot evidence. Depends on preflight. |
+| `factorio-desktop-adapter` | Open; depends on client join | Connect isolated screenshot capture and bounded keyboard/mouse actions to a worker; verify desktop identity and input isolation. |
+
+Current host checks found no Factorio executable, configured server address, or graphical display. No configured VM fleet host is present. The board connection is operational, but a Factorio connection has **not** been demonstrated. Do not equate a listening port or successful prerequisite check with a joined client. See [the connection guide](game/README.md). Obtain the intended server/desktop location before provisioning or joining an assumed environment.
