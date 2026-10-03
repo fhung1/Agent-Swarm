@@ -1,0 +1,27 @@
+[Unit]
+Description=Agent Swarm local SpacetimeDB
+After=network.target
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=agent-swarm
+Group=agent-swarm
+Environment=HOME=/var/lib/agent-swarm
+WorkingDirectory=/opt/agent-swarm
+StateDirectory=agent-swarm
+StateDirectoryMode=0700
+UMask=0077
+ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/agent-swarm/spacetime /var/lib/agent-swarm/identity
+ExecStart=/usr/bin/env spacetime start --listen-addr 127.0.0.1:3000 --data-dir /var/lib/agent-swarm/spacetime --jwt-priv-key-path /var/lib/agent-swarm/identity/id_ecdsa --jwt-pub-key-path /var/lib/agent-swarm/identity/id_ecdsa.pub --non-interactive
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agent-swarm
+
+[Install]
+WantedBy=multi-user.target

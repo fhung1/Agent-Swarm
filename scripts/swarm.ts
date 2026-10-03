@@ -14,8 +14,11 @@ import { deliverResearchCycle, planResearchCycle, type ScheduleSnapshot } from '
 // fileURLToPath decodes the URL, so paths with spaces (for example, "Agent Swarm") resolve correctly.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = process.env.SPACETIME_CLI ?? 'spacetime';
-const ENV = { ...process.env, PATH: `${process.env.PATH ?? ''}:${path.join(os.homedir(), '.local', 'bin')}` };
-const LOG_DIR = path.join(ROOT, 'logs');
+const ENV: NodeJS.ProcessEnv = { ...process.env, PATH: `${process.env.PATH ?? ''}:${path.join(os.homedir(), '.local', 'bin')}` };
+const credentialName = /^(?:ALPACA_API_KEY|ALPACA_API_SECRET|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|SEC_USER_AGENT)$/;
+const LOG_DIR = process.env.AGENT_SWARM_LOG_DIR
+  ? path.resolve(process.env.AGENT_SWARM_LOG_DIR)
+  : path.join(ROOT, 'logs');
 const STATE_FILE = path.join(LOG_DIR, 'swarm-state.json');
 
 const HELP = `Swarm supervisor
@@ -34,6 +37,10 @@ const option = (name: string) => { const i = args.indexOf(`--${name}`); return i
 function fail(message: string): never {
   console.error(message);
   process.exit(1);
+}
+
+function withoutCredentials(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(environment).filter(([name]) => !credentialName.test(name)));
 }
 
 function loadConfig(): SwarmConfig {
@@ -55,7 +62,7 @@ function identityOf(name: string): string | undefined {
 
 function spacetime(argv: string[]): string {
   try {
-    return execFileSync(CLI, argv, { env: ENV, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 30_000 });
+    return execFileSync(CLI, argv, { env: withoutCredentials(ENV), stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 30_000 });
   } catch (error) {
     const stderr = String((error as { stderr?: string }).stderr ?? error);
     throw new Error(/Response text: (.*)/.exec(stderr)?.[1] ?? stderr.split('\n').filter(l => l.trim() && !l.includes('UNSTABLE')).slice(0, 2).join(' '));
@@ -94,11 +101,17 @@ async function dbReachable(config: SwarmConfig): Promise<boolean> {
 
 function build(): void {
   console.log('Building…');
-  execFileSync('npm', ['run', '--silent', 'build'], { cwd: ROOT, env: ENV, stdio: 'inherit' });
+  execFileSync('npm', ['run', '--silent', 'build'], { cwd: ROOT, env: withoutCredentials(ENV), stdio: 'inherit' });
 }
 
 function processEnv(p: ProcessSpec, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  return { ...scopedProcessEnv(p,ENV), ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
+  const workerEnv = scopedProcessEnv(p, ENV);
+  if (p.env.AGENT_BRAIN === 'claude') {
+    for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN']) {
+      if (ENV[name]) workerEnv[name] = ENV[name];
+    }
+  }
+  return { ...withoutCredentials(ENV), ...workerEnv, ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
 }
 
 function missingSecrets(processes: ProcessSpec[]): string[] {
@@ -206,7 +219,7 @@ const DB_SPEC: ProcessSpec = { name: 'spacetimedb', role: 'operator' as never, s
 function launch(spec: ProcessSpec, extra: Record<string, string> = {}): ChildProcess {
   const stream = fs.createWriteStream(path.join(LOG_DIR, `${spec.name}.log`), { flags: 'a' });
   const [cmd, argv] = spec.script ? ['node', [path.join(ROOT, 'dist', spec.script), ...spec.args]] : ['npm', ['run', '--silent', 'db:start']];
-  const child = spawn(cmd, argv as string[], { cwd: ROOT, env: spec.script ? processEnv(spec, extra) : ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(cmd, argv as string[], { cwd: ROOT, env: spec.script ? processEnv(spec, extra) : withoutCredentials(ENV), stdio: ['ignore', 'pipe', 'pipe'] });
   for (const source of [child.stdout!, child.stderr!]) {
     let buffer = '';
     source.setEncoding('utf8');

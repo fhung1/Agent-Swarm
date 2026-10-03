@@ -1,0 +1,14 @@
+[Unit]
+Description=Coordinated offline backup of Agent Swarm state
+
+[Service]
+Type=oneshot
+Environment=AGENT_SWARM_BACKUP_MOUNT=/mnt/agent-swarm-backups
+Environment=SPACETIME_CLI=/usr/local/bin/spacetime
+ExecStart=/bin/sh /opt/agent-swarm/deploy/systemd/backup-coordinated.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agent-swarm /mnt/agent-swarm-backups

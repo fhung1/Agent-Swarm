@@ -1,0 +1,41 @@
+[Unit]
+Description=Agent Swarm paper research and execution workers
+After=network-online.target spacetimedb.service
+Wants=network-online.target
+Requires=spacetimedb.service
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=agent-swarm
+Group=agent-swarm
+Environment=HOME=/var/lib/agent-swarm
+Environment=SPACETIMEDB_HOST=ws://127.0.0.1:3000
+Environment=SPACETIMEDB_DB_NAME=quant-swarm
+Environment=SPACETIME_SERVER=local
+Environment=AGENT_SWARM_LOG_DIR=/var/log/agent-swarm
+Environment=SEC_ARTIFACT_DIR=/var/lib/agent-swarm/artifacts
+EnvironmentFile=/etc/agent-swarm/secrets.env
+WorkingDirectory=/opt/agent-swarm
+StateDirectory=agent-swarm
+StateDirectoryMode=0700
+LogsDirectory=agent-swarm
+LogsDirectoryMode=0700
+UMask=0077
+ExecStartPre=/usr/bin/install -d -m 0700 /var/lib/agent-swarm/artifacts /var/lib/agent-swarm/.local/share/quant-swarm/tokens
+ExecStartPre=/usr/bin/test -r /etc/agent-swarm/swarm.json
+ExecStartPre=/usr/bin/test -r /etc/agent-swarm/risk-policy.json
+ExecStart=/usr/bin/node /opt/agent-swarm/scripts/swarm.ts up --config /etc/agent-swarm/swarm.json --no-build
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agent-swarm /var/log/agent-swarm
+TimeoutStopSec=90s
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
