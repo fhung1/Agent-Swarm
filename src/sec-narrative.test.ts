@@ -52,6 +52,20 @@ test('10-Q extraction maps Part I Item 2 and Part II Item 1A to required narrati
   assert.deepEqual(requiredNarrativeSections('10-Q'), ['risk_factors', 'management_discussion']);
 });
 
+test('amended forms use their family section rules and preserve the full required disclosure test', () => {
+  const annual = [p('ITEM 1. BUSINESS'), p(`AMENDED BUSINESS ${filler('products and operations')}`),
+    p('ITEM 1A. RISK FACTORS'), p(`AMENDED RISK ${filler('material company risk')}`),
+    p("ITEM 7. MANAGEMENT'S DISCUSSION AND ANALYSIS"), p(`AMENDED MANAGEMENT ${filler('results and liquidity')}`)].join('\n');
+  const quarterly = [p('ITEM 2. MANAGEMENT\'S DISCUSSION AND ANALYSIS'), p(`AMENDED QUARTER ${filler('results and cash flow')}`),
+    p('ITEM 1A. RISK FACTORS'), p(`AMENDED RISK ${filler('uncertainty and risk')}`)].join('\n');
+  assert.deepEqual(extractFilingNarrative(annual, '10-K/A').map(section => section.key),
+    ['business','risk_factors','management_discussion']);
+  assert.deepEqual(extractFilingNarrative(quarterly, '10-Q/A').map(section => section.key),
+    ['risk_factors','management_discussion']);
+  assert.deepEqual(requiredNarrativeSections('10-K/A'), requiredNarrativeSections('10-K'));
+  assert.deepEqual(requiredNarrativeSections('10-Q/A'), requiredNarrativeSections('10-Q'));
+});
+
 test('HTML scripts are excluded and common SEC entities become readable text', () => {
   const html = [
     p('ITEM 1. BUSINESS'),

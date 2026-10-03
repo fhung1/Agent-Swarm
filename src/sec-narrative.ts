@@ -1,4 +1,4 @@
-export type FilingForm = '10-K' | '10-Q';
+export type FilingForm = '10-K' | '10-Q' | '10-K/A' | '10-Q/A';
 export type NarrativeSectionKey = 'business' | 'risk_factors' | 'management_discussion';
 
 export interface NarrativeSection {
@@ -12,7 +12,7 @@ export const NARRATIVE_CHUNK_CHARS = 248;
 export const NARRATIVE_CHUNKS_PER_SECTION = 3;
 export const NARRATIVE_SECTION_CHARS = NARRATIVE_CHUNK_CHARS * NARRATIVE_CHUNKS_PER_SECTION;
 
-const TARGETS: Record<FilingForm, { key: NarrativeSectionKey; item: string; label: string }[]> = {
+const TARGETS: Record<'10-K' | '10-Q', { key: NarrativeSectionKey; item: string; label: string }[]> = {
   '10-K': [
     { key: 'business', item: '1', label: 'Business' },
     { key: 'risk_factors', item: '1A', label: 'Risk Factors' },
@@ -23,6 +23,11 @@ const TARGETS: Record<FilingForm, { key: NarrativeSectionKey; item: string; labe
     { key: 'management_discussion', item: '2', label: "Management's Discussion and Analysis" },
   ],
 };
+
+function filingFamily(form: FilingForm): '10-K' | '10-Q' {
+  if (form === '10-K' || form === '10-K/A') return '10-K';
+  return '10-Q';
+}
 
 const ENTITIES: Record<string, string> = {
   amp: '&', apos: "'", bull: '•', copy: '©', deg: '°', divide: '÷', emsp: ' ', ensp: ' ', gt: '>',
@@ -89,10 +94,11 @@ function boundedChunks(value: string): string[] {
 
 /** Extract short deterministic excerpts from the actual Item section body, skipping TOC-sized stubs. */
 export function extractFilingNarrative(html: string, form: FilingForm): NarrativeSection[] {
+  const family = filingFamily(form);
   const lines = htmlLines(html);
   const headings = itemHeadings(lines);
   const sections: NarrativeSection[] = [];
-  for (const target of TARGETS[form]) {
+  for (const target of TARGETS[family]) {
     const candidates: { text: string; size: number }[] = [];
     for (let i = 0; i < headings.length; i++) {
       const heading = headings[i];
@@ -113,5 +119,5 @@ export function extractFilingNarrative(html: string, form: FilingForm): Narrativ
 }
 
 export function requiredNarrativeSections(form: FilingForm): NarrativeSectionKey[] {
-  return TARGETS[form].map(section => section.key);
+  return TARGETS[filingFamily(form)].map(section => section.key);
 }

@@ -3,7 +3,7 @@ import { PermanentWorkError } from '../work-errors.ts';
 
 // Source groups are indivisible: including a filing includes all its recorded facts.
 // Limits also respect the module's 50-reference / 4096-character reducer protocol.
-export const EVIDENCE_LIMITS = { sources: 6, facts: 40, refs: 49, refChars: 3967, chars: 30000 } as const;
+export const EVIDENCE_LIMITS = { sources: 6, facts: 48, refs: 49, refChars: 3967, chars: 30000 } as const;
 export const MAX_PROMPT_CHARS = 48000;
 export const MAX_SEC_SOURCE_AGE_DAYS = 400;
 export type NarrativeEvidenceRefs = Record<'business' | 'risk_factors' | 'management_discussion', string[]>;
@@ -53,14 +53,15 @@ function narrativeRefs(sources: SourceView[], facts: FactView[], now: number): N
   const required: NarrativeEvidenceRefs = { business: [], risk_factors: [], management_discussion: [] };
   // Fixtures and non-SEC research sources may use 10-K/10-Q labels without a filing document. Only enforce
   // this contract for the SEC archive documents the ingestor can extract and preserve as artifacts.
-  const filings = sources.filter(source => (source.kind === '10-K' || source.kind === '10-Q') &&
+  const filings = sources.filter(source => (source.kind === '10-K' || source.kind === '10-Q' ||
+    ((source.kind === '10-K/A' || source.kind === '10-Q/A') && Boolean(provenanceFor(source, facts)?.supersedesSourceId))) &&
     source.uri.startsWith('https://www.sec.gov/Archives/edgar/data/'));
   for (const source of filings) {
     const ageDays = (now - Date.parse(source.asOf)) / 86_400_000;
     if (!Number.isFinite(ageDays) || ageDays < 0 || ageDays > MAX_SEC_SOURCE_AGE_DAYS) {
       throw new PermanentWorkError(`SEC filing ${source.id} is future dated or older than ${MAX_SEC_SOURCE_AGE_DAYS} days`);
     }
-    const categories = source.kind === '10-K'
+    const categories = source.kind === '10-K' || source.kind === '10-K/A'
       ? ['business', 'risk_factors', 'management_discussion'] as const
       : ['risk_factors', 'management_discussion'] as const;
     for (const category of categories) {
@@ -73,17 +74,66 @@ function narrativeRefs(sources: SourceView[], facts: FactView[], now: number): N
   return required;
 }
 
+interface FilingProvenance { accession: string; form: string; reportDate: string; acceptedAt: string; supersedesSourceId?: string }
+
+function provenanceFor(source: SourceView, facts: FactView[]): FilingProvenance | undefined {
+  const fact = facts.find(row => row.sourceId === source.id && row.metric === 'filing_provenance');
+  if (!fact || fact.symbol !== source.symbol || fact.value.length > 512) return undefined;
+  try {
+    const value = JSON.parse(fact.value) as Partial<FilingProvenance>;
+    if (typeof value.accession !== 'string' || !/^[0-9]{10}-[0-9]{2}-[0-9]{6}$/.test(value.accession) ||
+      value.form !== source.kind || typeof value.reportDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.reportDate) ||
+      typeof value.acceptedAt !== 'string' || !Number.isFinite(Date.parse(value.acceptedAt)) ||
+      Date.parse(value.acceptedAt) !== Date.parse(source.asOf) ||
+      (value.supersedesSourceId !== undefined && (typeof value.supersedesSourceId !== 'string' || value.supersedesSourceId.length > 128))) {
+      return undefined;
+    }
+    return value as FilingProvenance;
+  } catch { return undefined; }
+}
+
+function filingFamily(kind: string): '10-K' | '10-Q' | undefined {
+  return kind === '10-K' || kind === '10-K/A' ? '10-K' : kind === '10-Q' || kind === '10-Q/A' ? '10-Q' : undefined;
+}
+
+function compareFiling(a: SourceView, b: SourceView, facts: FactView[]): number {
+  const reportA = provenanceFor(a, facts)?.reportDate ?? a.asOf;
+  const reportB = provenanceFor(b, facts)?.reportDate ?? b.asOf;
+  return compare(reportB, reportA) || recent(a, b);
+}
+
+function supersessionLinks(sources: SourceView[], facts: FactView[]): Map<string, string> {
+  const byId = new Map(sources.map(source => [source.id, source]));
+  const links = new Map<string, string>();
+  for (const successor of sources) {
+    const family = filingFamily(successor.kind);
+    if (!family || !successor.kind.endsWith('/A')) continue;
+    const metadata = provenanceFor(successor, facts);
+    const targetId = metadata?.supersedesSourceId;
+    const target = targetId ? byId.get(targetId) : undefined;
+    if (!metadata || !target || target.symbol !== successor.symbol || filingFamily(target.kind) !== family ||
+      Date.parse(successor.asOf) <= Date.parse(target.asOf) || metadata.reportDate !== provenanceFor(target, facts)?.reportDate) continue;
+    links.set(successor.id, target.id);
+  }
+  return links;
+}
+
 export function selectEvidence(allSources: SourceView[], allFacts: FactView[], allObservations: ObservationView[]): EvidenceSelection {
   for (const row of [...allSources,...allObservations]) if (!Number.isFinite(Date.parse(row.asOf))) {
     throw new PermanentWorkError(`Invalid evidence date: ${row.id}`);
   }
   const sourceRows = [...allSources].sort(recent);
-  const filings = ['10-K','10-Q'].flatMap(kind => {
-    const source = sourceRows.find(s=>s.kind===kind); return source ? [source] : [];
-  }).sort(recent);
+  const supersedes = supersessionLinks(sourceRows, allFacts);
+  const supersededIds = new Set(supersedes.values());
+  const families = ['10-K', '10-Q'] as const;
+  const filingCandidates = sourceRows.filter(source => filingFamily(source.kind));
+  const filings = families.flatMap(family => filingCandidates.filter(source => filingFamily(source.kind) === family &&
+    !supersededIds.has(source.id) && (source.kind === family || supersedes.has(source.id)))
+    .sort((a, b) => compareFiling(a, b, allFacts)).slice(0, 1));
   const required = filings.length ? filings : sourceRows.slice(0,1);
   const requiredIds = new Set(required.map(s=>s.id));
-  const optional = sourceRows.filter(s=>s.kind!=='10-K' && s.kind!=='10-Q' && !requiredIds.has(s.id));
+  const optional = sourceRows.filter(source => !requiredIds.has(source.id) &&
+    (!filingFamily(source.kind) || (source.kind.endsWith('/A') && !supersedes.has(source.id))));
   const groups = new Map(sourceRows.map(s=>[s.id, allFacts.filter(f=>f.sourceId===s.id).sort(metricOrder)]));
   const latest = new Map<string,ObservationView>();
   for (const quote of [...allObservations].sort(recent)) if (!latest.has(quote.feed)) latest.set(quote.feed,quote);

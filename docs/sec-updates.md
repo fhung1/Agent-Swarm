@@ -1,0 +1,13 @@
+# SEC filing updates
+
+The SEC ingestor polls the submissions `recent` arrays and deterministically selects the newest original 10-K and 10-Q by report date, at most two amendments per family accepted in the last 730 days, and at most two 8-K/8-K/A filings accepted in the last 365 days that identify Items 1.01, 2.02, 4.02, or 8.01. SEC accession numbers are validated and become part of the stable source ID. `as_of` is the SEC acceptance timestamp. The per-source `filing_provenance` fact records accession, form, report date, acceptance timestamp and, where applicable, the superseded source ID.
+
+All source, fact, document, XBRL and excerpt records are immutable and accession-specific. Repeated polling uses the same IDs; already-recorded rows are treated as successful retries. A complete 10-K/A or 10-Q/A with every required narrative section links to the earlier filing. Evidence selection follows only validated same-symbol, same-form-family links whose SEC acceptance time is later, hides superseded sources and facts from the selected set, and reports their IDs as omitted. The historical rows remain available for audit. Partial amendments remain additive and do not suppress the original filing, because an amendment may update only selected items. A complete amended source must still meet the fresh narrative-citation contract.
+
+Material 8-K events are stored as independent sources. Extraction is based on the item numbers SEC submissions reports, capped at two items and 1,200 characters per item. Up to 240 characters from each selected item are exposed as an evidence fact. Each event source and each 10-K/A or 10-Q/A also has one stable `filing_update_review=review_required` fact, making repeated polls produce one review signal per accession. The signal is durable for a future position-review worker; the current repository does not yet create a position-review task from it.
+
+For 10-Q cash flow, the ingestor records a value only when the accession-specific XBRL duration is between 70 and 110 days. If only a year-to-date duration is reported, the quarterly fact is omitted and the exact filing-specific facts remain in the XBRL artifact. The period is never relabeled.
+
+Selection, duration handling and event excerpt caps have offline fixtures in `src/sec-updates.test.ts`. Amendment supersession and event review markers are covered by `src/agents/evidence.test.ts`. These tests do not make live SEC requests.
+
+SEC background: [submissions data](https://www.sec.gov/edgar/sec-api-documentation), [filing access](https://www.sec.gov/Archives/edgar/data/1520138/000152013826000175/0001520138-26-000175-index.htm).

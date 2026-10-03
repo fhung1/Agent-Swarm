@@ -113,6 +113,16 @@ test('missing/contents-only headings and unsupported forms are explicit and neve
   assert.deepEqual(extractFilingExcerpts(filing(), '8-K').sections, []);
 });
 
+test('10-K/A and 10-Q/A reuse their base filing section maps while retaining amended form provenance', () => {
+  for (const [form, family] of [['10-K/A','10-K'],['10-Q/A','10-Q']] as const) {
+    const document = filing(family);
+    const result = extractFilingExcerpts(document, form);
+    assert.equal(result.form, form);
+    assert.deepEqual(result.missing, []);
+    assert.deepEqual(result.sections.map(section => section.section), ['risk_factors','mda']);
+  }
+});
+
 test('verified manifest/excerpt artifacts load; legacy manifests derive the same text from saved documents', t => {
   for (const legacy of [false, true]) {
     const f = saved(t, legacy);

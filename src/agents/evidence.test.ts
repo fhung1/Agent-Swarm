@@ -60,7 +60,7 @@ test('only the latest quote per feed is shown, with deterministic timestamp ties
 
 test('minimum required evidence that exceeds bounds fails permanently without partial facts',()=>{
   const filing=source('annual','10-K');
-  assert.throws(()=>selectEvidence([filing],facts(filing,41),[]),PermanentWorkError);
+  assert.throws(()=>selectEvidence([filing],facts(filing,EVIDENCE_LIMITS.facts+1),[]),PermanentWorkError);
   assert.throws(()=>selectEvidence([{...filing,uri:'x'.repeat(EVIDENCE_LIMITS.chars)}],[],[]),PermanentWorkError);
   assert.throws(()=>selectEvidence([{...filing,asOf:'bad'}],[],[]),PermanentWorkError);
   assert.throws(()=>assertPromptBudget('system','x'.repeat(MAX_PROMPT_CHARS)),PermanentWorkError);
@@ -119,4 +119,59 @@ test('stale SEC evidence fails closed before thesis selection',()=>{
     sourceId:stale.id,symbol:stale.symbol,metric:`filing_${section}_01`,value:'A sufficiently long stale filing excerpt with cited context.',
     unit:'text',period:'Item; accession; accepted date',quality:'ok' }));
   assert.throws(()=>selectEvidence([stale],narrative,[]),/older than 400 days/);
+});
+
+test('a complete accession-linked amendment supersedes the old filing in selected evidence only',()=>{
+  const asOf = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const earlier = new Date(Date.now() - 20 * 86_400_000).toISOString();
+  const annual: SourceView = { id:'annual-original',symbol:'QFIX',kind:'10-K',uri:'https://www.sec.gov/Archives/edgar/data/1/annual.htm',asOf:earlier };
+  const amendment: SourceView = { id:'annual-amended',symbol:'QFIX',kind:'10-K/A',uri:'https://www.sec.gov/Archives/edgar/data/1/amended.htm',asOf };
+  const quarter: SourceView = { id:'quarter-original',symbol:'QFIX',kind:'10-Q',uri:'https://www.sec.gov/Archives/edgar/data/1/quarter.htm',asOf };
+  const narrativeFacts = (filing: SourceView) => ['business','risk_factors','management_discussion'].map(section => ({
+    id:`${filing.id}.${section}`,sourceId:filing.id,symbol:filing.symbol,metric:`filing_${section}_01`,
+    value:`Amended ${section} disclosure with enough complete context to support a careful analysis.`,unit:'text',period:'item; accession',quality:'ok',
+  }));
+  const accession = (n: number) => `0000000001-26-${String(n).padStart(6,'0')}`;
+  const provenance = (filing: SourceView, number: number, supersedesSourceId?: string): FactView => ({
+    id:`${filing.id}.provenance`,sourceId:filing.id,symbol:filing.symbol,metric:'filing_provenance',
+    value:JSON.stringify({accession:accession(number),form:filing.kind,reportDate:'2025-12-31',acceptedAt:filing.asOf,
+      ...(supersedesSourceId ? {supersedesSourceId} : {})}),unit:'text',period:'filing provenance',quality:'ok',
+  });
+  const rows=[...narrativeFacts(annual),...narrativeFacts(amendment),...narrativeFacts(quarter),
+    provenance(annual,1),provenance(amendment,2,annual.id),provenance(quarter,3)];
+  const selected=selectEvidence([annual,amendment,quarter],rows,[]);
+  assert.deepEqual(new Set(selected.sources.map(row=>row.id)),new Set([amendment.id,quarter.id]));
+  assert.equal(selected.omitted.sources.includes(annual.id),true);
+  assert.equal(selected.omitted.facts.some(id=>id.startsWith(`${annual.id}.`)),true);
+  assert.ok(selected.allowedIds.has(`${amendment.id}.risk_factors`));
+  assert.throws(()=>selectEvidence([annual,amendment,quarter],rows.filter(row=>
+    row.sourceId!==amendment.id || row.metric==='filing_provenance'),[]),/missing a fresh/);
+});
+
+test('partial amendment remains additive and never suppresses its original filing',()=>{
+  const original=source('original','10-K',1);
+  const amendment=source('partial','10-K/A',2);
+  const quarterly=source('quarter','10-Q',3);
+  const metadata:FactView={id:'partial.provenance',sourceId:amendment.id,symbol:amendment.symbol,metric:'filing_provenance',
+    value:JSON.stringify({accession:'0000000001-26-000002',form:'10-K/A',reportDate:'2025-12-31',acceptedAt:amendment.asOf}),
+    unit:'text',period:'filing provenance',quality:'ok'};
+  const selected=selectEvidence([original,amendment,quarterly],[metadata],[]);
+  assert.ok(selected.sources.some(row=>row.id===original.id));
+  assert.ok(selected.sources.some(row=>row.id===amendment.id));
+  assert.ok(!selected.omitted.sources.includes(original.id));
+});
+
+test('event filings are optional evidence and update markers stay accession linked',()=>{
+  const annual=source('annual','10-K',1);
+  const event:SourceView={...source('event','8-K',2),uri:'https://www.sec.gov/Archives/edgar/data/1/event.htm'};
+  const eventFacts:FactView[]=[
+    {id:'event.provenance',sourceId:event.id,symbol:event.symbol,metric:'filing_provenance',
+      value:JSON.stringify({accession:'0000000001-26-000004',form:'8-K',reportDate:'2026-09-20',acceptedAt:event.asOf}),unit:'text',period:'accession',quality:'ok'},
+    {id:'event.review',sourceId:event.id,symbol:event.symbol,metric:'filing_update_review',value:'review_required',unit:'text',period:'Item 4.02; accession 0000000001-26-000004',quality:'ok'},
+    {id:'event.item',sourceId:event.id,symbol:event.symbol,metric:'filing_event_4_02',value:'The filing states the prior financial statements should no longer be relied on.',unit:'text',period:'Item 4.02; accession 0000000001-26-000004',quality:'ok'},
+  ];
+  const selected=selectEvidence([annual,event],[...facts(annual,3),...eventFacts],[]);
+  assert.ok(selected.sources.some(row=>row.id===event.id));
+  assert.ok(selected.facts.some(row=>row.metric==='filing_update_review'));
+  assert.ok(selected.allowedIds.has('event.item'));
 });
