@@ -1,6 +1,6 @@
 import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
-import { credentialsFromEnv, getAccount, getOpenOrders, object, textField, type AlpacaCredentials, type JsonObject } from './alpaca-client.js';
+import { credentialsFromEnv, getAccount, getPositions, getOpenOrders, object, textField, type AlpacaCredentials, type JsonObject } from './alpaca-client.js';
 import { cancelOrder, getFills, getOrder, getOrderByClientId, submitOrder } from './alpaca-orders.js';
 import {
   TERMINAL, classifySubmitFailure, clientOrderIdFor, filledQuantity, newFills, nextStatus, orderRequestFor,
@@ -10,6 +10,8 @@ import { recordId } from './ids.js';
 import { submissionBlock } from './agents/submission.js';
 import { parseRiskPolicy, pendingIntentsFor } from './agents/risk-review.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
+import { startTradeStream, type TradeStream } from './alpaca-stream.js';
+import type { TradeUpdate } from './agents/trade-updates.js';
 
 // Paper executor: submits risk-passed proposals to Alpaca's paper trading API and keeps the order ledger reconciled.
 // No human approves orders; a fresh risk pass from the risk broker is the only requirement. Each proposal gets one
@@ -43,16 +45,14 @@ try {
 let connection: DbConnection | undefined;
 let retryTimer: NodeJS.Timeout | undefined;
 let cycleTimer: NodeJS.Timeout | undefined;
+let tradeStream: TradeStream | undefined;
 let attempts = 0;
 let ready = false;
 let stopped = false;
 let cycling = false;
 let accountId: string | undefined;
 let accountCheckedAt = 0;
-// Per-process submission bookkeeping. After a restart the deterministic client order ID makes resubmission safe.
-const submits = new Map<string, { attempts: number; lastAt: number }>();
 const cancelRequested = new Set<string>();
-let lastReconciliation: string | undefined;
 
 type PaperOrderRow = { id: string; proposalId: string; clientOrderId: string; alpacaOrderId: string; status: string; submittedAt: Timestamp };
 type CancelRequestRow = { orderId: string; status: string; reason: string; detail: string };
@@ -81,6 +81,8 @@ async function recordBrokerState(conn: DbConnection, order: PaperOrderRow, broke
     issues.push(`${order.id}: broker order ${alpacaOrderId} differs from recorded ${order.alpacaOrderId}`);
     return;
   }
+  // A fill may arrive in the first POST response. Bind the broker identity before recording its activities.
+  if(!order.alpacaOrderId)await conn.reducers.updatePaperOrder({id:order.id,alpacaOrderId,status:order.status});
   // Fills first: the module accepts "filled" only once recorded fills add up to the order quantity.
   const recorded = [...conn.db.myFill.iter()].filter(f => f.orderId === order.id);
   const brokerFilled = String(broker.filled_qty ?? '0');
@@ -120,36 +122,41 @@ async function submit(conn: DbConnection, order: PaperOrderRow, account: string,
   if (!proposal) { issues.push(`${order.id}: proposal ${order.proposalId} not visible`); return; }
   const blocked = beforeSubmission(conn, order, account);
   if (blocked) { console.log(`${order.id}: new submission blocked: ${blocked}`); return; }
-  const bookkeeping = submits.get(order.id) ?? { attempts: 0, lastAt: 0 };
-  submits.set(order.id, { attempts: bookkeeping.attempts + 1, lastAt: Date.now() });
+  const prior=[...conn.db.myPaperSubmission.iter()].filter(a=>a.orderId===order.id);
+  const attemptId=recordId('submit.',`${order.id}.${prior.length+1}`);
+  try{await conn.reducers.beginPaperSubmission({id:attemptId,orderId:order.id,expectedAttempts:prior.length});}
+  catch(error){console.log(`${order.id}: authoritative submission blocked: ${String(error)}`);return;}
+  let broker:JsonObject;
   try {
-    const broker = await submitOrder(credentials!, orderRequestFor(proposal, order.clientOrderId));
-    console.log(`Submitted ${order.id} as ${order.clientOrderId}: ${proposal.side} ${proposal.quantity} ${proposal.symbol} ${proposal.orderType}`);
-    await recordBrokerState(conn, order, broker, issues);
+    broker = await submitOrder(credentials!, orderRequestFor(proposal, order.clientOrderId));
   } catch (error) {
     const kind = classifySubmitFailure(error);
+    await conn.reducers.finishPaperSubmission({id:attemptId,status:kind,details:clip(String(error),2000)});
     if (kind === 'refused') {
       // A refused resubmission may be the broker rejecting a duplicate of an order that already exists.
       const existing = await getOrderByClientId(credentials!, order.clientOrderId);
       if (existing) return recordBrokerState(conn, order, existing, issues);
-      if (bookkeeping.attempts > 0) { issues.push(`${order.id}: refusal after earlier attempts remains uncertain until reconciled`); return; }
+      if (prior.length > 0) { issues.push(`${order.id}: refusal after earlier attempts remains uncertain until reconciled`); return; }
       return reject(conn, order, account, String((error as Error).message));
     }
     // duplicate: the order exists under our client order ID; the next lookup records it.
     // retry and uncertain: nothing is assumed; the next cycle looks the order up before trying again.
     if (kind !== 'duplicate') issues.push(`${order.id}: submission ${kind}: ${String((error as Error).message).slice(0, 200)}`);
     console.log(`Submission of ${order.id} ${kind}: ${String(error)}`);
+    return;
   }
+  await conn.reducers.finishPaperSubmission({id:attemptId,status:'accepted',details:`Broker returned ${String(broker.id??'an order')}; fills require separate reconciliation`});
+  console.log(`Submitted ${order.id} as ${order.clientOrderId}: ${proposal.side} ${proposal.quantity} ${proposal.symbol} ${proposal.orderType}`);
+  await recordBrokerState(conn, order, broker, issues);
 }
 
 // An order reserved in the ledger but without a broker ID: find it by client order ID, or (re)submit it.
 async function settle(conn: DbConnection, order: PaperOrderRow, account: string, issues: string[]): Promise<void> {
   const broker = await getOrderByClientId(credentials!, order.clientOrderId);
   if (broker) return recordBrokerState(conn, order, broker, issues);
-  const bookkeeping = submits.get(order.id);
-  const lastAt = bookkeeping?.lastAt ?? order.submittedAt.toDate().getTime();
-  if (bookkeeping && Date.now() - lastAt < ABSENCE_GRACE_MS) return; // too soon to treat absence as "never placed"
-  if ((bookkeeping?.attempts ?? 0) >= MAX_SUBMIT_ATTEMPTS) {
+  const attempts=[...conn.db.myPaperSubmission.iter()].filter(a=>a.orderId===order.id).sort((a,b)=>b.attempt-a.attempt);
+  if (attempts[0] && Date.now() - attempts[0].startedAt.toDate().getTime() < ABSENCE_GRACE_MS) return;
+  if (attempts.length >= MAX_SUBMIT_ATTEMPTS) {
     issues.push(`${order.id}: submission remains uncertain after ${MAX_SUBMIT_ATTEMPTS} attempts; retaining exposure for reconciliation`);
     return;
   }
@@ -227,7 +234,6 @@ async function cycle(conn: DbConnection): Promise<void> {
   const issues: string[] = [];
   try {
     const account = await brokerAccountId();
-    await reserveNew(conn, account);
     const runs = new Map([...conn.db.myRun.iter()].map(r => [r.id, r.status]));
     const proposals = new Map([...conn.db.myTradeProposal.iter()].map(p => [p.id, p]));
     const orders = [...conn.db.myPaperOrder.iter()];
@@ -239,7 +245,11 @@ async function cycle(conn: DbConnection): Promise<void> {
       const reservation = [...conn.db.myRiskReservation.iter()].find(r => r.proposalId === order.proposalId);
       if (reservation && reservation.accountId !== account) { issues.push(`${order.id}: reserved for account ${reservation.accountId}, credentials are for ${account}`); continue; }
       try {
-        if (!order.alpacaOrderId) { await settle(conn, order, account, issues); continue; }
+        if (!order.alpacaOrderId) {
+          const found=await getOrderByClientId(credentials!,order.clientOrderId);
+          if(found)await recordBrokerState(conn,order,found,issues);
+          continue;
+        }
         // Pausing or closing a run cancels its open orders; the broker's answer arrives through the next refresh.
         const runStatus = runs.get(proposals.get(order.proposalId)?.runId ?? '');
         if (runStatus !== 'active' && !cancelRequested.has(order.id)) {
@@ -254,13 +264,19 @@ async function cycle(conn: DbConnection): Promise<void> {
         issues.push(`${order.id}: ${String((error as Error).message ?? error).slice(0, 200)}`);
       }
     }
-    // Orders under our client order ID prefix that the ledger does not know about indicate a lost reservation.
-    const known = new Set(orders.map(o => o.clientOrderId));
-    for (const open of await getOpenOrders(credentials!)) {
-      const clientOrderId = String(object(open, 'open order').client_order_id ?? '');
-      if (clientOrderId.startsWith('qs-') && !known.has(clientOrderId)) issues.push(`unknown broker order with client order ID ${clientOrderId}`);
+    // Reconcile before every new submission, including cash, quantities and non-swarm broker orders.
+    const [rawAccount,positions,openOrders]=await Promise.all([getAccount(credentials!),getPositions(credentials!),getOpenOrders(credentials!)]);
+    const currentAccount=object(rawAccount,'account');
+    if(textField(currentAccount,'id')!==account)throw new Error('Paper credentials changed account during reconciliation');
+    if(currentAccount.status!=='ACTIVE'||currentAccount.trading_blocked===true)issues.push('Paper account is inactive or trading blocked');
+    await conn.reducers.reconcilePaperAccount({id:recordId('recon.',`${account}.${Date.now()}`),accountId:account,cash:textField(currentAccount,'cash'),positionsJson:JSON.stringify(positions),openOrdersJson:JSON.stringify(openOrders),issues:clip(issues.join('; '))});
+    const check=[...conn.db.myAccountCheck.iter()].find(c=>c.accountId===account);
+    if(check?.status!=='matched'){console.log(`New submissions blocked: ${check?.details??'account check missing'}`);return;}
+    await reserveNew(conn,account);
+    for(const order of [...conn.db.myPaperOrder.iter()])if(!order.alpacaOrderId&&!TERMINAL.has(order.status)){
+      try{await settle(conn,order,account,issues);}catch(error){issues.push(`${order.id}: ${String(error)}`);}
     }
-    await reconcile(conn, account, issues);
+    if(issues.length)await conn.reducers.recordReconciliation({id:recordId('recon.',`${account}.${Date.now()}.submission`),accountId:account,status:'mismatch',details:clip(issues.join('; '))});
   } catch (error) {
     console.error(`Executor cycle failed: ${String(error)}`);
   } finally {
@@ -268,11 +284,49 @@ async function cycle(conn: DbConnection): Promise<void> {
   }
 }
 
+async function receiveTradeUpdate(conn: DbConnection, update: TradeUpdate): Promise<void> {
+  if (!ready || connection !== conn || !conn.isActive) return;
+  const order = [...conn.db.myPaperOrder.iter()].find(row =>
+    row.alpacaOrderId === update.alpacaOrderId || row.clientOrderId === update.clientOrderId);
+  if (!order || order.alpacaOrderId !== update.alpacaOrderId) {
+    console.error(`Trade update for unknown order ${update.clientOrderId} (${update.alpacaOrderId}); REST reconciliation will inspect it`);
+    void cycle(conn);
+    return;
+  }
+  try {
+    await conn.reducers.recordTradeUpdate({
+      id: update.id, orderId: order.id, alpacaOrderId: update.alpacaOrderId, event: update.event,
+      brokerStatus: update.brokerStatus, executionId: update.executionId,
+      brokerTimestamp: Timestamp.fromDate(update.brokerTimestamp),
+    });
+    console.log(`Trade update ${update.event} for ${order.id}; reconciling through broker REST state`);
+  } catch (error) {
+    console.error(`Could not record trade update ${update.id}: ${String(error)}`);
+  }
+  void cycle(conn);
+}
+
+function syncTradeStream(conn: DbConnection): void {
+  const authorized = ready && connection === conn && conn.isActive &&
+    [...conn.db.myAgent.iter()].some(agent => agent.identity.equals(conn.identity!) && agent.role === 'executor');
+  if (!authorized) {
+    tradeStream?.stop();
+    tradeStream = undefined;
+    return;
+  }
+  if (tradeStream) return;
+  tradeStream = startTradeStream(credentials!, update => void receiveTradeUpdate(conn, update), (connected, detail) => {
+    console.log(`Trade update stream ${connected ? 'connected' : 'disconnected'}: ${detail}; REST polling remains active`);
+  });
+}
+
 function beforeSubmission(conn: DbConnection, order: PaperOrderRow, account: string): string | undefined {
   try {
     const proposal = [...conn.db.myTradeProposal.iter()].find(p => p.id === order.proposalId);
     const reservation = [...conn.db.myRiskReservation.iter()].find(r => r.proposalId === order.proposalId);
     if (!proposal || !reservation) return 'Proposal or reservation missing';
+    const accountCheck=[...conn.db.myAccountCheck.iter()].find(c=>c.accountId===account);
+    if(accountCheck?.status!=='matched')return 'Full account reconciliation is pending or mismatched';
     const config = [...conn.db.myRunConfig.iter()].find(c => c.runId === proposal.runId);
     const policyRow = [...conn.db.myRiskPolicy.iter()].find(p => p.id === config?.policyId);
     const snapshot = [...conn.db.myAccountSnapshot.iter()].filter(s => s.accountId === account)
@@ -300,23 +354,12 @@ function beforeSubmission(conn: DbConnection, order: PaperOrderRow, account: str
   } catch(error) { return `Cannot validate submission: ${String(error)}`; }
 }
 
-// Record a reconciliation whenever the set of discrepancies changes, and once at startup.
-async function reconcile(conn: DbConnection, account: string, issues: string[]): Promise<void> {
-  const key = [...issues].sort().join('\n');
-  if (key === lastReconciliation) return;
-  const status = issues.length ? 'mismatch' : lastReconciliation === undefined ? 'matched' : 'resolved';
-  await conn.reducers.recordReconciliation({
-    id: recordId('recon.', `${account}.${Date.now()}`), accountId: account, status,
-    details: clip(issues.length ? issues.join('; ') : 'Ledger matches broker orders and fills'),
-  });
-  lastReconciliation = key;
-  console.log(`Reconciliation ${status}${issues.length ? `: ${issues.join('; ')}` : ''}`);
-}
-
 function scheduleReconnect(reason: unknown): void {
   if (stopped || retryTimer) return;
   ready = false;
   if (cycleTimer) clearInterval(cycleTimer);
+  tradeStream?.stop();
+  tradeStream = undefined;
   console.error('Connection lost:', reason);
   const delay = Math.min(30_000, 1_000 * 2 ** Math.min(attempts++, 5));
   retryTimer = setTimeout(() => { retryTimer = undefined; connect(); }, delay);
@@ -340,6 +383,10 @@ function connect(): void {
         return;
       }
       const run = () => void cycle(conn);
+      const syncStream = () => syncTradeStream(conn);
+      conn.db.myAgent.onInsert(syncStream);
+      conn.db.myAgent.onUpdate(syncStream);
+      conn.db.myAgent.onDelete(syncStream);
       conn.db.myTradeProposal.onUpdate(run);
       conn.db.myRiskDecision.onInsert(run);
       conn.subscriptionBuilder()
@@ -347,6 +394,7 @@ function connect(): void {
           ready = true;
           console.log(`Subscription ready (role: ${[...conn.db.myAgent.iter()].find(a => a.identity.equals(conn.identity!))?.role ?? 'not granted'})`);
           cycleTimer = setInterval(run, CYCLE_MS);
+          syncTradeStream(conn);
           run();
         })
         .onError(ctx => {
@@ -356,9 +404,11 @@ function connect(): void {
         })
         .subscribe([
           'SELECT * FROM my_agent', 'SELECT * FROM my_run', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
-          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request', 'SELECT * FROM my_fill',
+          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request',
+          'SELECT * FROM my_trade_update', 'SELECT * FROM my_fill',
           'SELECT * FROM my_run_config', 'SELECT * FROM my_risk_policy', 'SELECT * FROM my_account_snapshot',
           'SELECT * FROM my_market_observation', 'SELECT * FROM my_market_clock', 'SELECT * FROM my_reconciliation',
+          'SELECT * FROM my_paper_submission','SELECT * FROM my_account_ledger','SELECT * FROM my_account_check',
         ]);
     })
     .onConnectError((_ctx, error) => scheduleReconnect(error))
@@ -370,6 +420,7 @@ process.on('SIGINT', () => {
   stopped = true;
   if (retryTimer) clearTimeout(retryTimer);
   if (cycleTimer) clearInterval(cycleTimer);
+  tradeStream?.stop();
   connection?.disconnect();
   process.exit(0);
 });

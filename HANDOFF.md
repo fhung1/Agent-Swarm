@@ -4,6 +4,14 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex board observer — Synchronize main
+
+- **Status:** merge validated; publication recorded on board task `sync-main-merge`.
+- **Goal:** Pull upstream, resolve conflicts, and push at operator request.
+- **Work completed:** Merged local `48fcf04` with upstream in `/tmp/agent-sync-main`. Preserved both handoff histories and upstream dashboard configuration, credential scoping, and executor-check documentation.
+- **Checks:** Full `npm run check:all` passed under Node 24: generated bindings, typechecks/builds, 133 unit tests, structured research fixtures, worker recovery/leases/risk, and mock-broker executor timeout/restart/fill/reconciliation. Cached diff check passed; no live broker/provider calls.
+- **Next steps:** Push the validated merge and fast-forward clean shared main; final publication hash and outcome are recorded in the board result.
+
 ## 2026-10-03 22:56 UTC — Codex (codex-swarm) — Multi-application readiness checks
 
 - **Status:** in progress; board task `multi-app-readiness-check` (push when finished).
@@ -12,6 +20,16 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Checks run:** Board connection/status and task-detail read succeeded. No implementation checks run yet.
 - **Open issues:** Local `main` is 27 commits behind `origin/main`; publication must use the current upstream base while preserving shared changes. Existing open tasks for Factorio F3, Minecraft M5, and live paper acceptance remain prerequisites, so the readiness report must show those gates as blocked when their evidence is absent.
 - **Next steps:** Implement application-specific preflight and manifest generation, document explicit commands and status meanings, run isolated safe checks, publish the completed task, and release locks.
+
+## 2026-10-03 — Codex queue — Resolve and merge PR #2
+
+- **Status:** complete; PR #2 merged, final integration c30e86f pushed to main, and this session stopped at owner request.
+- **Work:** Combined cancellation tables/views/controls with paper submission and account reconciliation safety; retained both handoff histories, configurable dashboard connections plus Tailscale defaults and token recovery. Removed unfinished alert-view UI wiring because no backend alert view exists; retained alert evaluator/tests. Fixed Minecraft launcher environment typing and development browser task-ID selector; updated browser coverage for cancellation.
+- **Checks:** Initial isolated check:all passed: 112 unit tests, generated bindings, typechecks/builds, structured fixtures, worker recovery/risk and executor crash/fill/reconciliation. Minecraft typecheck, 2 unit tests, worker/dashboard build and module typecheck passed. Both trading and development real-Chromium acceptance passed against isolated fixtures. Diff/conflict-marker checks passed. No real broker/provider/gameplay calls.
+- **Policy:** Owner explicitly resumed all three applications; merged branch stop-all notes are historical. AGENTS.md now requires direct commits/pushes to main and no new PRs. This existing PR is the authorized exception.
+- **Latest-main integration:** Preserved research scheduler, trade-update stream, shared board and branding. Combined SEC narrative facts with verified excerpt artifacts; at most two narrative chunks per section keep both formats within the 40-fact paired-filing limit, with omitted characters retained in the artifact/manifest. Fixed native TypeScript test import and kept undici external to avoid ESM executor crash; mock broker now denies external stream connections. Final check:all passed with 133 unit tests, generated-binding/type/build checks, structured fixtures, process recovery/risk and mock-broker executor timeout/restart/fill/reconciliation acceptance. undici is an external runtime dependency.
+- **Stop request:** Owner requested stopping after this merge; no further tasks will be started. The session’s earlier board watcher has been stopped.
+- **Publication:** PR branch head d4ca6a3 is retained in merge b67aaa3; final integration c30e86f was pushed to main. GitHub confirms PR #2 closed and merged at 2026-10-03T23:01:55Z. Concurrent shared edits were preserved using /tmp/quant-pr2-resolve.
 
 ## 2026-10-03 — Codex — SEC narrative evidence
 
@@ -41,6 +59,33 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Next steps:** None.
 
 
+## 2026-10-03 — Codex (focus-reset) — Owner stop-all checkpoint
+
+- **Status:** All development stopped at owner request; saving all current shared changes as an unfinished checkpoint.
+- **Work completed:** Broadcast and directly delivered stop instructions to registered sessions. Archived 57 unfinished/cancelled task contracts, including all 33 active tasks, with original ownership, dependencies, details and results in `UNFINISHED_TASKS.md`. Retired active board tasks administratively using the recorded assignee labels required by the shared-identity board; cancellation notes identify focus-reset and the owner directive. Cancellation is not completion or acknowledgement.
+- **Validation:** Snapshot and board-state review only; no new implementation or runtime acceptance checks. This checkpoint contains unfinished work from multiple sessions and does not establish readiness.
+- **Publication:** Commit/push result is recorded in the final board broadcast.
+- **Next steps:** None authorized. Resume only on a new owner instruction using the archived task contracts.
+
+## 2026-10-03 — Codex (focus-reset) — Minecraft and trading priority
+
+- **Status:** scope directive recorded; board task `focus-reset-scope`; push when finished.
+- **Owner directive:** Stop Factorio work because the owner’s friend is fixing it; focus on Minecraft and paper trading.
+- **Work completed:** Read repository architecture, Minecraft runtime guide, scripts, handoff and board. Broadcast stop instruction to all sessions and directly notified `codex-plan`, the holder of Factorio locks. Cancelled all eight open `fa-*` tasks. Created `minecraft-trading-readiness` to retain useful non-Factorio scope from the mixed readiness task. Added durable priority to AGENTS.md.
+- **Checks:** Board confirms eight cancellations. Mixed task cancellation requires its assignee, who has been asked to cancel and release locks. No runtime code changed.
+- **Next steps:** The mixed task owner must cancel `three-swarm-readiness`, release Factorio locks and claim `minecraft-trading-readiness`. Documentation published independently of concurrent work. Minecraft priorities are launcher acceptance, recovery and sharing experiments; paper priorities are execution safety, evidence and operator monitoring.
+
+## 2026-10-03 21:46 UTC — Codex (codex-next) — Operator alerts
+
+- **Status:** in progress; board task `operator-alerts` claimed, push when finished.
+- **Goal:** Add account-scoped operational alerts for stale data, stuck/rejected orders, silent services or trade updates, reconciliation mismatches, and policy exposure breaches; show open alerts in the operator dashboard.
+- **Work completed:** Added deterministic alert derivation and example thresholds in `src/alerts.ts` and `config/alerts.example.json`, with five focused forced-condition tests in `src/alerts.test.ts`. Confirmed current mismatch blocking exists at executor submission; the risk-decision pass reducer needs a coordinated guard if it is not added by the current risk-gate owner.
+- **Files / references:** Board task `operator-alerts`; `src/alerts.ts`, `src/alerts.test.ts`, `config/alerts.example.json`.
+- **Checks run:** `node --test src/alerts.test.ts` passed (5/5); focused TypeScript check for both alert files passed.
+- **Open issues:** Alert persistence, scoped module view, worker wiring, dashboard display, and mismatch pass protection remain. Current sessions hold `spacetimedb/src/`, `src/module_bindings/`, `package.json`, and `dashboard/`; requests for transfer are posted on the coordination board. No alert data has been written to the live database.
+- **Next steps:** Finish module table/reducer/view, standalone monitor service and setup, integrate the dashboard after its acceptance task releases `dashboard/`, run forced-condition and dashboard checks, then commit and push only this task's changes and mark the board task done.
+- **Context:** `repo_reader` said it will release the dashboard path after pushing `dashboard-runtime-acceptance`; `codex-plan` expects to release module/package paths after its paper safety checks. Risk-gate mismatch pass guard is coordinated with `codex-plan`.
+
 ## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
 
 - **Status:** complete; publication requested by the owner (commit/push recorded on board task `push-dev-dashboard`)
@@ -69,6 +114,23 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** This runtime lacks Alpaca credentials; live connectivity/execution checks remain blocked. Other board tasks belong to remaining sessions. Dashboard/supervisor work is concurrent and unchanged by this session.
 - **Next steps:** Resume monitoring only if owner requests it. The board records both resolved tasks and the stopped monitor status. This session made no commit.
 
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation and acceptance checks complete; publication commit recorded on the board after push
+- **Goal:** Complete `sec-filing-excerpts`; push when finished.
+- **Work completed:** Risk-factor/MD&A extraction with document checksums, normalized offsets, deterministic <=240-character excerpt fact chunks and richer bounded artifacts. Verified source-matched reads stay inside SEC_ARTIFACT_DIR, reject symlinks and report unavailable/truncated evidence. Legacy manifests use original verified documents. Citation/prompt budgets remain enforced; inference audit uses `research-v3-sec-excerpts`.
+- **Checks:** Trimmed real AAPL 10-K/10-Q fixtures and corruption/path/offset/budget checks pass. Isolated database replay of saved real AAPL/MSFT filings produced 4 sources/56 facts including 16 excerpts; verified all offsets, recovered an interrupted ingestion and proved duplicate-free reruns. Full typecheck/build/unit checks pass; exact publication checkout checks are recorded on the board. No new SEC download or provider/broker calls.
+- **Limitations:** Heading matching is heuristic, full excerpt cap 3,200 characters per section, hot fact cap 240 characters/two chunks per section. Fresh SEC endpoint acceptance still needs a real contact User-Agent. Shared worker artifact access is required.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:
@@ -88,7 +150,36 @@ Copy this section for each handoff and fill in what applies:
 
 ## Handoffs
 
+## 2026-10-03 — Codex (repo_reader) — Development board runtime acceptance
+
+- **Status:** in progress; push when finished
+- **Goal:** Verify development board message/task controls in a real browser, extending the previously verified live reads.
+- **Work completed:** Added shared isolated browser/database infrastructure and a two-tab development-board fixture for message routing, competing claims, dependencies, block/release/takeover/completion, locks and recovery. Trading acceptance now uses the same helper.
+- **Files / references:** `scripts/dashboard-test-env.ts`, `scripts/check-dashboard.ts`, `scripts/check-dev-dashboard.ts`, planned `docs/dev-dashboard-acceptance.md`; board task `dev-dashboard-runtime-acceptance`.
+- **Checks / findings:** Strict runner/helper TypeScript passes. Initial Chrome runs exposed background-tab animation-frame throttling in the test driver; the driver now activates the inspected tab. Trading regression against concurrently edited dashboard/backend needs diagnosis; browser failures now include rendered text and runtime exceptions.
+- **Next steps:** Finish both browser runs, document observed results, and commit/push each completed task through an independent checkout while the shared Git index is reserved. No Factorio work.
+
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
+
 <!-- Add each new handoff below this line, newest first. -->
+
+## 2026-10-03 — Codex (codex-merge) — Resolve rebase and publish chat code
+
+- **Status:** complete
+- **Goal:** Preserve both handoff histories, complete the paused rebase, validate, and push the chat code.
+- **Work completed:** Preserved both sides of the HANDOFF.md conflict and completed the rebase. Updated the chat client to use generated scoped views and corrected the TypeScript test import. The original chat commit `8022efd` is backed up on `origin/chat-work-8022efd`.
+- **Checks run:** `npm run typecheck` passed; `npm test` passed (65/65); `git diff --check` passed.
+- **Open issues:** Chat viewer requires an identity with the appropriate operator/run grants to see scoped state.
+- **Files / references:** Rebased chat commits `bb62af4` and `5eb852a` pushed to `origin/main`.
+- **Next steps:** None for the rebase or push.
 
 ## 2026-10-03 — Codex (codex-monitor) — Operator order cancellation
 
@@ -202,17 +293,122 @@ Copy this section for each handoff and fill in what applies:
 - **Open issues:** Need identify the intended existing board endpoint or confirm the local project board is intended before provisioning its infrastructure.
 - **Next steps:** Obtain board address/name, then connect and verify subscription snapshot.
 - **Context:** No messages sent, roles granted, or database state changed.
+## 2026-10-03 — Codex board worker — Separate development from gameplay
 
+- **Status:** complete
+- **Work completed:** Created canonical `factorio-gameplay-swarm` task on DEVELOPMENT with original acceptance criteria and explicit final routing. Cancelled the Factorio development-task copy. Development agents/discussions belong on development; Factorio is exclusively for gameplay agents using the same backend implementation with isolated board state. Broadcast this routing to development sessions. Marked our historical Factorio session inactive/moved (current reducers have no unregister/delete operation).
+- **Checks run:** Board writes succeeded. Original cancelled development task cannot be reopened by a non-assignee, so canonical replacement uses a new ID. Shared framework prerequisite is complete.
+- **Next steps:** Claim implementation on development; connect only gameplay workers to Factorio. Old session/messages remain as historical records.
+
+
+## 2026-10-03 — Codex board worker — Move task to Factorio board
+
+- **Status:** complete
+- **Work completed:** Copied `factorio-ten-agent-swarm` with its full requirements onto the Factorio board and cancelled the development-board copy with a relocation note. Clarified that both boards use the same backend implementation/infrastructure with separate board state. Notified `codex-framework`; the framework dependency stays on development and is referenced in the Factorio task details because cross-instance dependency IDs are not local tasks.
+- **Checks run:** Confirmed Factorio task is open.
+- **Next steps:** Implement from the Factorio board after coordinating the shared framework prerequisite.
+
+
+## 2026-10-03 — Codex — General-purpose message-board framework
+
+- **Status:** complete
+- **Goal:** Make development, trading, Minecraft, and Factorio configurable instances of one application-neutral message-board framework; push when finished.
+- **Work completed:** Extracted shared backend factory, Node/browser client, configurable instance catalog, CLI and common dashboard. Development uses the same framework with a task-policy setting. All communication instances use the same API; application IDs no longer select separate client implementations. Preserved legacy wire schema and development history; published local instances without resets and opened the default Development dashboard.
+- **Files / references:** `message-board/README.md`, `message-board/instances.json`, `message-board/client.ts`, `message-board/module.ts`; branch `feat/message-board-framework`; implementation commit `76274a4` pushed to `origin/feat/message-board-framework`. Persistent checkout: `/home/bobywoby/dev/mhacks/2026/Agent-Swarm-board-framework`.
+- **Checks run:** `npm run check:message-board` integration passed (generic participant types, isolated boards, atomic claims, dependencies/reservations, development-only policy, compatible republish, token recovery and automatic reconnect). Module/client/CLI and dashboard typechecks pass. Generated bindings match the existing coordination schema. `npm run check:all` passed, including the 65-second lease-renewal and takeover acceptance. Chromium verified all four live boards plus a fifth instance added only through configuration, offline navigation and unknown-ID fallback. Git whitespace checks pass.
+- **Limitations:** Trusted-local participant names remain self-declared; recipient fields are routing hints, not private messages. Existing trading/game workers and domain audit histories are not automatically migrated or bridged; the shared worker API is documented for adoption. Financial/game execution gates remain in their application services.
+- **Next steps:** Use http://127.0.0.1:4174 or `npm run dashboard` from the framework checkout. Add an application via the instance catalog and connect its agents through the same client/reducers. Merge the pushed feature branch when ready.
+- **Context:** Dashboard exec session 95185; shared SpacetimeDB session 79670. Original main checkout and prior dashboard prototype remain preserved. Tests used isolated fixture databases; temporary test servers are stopped.
+
+
+## 2026-10-03 — Codex board worker — Queue Factorio swarm integration
+
+- **Status:** complete (task creation)
+- **Goal:** Create the requested development-board task for ten Factorio agents using a separate instance of the shared message board.
+- **Work completed:** Created open task `factorio-ten-agent-swarm` in `quant-swarm-coord`, dependent on the already claimed `generic-message-board` extraction. Included separate-instance isolation, game observation/action adapter, ten worker identities, shared objectives and task ownership, restart recovery, unified live/history dashboard, launch instructions, and milestone/victory evidence acceptance criteria. Notified `codex-framework` of the integration requirements.
+- **Checks run:** Read back active tasks; confirmed new task is open with its dependency. Used the persistent dashboard checkout CLI. No implementation started.
+- **Next steps:** Complete the framework dependency, then claim and implement the Factorio integration task. The dashboard checkout HANDOFF is locked by codex-framework; this entry records task creation in the original checkout.
+
+
+## 2026-10-03 — Codex — Pull merged main
+
+- **Status:** complete
+- **Goal:** Pull latest code into the primary checkout.
+- **Work completed:** Fast-forwarded main from `37e4918` to `da5b71c` (merged phase-0 branch). Restored local handoff entries alongside upstream entries after a documentation-only stash conflict. Preserved untracked chat files and the separate dashboard checkout.
+- **Checks run:** Main matches origin/main; no unmerged paths remain. No application tests required for this pull-only operation.
+- **Next steps:** None for this pull. Dashboard customizations remain in `../Agent-Swarm-dashboard`.
+
+## 2026-10-03 — Codex — Pull current branch
+
+- **Status:** complete
+- **Goal:** Pull the code in the current checkout.
+- **Work completed:** Fetched origin and ran `git pull --ff-only` on `main`; main is already up to date at `37e4918`. Preserved existing local changes and untracked files.
+- **Checks run:** Verified branch tracking and working tree status. Remote `phase-0-alpaca-read` advanced to `f9da58d`; current branch remains main.
+- **Next steps:** None for the current-branch pull.
+
+
+## 2026-10-03 — Codex — Unified communication dashboard
+
+- **Status:** complete
+- **Goal:** Use one global communication dashboard for development, trading, Minecraft, and Factorio.
+- **Work completed:** Default `npm run dashboard` serves shared message-first UI at port 4174; board links select isolated coordination backends or scoped trading run messages. Added board-aware CLI, setup command, saved per-board identities, run selector, composer, task controls for coordination, navigation during disconnections, and reconnect recovery. Portfolio/order console remains optional via `dashboard:portfolio` on 4173; it is stopped. Opened Development in the user's browser.
+- **Files / references:** Persistent checkout `/home/bobywoby/dev/mhacks/2026/Agent-Swarm-dashboard`, branch `feat/unified-communication-dashboard`, uncommitted changes. `dashboard/README.md` contains setup and agent connection instructions. Original main checkout and its untracked chat files remain intact.
+- **Checks run:** Dashboard TypeScript check and git diff whitespace check pass. Chromium integration against temporary databases verified four-board navigation, board and run isolation, escaped message content, live delivery, message composition, persisted identity, authorization, and server-restart recovery with the selected run retained. Inspected development UI screenshot. Temporary test services shut down.
+- **Open issues:** The existing local trading database lacks the updated scoped-view schema; publishing it requires its original owner (the current CLI received HTTP 403). Trading UI works against the isolated current-schema fixture. Game boards are provisioned and empty until game agents connect; no game agents were launched.
+- **Next steps:** Use http://127.0.0.1:4174/?board=development. Run `npm run dashboard` from the persistent checkout to restart. Have the existing trading database owner publish the current schema and grant browser access. Connect game agents with `--board minecraft` or `--board factorio`.
+- **Context:** Running dashboard exec session 6376 and shared database session 79670. Coordination task `unified-boards` records completion. No GitHub push performed.
+
+
+## 2026-10-03 — Codex board worker — Consume live development-board tasks
+
+- **Status:** in progress
+- **Goal:** Connect to the live message board and execute tasks as they appear.
+- **Work completed:** Located the active development board (`quant-swarm-coord`, dashboard port 4174) in `/tmp/agent-swarm-dashboard`. The older trading-board token is invalid after the environment changed; current CLI identity can reach the development board. Read its coordination workflow and register under `codex-board-worker`.
+- **Next steps:** Read task dependencies/messages, claim available work, acquire file locks before edits, and post progress/results. Preserve other sessions' changes.
+
+## 2026-10-03 — Codex — Pull update and run dashboard
+
+- **Status:** complete (servers running; trading database owner action remains)
+- **Goal:** Pull the GitHub dashboard update and run it locally.
+- **Work completed:** Fetched `7201774` from `origin/phase-0-alpaca-read`, created isolated checkout `/tmp/agent-swarm-dashboard`, pulled that branch there, installed dependencies, started both dashboards and existing local SpacetimeDB data directory. Published the missing `quant-swarm-coord` database.
+- **Checks run:** Both browser bundles built and returned HTTP 200 at ports 4173 and 4174. SpacetimeDB 2.10.2 listens on port 3000. Trading module publish rejected with HTTP 403 because CLI identity is not the existing database owner.
+- **Open issues:** Existing trading database may require owner schema update and browser operator/access grants. No existing database was reset. Original main checkout and untracked chat files preserved.
+- **Next steps:** Open http://127.0.0.1:4173 (trading) or http://127.0.0.1:4174 (development). Have database owner update quant-swarm and grant browser access if needed.
+- **Context:** Running exec sessions: trading 68523, development 80006, database 79670. Server source checkout is in /tmp; no ongoing GitHub watcher installed.
+
+
+## 2026-10-03 — Codex (cedar) — SEC cache and retry
+
+- **Status:** complete; pushed by cedar as `427b9d8`
+- **Goal:** Complete board task `sec-cache-retry` without changing trading/executor interfaces.
+- **Work underway:** Conditional SEC HTTP revalidation, checksum-verified cached bytes, short TTL for mutable feeds and three bounded transient retries honoring Retry-After; preserve provenance.
+- **Checks / publication:** Typecheck/build and 74 unit tests passed (11 new cache tests); real local HTTP fixtures verified 503 recovery and restart/304. Checksum-verified conditional caching, three bounded retries, route guard and 5-minute mutable/24-hour filing TTL are documented in `docs/sec-cache.md`. No external SEC/model/broker calls. Completion evidence added at cedar's request while codex-plan held the lock.
+
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation/checks complete; waiting for the other session's Git-index commit window to finish before push
+- **Goal:** Complete `sec-filing-excerpts` and push when finished.
+- **Work completed:** Added bounded risk-factor and MD&A text artifacts and manifest references; workers verify content-addressed files within SEC_ARTIFACT_DIR, document/source matching, byte bounds and symlink/path restrictions. Legacy manifests derive excerpts from the verified original document. Source IDs remain the citations; missing/truncated text is disclosed and shared evidence budgets include excerpt text. New inference audit uses prompt version `research-v3-sec-excerpts`. No schema changes.
+- **Checks run:** Full typecheck/build and all 88 unit tests pass, including eight extractor/artifact/security checks and six evidence-selection checks. Offline smoke on all four saved AAPL/MSFT 10-K/10-Q filings found both sections. Both-company prompts retained all 20 labeled fixture facts at 15,704/15,728 characters. Diff check passed. No downloads, model or broker calls.
+- **Limitations:** Heading extraction is heuristic and bounded to 3,200 characters per section; unsupported layouts or incomplete evidence remain explicit research limitations. Workers need the SEC artifact directory shared/mounted locally.
+- **Next steps:** Commit/push this completed task after the shared Git-index lock releases, record its implementation commit, and mark the board task done.
+
+## 2026-10-03 — Codex (codex-next) — Operator alerts
+
+- **Status:** in progress; entry added while codex-plan holds the handoff lock
+- **Work underway:** Board task `operator-alerts`; alerts and dashboard runtime configuration. Trading module/bindings transfer is waiting for codex-plan's paper safety commit. Verification and push pending.
 
 ## 2026-10-03 — Codex (codex-plan) — Three-swarm readiness and push policy
 
 - **Status:** in progress
 - **Goal:** Audit all current implementation plans and implement until Alpaca, Minecraft and Factorio swarms have runnable full-test paths. Owner confirmed Factorio uses headless structured state and commands.
-- **Work completed:** Reviewed current source, acceptance scripts, plans and all board tasks; added 14 uncovered backlog tasks with evidence/dependencies/checks. Published additive coordination policy: every existing task says `push when finished`, and every new task inherits it. Added the standing push instruction to AGENTS.md.
-- **Findings:** Phase 1 accepted locally; paper executor/supervisor/dashboard exist but broker acceptance remains pending. Found SEC supervisor `SYMBOL`/`SYMBOLS` mismatch and execution revalidation/reconciliation gaps. Minecraft implementation has not started; previous graphical Factorio work is deferred and does not satisfy new headless requirements.
-- **Checks:** Coordination module typecheck/publish and policy migration passed; Git diff check passed. No broker orders or paid inference made.
-- **Prerequisites:** OPENAI_API_KEY exists; Alpaca paper credentials and SEC_USER_AGENT are absent. Java is 20, Docker engine is available, Factorio runtime absent. Owner questions pending for EULA, private environment configuration and headless container setup.
-- **Next steps:** Push completed policy and confirm other sessions' completed changes are pushed; implement game module/workers/adapters/launchers and repair Alpaca integration gaps; execute isolated and live acceptance where prerequisites permit.
+- **Work completed:** Audited source, plans and board; added 14 uncovered trading tasks, eight headless Factorio tasks and readiness tracking. Every existing/new board task now says `push when finished`; AGENTS.md retains this instruction. Pushed policy `6e90bc6`, SEC supervisor symbol fix `fad241a`, other sessions' completed CI/evidence changes `78c38aa`, and executor-side pre-submit checks/uncertain-exposure retention `f9da58d` to `origin/phase-0-alpaca-read`.
+- **Minecraft implementation:** New isolated `games/` package: checksum-verified private Java 21/Minecraft 1.21.11 server, ten independent Mineflayer workers with persistent identities/local observations/bounded commands, private indexed game views and authenticated messages/knowledge/action/model audit, shared durable budgets, pause/revocation/disconnect cancellation, restart output reuse and conservative uncertain-action recovery, launcher and operator dashboard at port 4175. Game database is `quant-swarm-games`, separate from trading and coordination. Worlds/binaries/tokens/traces remain ignored.
+- **Checks:** Isolated `npm run check:all` passed 59 unit tests, 13 synthetic model responses and full Phase 1 acceptance `phase-one-1791060946572`; executor changes passed 61 unit tests/typecheck/build. Game typecheck/build/unit and real database authorization/citation/idempotence/budget/revocation checks pass. Ten actual bots stayed connected for 600 seconds; a live survival bot mined five logs/crafted a table in an explicitly labeled log fixture; real Chrome verified ungranted isolation, live grants, pause/resume and revocation. Ten fixture-response workers exercised budget/output/action/cross-agent citation paths without external inference. Initial concurrent collection exposed chunk-readiness and timeout cancellation issues, now fixed; inference-audit migration preserved existing rows.
+- **Additional checks:** `check:workers` passed ten independent workers/20 completed actions and inferences, cross-agent citations, shared two-call concurrency, restart step limits and recorded-output reuse. Owner approved one `gpt-6-astra` request to the Responses endpoint with only local Minecraft state/goal; run `minecraft-model-smoke` completed one structured model decision and recorded its `share` action. No broker orders were made.
+- **Prerequisites / remaining gaps:** Alpaca keys and SEC_USER_AGENT are absent; owner will supply them. Owner approved stale trading-lock transfer; authoritative pre-submit transition, durable attempts and account-ledger reconciliation are now being implemented under our module locks. Minecraft EULA accepted. Thirty-minute ten-worker gameplay, matched-seed sharing experiments and full recovery drills are not yet accepted. Owner later deferred Factorio live tests because it is not installed; its headless backlog remains scoped, unimplemented and unlaunched.
+- **Publication / current checks:** Minecraft pushed as `397358f`; server/schema/core/sharing/dashboard board tasks done. Paper module now has private `paper_submission`, `account_ledger` and `account_check` tables, deterministic full-account comparisons, atomic pre-submit risk/grant/pause/reconciliation checks, three persistent attempts with uncertainty grace, explicit audited paused-run recovery, and safe reserved-risk refresh. Actual executor mock-broker drill passed acceptance-before-timeout/abrupt restart with one POST, partial/final fills, cash drift/external-order interlocks and recovery; all broker HTTP was intercepted with fake keys. `pilot:prepare` discovers the paper account via one GET and creates ignored config; `pilot:preflight` makes no provider calls. Final isolated CI suite is running after the last uncertainty guard.
+- **Next steps:** Push final paper safety/test/setup/docs commit once checks pass, release module/package locks to codex-next, and run real paper acceptance when credentials/SEC contact arrive. Minecraft code is runnable; the plan's 30-minute active-worker check and experiment/reliability acceptance remain on the board. Factorio remains owner-deferred. Exact Git push destination and branch are owner-authorized.
 
 ## 2026-10-03 — Codex (repo_reader) — Repository orientation and dashboard diagnosis
 
@@ -526,3 +722,13 @@ Copy this section for each handoff and fill in what applies:
 - **Reconciliation:** Concurrent session added a detailed Factorio chain. Cancelled five overlapping audit tasks in favor of those IDs, documented mappings and shared game/framework integration; applied push-policy globally.
 - **Checks:** Read current code/plans and live task inventory, verified task additions/dependencies and git diff --check. Documentation/board only; no runtime tests needed.
 - **Next steps:** Workers claim root tasks and observe dependencies; external paper credentials and game runtimes remain acceptance prerequisites.
+## 2026-10-03 — codex-localdemo — Local Factorio live demo
+
+- **Status:** In progress. Matched installed Linux Steam Factorio 2.0.77 and found current main's one-actor bridge and generic board; ten-worker integration remains to implement.
+- **Isolation:** Existing port 3000 is an SSH tunnel and has not been used. Started a new local SpacetimeDB 2.10.2 on 127.0.0.1:3001 with development and Factorio databases in `.game-runs/local-demo-db`. Personal Factorio saves remain untouched.
+- **Coordination:** Registered and claimed `factorio-local-demo` on the local development board, locked implementation files. Will update with checks, runtime evidence, commit and next steps.
+- **Live result:** Ten independent Node rules-worker processes, saved tokens and journals, and ten scripted actors are running against the disposable world. The graphical Steam client joined `127.0.0.1:34197` and showed the characters at spawn; `.game-runs/client-joined.png` records the view. The shared local dashboard is live at `http://127.0.0.1:4184/?board=factorio` and `?board=development`; its navigation and availability were visually checked in `.game-runs/dashboard-open.png`.
+- **Engine/board audit:** `python3 factorio/verify-demo.py --world "$PWD/.game-runs/live-20261003"` passed: ten actors with five plates each, ten done tasks, 50 completed transfer receipts, 50 matching board action results, chest 0/50 ore and 10/20 coal. Report: `.game-runs/live-20261003/verification.json`. Resource reservations and task-linked messages are on gameplay board only. Viewing messages are separate.
+- **Checks:** Node typecheck, Python compile, documentation whitespace, 50-call concurrent RCON smoke, real-engine `check-production.py` (new mod rendering), and live pause rejection/resume all passed. The first rendering attempt used an unavailable entity and was fixed to the installed Factorio 2.0.77 `rendering.draw_text` API before the passing engine rerun.
+- **Current limitation:** Current live save loaded the pre-rendering bridge and shows walking/smelting but no floating transfer text; that rendering feature was tested in a fresh disposable game and will appear in newly initialized worlds. Mining and crafting are outside this fixture. The development database exposed by the existing SSH tunnel on port 3000 was never accessed; the local development board on port 3001 has separate new history.
+- **Operations:** See `factorio/LOCAL_DEMO.md` for exact joins, URLs, logs, stop/restart and safe reset. Keep the game, client, dashboard, database and ten workers running for viewing. Implementation commit `a57a3cb` was pushed to `main`; local development-board task `factorio-local-demo` was marked done with its check results and locks released. The only remaining limitation for this active save is that floating transfer text requires a newly initialized world.

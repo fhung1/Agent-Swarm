@@ -20,3 +20,12 @@
 - Reviewed all three blocked records and their descendants against current scope and runtime evidence. None is now actionable in the active pilot architecture. Kept the three explicitly deferred roots blocked and replaced generic reasons with precise evidence/reopening conditions.
 - Confirmed only two deferred vision children depend on them; current headless Factorio, Minecraft and paper trading queues do not. Report: docs/blocked-task-review.md.
 - Checks: persisted blocked/full task queries, dependency traversal, current plan comparison and host OS. No broker/model/game calls. Shared HANDOFF.md lock still held; requested summary transfer. Publication/check hash recorded on board when pushed.
+
+## factorio-readiness-audit
+
+- Started Factorio-only review of committed main (`a57a3cb`, then documentation-only `0392fd8`), plans, recorded live verification and current board. No Minecraft or trading work; no live game mutations.
+- Existing evidence proves ten rules workers and fifty actual plates. Reviewing missing worker recovery integration, admission checks, run identity, message retry deduplication and finite lifecycle against existing tasks before adding concrete subtasks.
+- Shared HANDOFF.md is locked by codex-swarm; requested a pointer to this distinct entry. Audit report and this handoff are locked under factorio-readiness-audit.
+- Added five concrete subtasks: factorio-worker-journal-integration, factorio-action-lease-fencing, factorio-run-isolation, factorio-message-outbox, factorio-rules-run-limits. Existing factorio-board-outage-recovery (added concurrently by live owner) retains supervisor/phase recovery scope. All new tasks require direct-main push and concrete failure acceptance.
+- Report: docs/factorio-readiness-audit.md. Existing model/freeplay/operator acceptance tasks remain tracked; no duplicate production milestone or deferred vision reopening. Next: verify persisted tasks/dependencies, publish this report, close audit, then stop.
+- Verification passed: all five persisted tasks have expected prerequisites, open status and direct-main/push instructions; all 86 board task references resolve without cycles. `git diff --check` passed. No application code changed. Audit complete; implementation remains open on the board, and this session stops after publication.

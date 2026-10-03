@@ -8,7 +8,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
+import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, scopedProcessEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
 import { deliverResearchCycle, planResearchCycle, type ScheduleSnapshot } from '../src/research-schedule.ts';
 
 // fileURLToPath decodes the URL, so paths with spaces (for example, "Agent Swarm") resolve correctly.
@@ -105,17 +105,13 @@ function build(): void {
 }
 
 function processEnv(p: ProcessSpec, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const childEnv: NodeJS.ProcessEnv = withoutCredentials(ENV);
-  const allowed = new Set(p.secrets);
+  const workerEnv = scopedProcessEnv(p, ENV);
   if (p.env.AGENT_BRAIN === 'claude') {
-    allowed.add('ANTHROPIC_API_KEY');
-    allowed.add('ANTHROPIC_AUTH_TOKEN');
+    for (const name of ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN']) {
+      if (ENV[name]) workerEnv[name] = ENV[name];
+    }
   }
-  if (p.env.AGENT_BRAIN === 'codex') allowed.add('OPENAI_API_KEY');
-  // The supervisor needs the configured keys to preflight work, but only processes that
-  // call the corresponding provider or data service should inherit them.
-  for (const name of Object.keys(ENV)) if (credentialName.test(name) && allowed.has(name)) childEnv[name] = ENV[name];
-  return { ...childEnv, ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
+  return { ...withoutCredentials(ENV), ...workerEnv, ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
 }
 
 function missingSecrets(processes: ProcessSpec[]): string[] {
@@ -223,7 +219,7 @@ const DB_SPEC: ProcessSpec = { name: 'spacetimedb', role: 'operator' as never, s
 function launch(spec: ProcessSpec, extra: Record<string, string> = {}): ChildProcess {
   const stream = fs.createWriteStream(path.join(LOG_DIR, `${spec.name}.log`), { flags: 'a' });
   const [cmd, argv] = spec.script ? ['node', [path.join(ROOT, 'dist', spec.script), ...spec.args]] : ['npm', ['run', '--silent', 'db:start']];
-  const child = spawn(cmd, argv as string[], { cwd: ROOT, env: processEnv(spec, extra), stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(cmd, argv as string[], { cwd: ROOT, env: spec.script ? processEnv(spec, extra) : withoutCredentials(ENV), stdio: ['ignore', 'pipe', 'pipe'] });
   for (const source of [child.stdout!, child.stderr!]) {
     let buffer = '';
     source.setEncoding('utf8');

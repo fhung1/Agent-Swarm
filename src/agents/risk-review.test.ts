@@ -84,6 +84,8 @@ test('passed proposals refresh only when unsubmitted and stale', () => {
   assert.equal(needsRefresh(fresh, undefined, 'snap-1', 'paper-pilot-2', now), true);
   assert.equal(needsRefresh({ ...fresh, expiresAt: minutesAgo(1) }, { proposalId: proposal.id, status: 'accepted' }, 'snap-2', 'paper-pilot-1', now), false);
   assert.equal(needsRefresh(undefined, undefined, 'snap-1', 'paper-pilot-1', now), false);
+  assert.equal(needsRefresh(fresh,{proposalId:proposal.id,status:'submitting',alpacaOrderId:''},'snap-2','paper-pilot-1',now),true);
+  assert.equal(needsRefresh(fresh,{proposalId:proposal.id,status:'submitting',alpacaOrderId:'broker'},'snap-2','paper-pilot-1',now),false);
 });
 
 test('summaries name the order, failures, and expiry', () => {

@@ -1,10 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy } from './swarm-plan.ts';
+import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, scopedProcessEnv, runPolicy } from './swarm-plan.ts';
 
 const example = fs.readFileSync(new URL('../config/swarm.example.json', import.meta.url), 'utf8');
 const config = (agents: object, extra: object = {}) => parseSwarmConfig(JSON.stringify({ runId: 'pilot-1', agents, ...extra }));
+
+test('research workers receive model secrets while broker services receive paper secrets',()=>{
+  const env={PATH:'/bin',ALPACA_API_KEY:'fake-paper',ALPACA_API_SECRET:'fake-secret',OPENAI_API_KEY:'fake-model',SEC_USER_AGENT:'fake-contact'};
+  const processes=planProcesses(config({coordinator:{count:1,brain:'codex'},analyst:{count:1,brain:'codex'},skeptic:{count:0},risk:{count:1},executor:{count:1}}));
+  const analyst=scopedProcessEnv(processes.find(p=>p.role==='analyst')!,env);
+  assert.equal(analyst.OPENAI_API_KEY,'fake-model');assert.equal(analyst.ALPACA_API_KEY,undefined);assert.equal(analyst.ALPACA_API_SECRET,undefined);assert.equal(analyst.SEC_USER_AGENT,undefined);
+  const executor=scopedProcessEnv(processes.find(p=>p.role==='executor')!,env);
+  assert.equal(executor.ALPACA_API_KEY,'fake-paper');assert.equal(executor.OPENAI_API_KEY,undefined);assert.equal(executor.PATH,'/bin');
+});
 
 test('the shipped example config is valid', () => {
   const parsed = parseSwarmConfig(example);

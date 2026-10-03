@@ -1,4 +1,7 @@
 import type { DbConnection } from '../module_bindings/index.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { loadFilingExcerpts } from '../sec-excerpts.js';
 import type { Fact, MarketObservation, Source, Task, Thesis } from '../module_bindings/types.js';
 import { recordId } from '../ids.js';
 import { accountedAsk, PROMPT_VERSION } from './accounted-ask.js';
@@ -27,7 +30,9 @@ function clip(text: string, max = 4000): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-const sourceView = (s: Source): SourceView => ({ id: s.id, symbol: s.symbol, kind: s.kind, uri: s.uri, asOf: s.asOf.toISOString() });
+const sourceView = (s: Source): SourceView => ({ id: s.id, symbol: s.symbol, kind: s.kind, uri: s.uri, asOf: s.asOf.toISOString(),
+  qualitative: loadFilingExcerpts(s, process.env.SEC_ARTIFACT_DIR ?? join(homedir(), '.local', 'share', 'quant-swarm', 'artifacts', 'sec')),
+});
 const factView = (f: Fact): FactView => ({
   id: f.id, sourceId: f.sourceId, symbol: f.symbol, metric: f.metric, value: f.value, unit: f.unit, period: f.period, quality: f.quality,
 });

@@ -1,8 +1,10 @@
 import { DbConnection } from './coord_bindings/index.js';
 import type { DevTask } from './coord_bindings/types.js';
+import { dashboardConfig, dashboardTokenKey } from './config.js';
 
 const root = document.querySelector<HTMLElement>('#app')!;
-const TOKEN_KEY = 'quant-swarm:development:token';
+const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm-coord');
+const TOKEN_KEY = dashboardTokenKey('development', HOST, DATABASE);
 const NAME_KEY = 'quant-swarm:development:name';
 let connection: DbConnection | undefined;
 let ready = false;
@@ -266,8 +268,8 @@ function connect(): void {
   const current = ++generation;
   ready = false;
   connection = DbConnection.builder()
-    .withUri(`ws://${window.location.hostname}:3000`)
-    .withDatabaseName('quant-swarm-coord')
+    .withUri(HOST)
+    .withDatabaseName(DATABASE)
     .withToken(sessionToken)
     .onConnect((conn, _identity, token) => {
       if (current !== generation) { conn.disconnect(); return; }
