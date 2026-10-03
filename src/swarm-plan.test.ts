@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
-import { parseSwarmConfig, planGrants, planProcesses, runPolicy } from './swarm-plan.ts';
+import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy } from './swarm-plan.ts';
 
 const example = fs.readFileSync(new URL('../config/swarm.example.json', import.meta.url), 'utf8');
 const config = (agents: object, extra: object = {}) => parseSwarmConfig(JSON.stringify({ runId: 'pilot-1', agents, ...extra }));
@@ -54,6 +54,10 @@ test('market data and research add periodic and one-shot processes', () => {
   const ingestor = processes.find(p => p.role === 'ingestor')!;
   assert.equal(ingestor.script, 'sec-ingestor.js');
   assert.ok(ingestor.oneShot);
+  assert.deepEqual(researchSymbolEnv(ingestor, 'MSFT'), { SYMBOLS: 'MSFT' });
+  const fixture = planProcesses(config({}, { research: { symbols: ['NVDA'], evidence: 'fixture' } })).find(p => p.role === 'ingestor')!;
+  assert.deepEqual(researchSymbolEnv(fixture, 'NVDA'), { SYMBOL: 'NVDA' });
+  assert.throws(() => researchSymbolEnv(ingestor, 'MSFT,AAPL'), /Invalid research symbol/);
 });
 
 test('grants cover every process, account access only where needed, and a run-specific policy', () => {

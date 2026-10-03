@@ -147,6 +147,11 @@ export function runPolicy(policyJson: string, runId: string): { id: string; json
 
 export type Command = { reducer: string; args: (string | number)[]; note: string };
 
+export function researchSymbolEnv(ingestor: ProcessSpec, symbol: string): Record<string, string> {
+  if (!SYMBOL.test(symbol)) throw new Error('Invalid research symbol');
+  return ingestor.script === 'sec-ingestor.js' ? { SYMBOLS: symbol } : { SYMBOL: symbol };
+}
+
 // Owner/operator commands, in order. Each is safe to repeat (grants and identical policies are no-ops); the run is
 // created only when it does not exist yet, because creating it twice is an error.
 export function planGrants(config: SwarmConfig, processes: ProcessSpec[], identities: Map<string, string>,

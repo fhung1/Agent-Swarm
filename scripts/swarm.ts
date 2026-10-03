@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSwarmConfig, planGrants, planProcesses, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
+import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
 
 // fileURLToPath decodes the URL, so paths with spaces ("Quant Swarm") resolve correctly.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -262,7 +262,7 @@ async function seedResearch(config: SwarmConfig, ingestor: ProcessSpec | undefin
     const id = `${config.runId}.thesis.${symbol}`.slice(0, 128);
     if (tasks.some(t => t.id === id)) { console.log(`[swarm] ${id} already exists`); continue; }
     if (ingestor) {
-      const code = await runOnce(ingestor, { SYMBOL: symbol });
+      const code = await runOnce(ingestor, researchSymbolEnv(ingestor, symbol));
       if (code !== 0) { console.log(`[swarm] Evidence ingest for ${symbol} failed; not queuing a thesis task`); continue; }
     }
     call(config, 'create_task', [id, config.runId, symbol, 'thesis', config.research.objective, 'analyst', '']);
