@@ -63,6 +63,17 @@ Copy this section for each handoff and fill in what applies:
 
 <!-- Add each new handoff below this line, newest first. -->
 
+## 2026-10-03 — Codex (codex-merge) — Resolve rebase and publish chat code
+
+- **Status:** complete
+- **Goal:** Preserve both handoff histories, complete the paused rebase, validate, and push the chat code.
+- **Work completed:** Preserved both sides of the HANDOFF.md conflict and completed the rebase. Updated the chat client to use generated scoped views and corrected the TypeScript test import. The original chat commit `8022efd` is backed up on `origin/chat-work-8022efd`.
+- **Checks run:** `npm run typecheck` passed; `npm test` passed (65/65); `git diff --check` passed.
+- **Open issues:** Chat viewer requires an identity with the appropriate operator/run grants to see scoped state.
+- **Files / references:** Rebased chat commits `bb62af4` and `5eb852a` pushed to `origin/main`.
+- **Next steps:** None for the rebase or push.
+
+
 ## 2026-10-03 — Codex — Push using registered SSH key
 
 - **Status:** code pushed; PR creation blocked
@@ -160,6 +171,88 @@ Copy this section for each handoff and fill in what applies:
 - **Open issues:** Need identify the intended existing board endpoint or confirm the local project board is intended before provisioning its infrastructure.
 - **Next steps:** Obtain board address/name, then connect and verify subscription snapshot.
 - **Context:** No messages sent, roles granted, or database state changed.
+## 2026-10-03 — Codex board worker — Separate development from gameplay
+
+- **Status:** complete
+- **Work completed:** Created canonical `factorio-gameplay-swarm` task on DEVELOPMENT with original acceptance criteria and explicit final routing. Cancelled the Factorio development-task copy. Development agents/discussions belong on development; Factorio is exclusively for gameplay agents using the same backend implementation with isolated board state. Broadcast this routing to development sessions. Marked our historical Factorio session inactive/moved (current reducers have no unregister/delete operation).
+- **Checks run:** Board writes succeeded. Original cancelled development task cannot be reopened by a non-assignee, so canonical replacement uses a new ID. Shared framework prerequisite is complete.
+- **Next steps:** Claim implementation on development; connect only gameplay workers to Factorio. Old session/messages remain as historical records.
+
+
+## 2026-10-03 — Codex board worker — Move task to Factorio board
+
+- **Status:** complete
+- **Work completed:** Copied `factorio-ten-agent-swarm` with its full requirements onto the Factorio board and cancelled the development-board copy with a relocation note. Clarified that both boards use the same backend implementation/infrastructure with separate board state. Notified `codex-framework`; the framework dependency stays on development and is referenced in the Factorio task details because cross-instance dependency IDs are not local tasks.
+- **Checks run:** Confirmed Factorio task is open.
+- **Next steps:** Implement from the Factorio board after coordinating the shared framework prerequisite.
+
+
+## 2026-10-03 — Codex — General-purpose message-board framework
+
+- **Status:** complete
+- **Goal:** Make development, trading, Minecraft, and Factorio configurable instances of one application-neutral message-board framework; push when finished.
+- **Work completed:** Extracted shared backend factory, Node/browser client, configurable instance catalog, CLI and common dashboard. Development uses the same framework with a task-policy setting. All communication instances use the same API; application IDs no longer select separate client implementations. Preserved legacy wire schema and development history; published local instances without resets and opened the default Development dashboard.
+- **Files / references:** `message-board/README.md`, `message-board/instances.json`, `message-board/client.ts`, `message-board/module.ts`; branch `feat/message-board-framework`; implementation commit `76274a4` pushed to `origin/feat/message-board-framework`. Persistent checkout: `/home/bobywoby/dev/mhacks/2026/Agent-Swarm-board-framework`.
+- **Checks run:** `npm run check:message-board` integration passed (generic participant types, isolated boards, atomic claims, dependencies/reservations, development-only policy, compatible republish, token recovery and automatic reconnect). Module/client/CLI and dashboard typechecks pass. Generated bindings match the existing coordination schema. `npm run check:all` passed, including the 65-second lease-renewal and takeover acceptance. Chromium verified all four live boards plus a fifth instance added only through configuration, offline navigation and unknown-ID fallback. Git whitespace checks pass.
+- **Limitations:** Trusted-local participant names remain self-declared; recipient fields are routing hints, not private messages. Existing trading/game workers and domain audit histories are not automatically migrated or bridged; the shared worker API is documented for adoption. Financial/game execution gates remain in their application services.
+- **Next steps:** Use http://127.0.0.1:4174 or `npm run dashboard` from the framework checkout. Add an application via the instance catalog and connect its agents through the same client/reducers. Merge the pushed feature branch when ready.
+- **Context:** Dashboard exec session 95185; shared SpacetimeDB session 79670. Original main checkout and prior dashboard prototype remain preserved. Tests used isolated fixture databases; temporary test servers are stopped.
+
+
+## 2026-10-03 — Codex board worker — Queue Factorio swarm integration
+
+- **Status:** complete (task creation)
+- **Goal:** Create the requested development-board task for ten Factorio agents using a separate instance of the shared message board.
+- **Work completed:** Created open task `factorio-ten-agent-swarm` in `quant-swarm-coord`, dependent on the already claimed `generic-message-board` extraction. Included separate-instance isolation, game observation/action adapter, ten worker identities, shared objectives and task ownership, restart recovery, unified live/history dashboard, launch instructions, and milestone/victory evidence acceptance criteria. Notified `codex-framework` of the integration requirements.
+- **Checks run:** Read back active tasks; confirmed new task is open with its dependency. Used the persistent dashboard checkout CLI. No implementation started.
+- **Next steps:** Complete the framework dependency, then claim and implement the Factorio integration task. The dashboard checkout HANDOFF is locked by codex-framework; this entry records task creation in the original checkout.
+
+
+## 2026-10-03 — Codex — Pull merged main
+
+- **Status:** complete
+- **Goal:** Pull latest code into the primary checkout.
+- **Work completed:** Fast-forwarded main from `37e4918` to `da5b71c` (merged phase-0 branch). Restored local handoff entries alongside upstream entries after a documentation-only stash conflict. Preserved untracked chat files and the separate dashboard checkout.
+- **Checks run:** Main matches origin/main; no unmerged paths remain. No application tests required for this pull-only operation.
+- **Next steps:** None for this pull. Dashboard customizations remain in `../Agent-Swarm-dashboard`.
+
+## 2026-10-03 — Codex — Pull current branch
+
+- **Status:** complete
+- **Goal:** Pull the code in the current checkout.
+- **Work completed:** Fetched origin and ran `git pull --ff-only` on `main`; main is already up to date at `37e4918`. Preserved existing local changes and untracked files.
+- **Checks run:** Verified branch tracking and working tree status. Remote `phase-0-alpaca-read` advanced to `f9da58d`; current branch remains main.
+- **Next steps:** None for the current-branch pull.
+
+
+## 2026-10-03 — Codex — Unified communication dashboard
+
+- **Status:** complete
+- **Goal:** Use one global communication dashboard for development, trading, Minecraft, and Factorio.
+- **Work completed:** Default `npm run dashboard` serves shared message-first UI at port 4174; board links select isolated coordination backends or scoped trading run messages. Added board-aware CLI, setup command, saved per-board identities, run selector, composer, task controls for coordination, navigation during disconnections, and reconnect recovery. Portfolio/order console remains optional via `dashboard:portfolio` on 4173; it is stopped. Opened Development in the user's browser.
+- **Files / references:** Persistent checkout `/home/bobywoby/dev/mhacks/2026/Agent-Swarm-dashboard`, branch `feat/unified-communication-dashboard`, uncommitted changes. `dashboard/README.md` contains setup and agent connection instructions. Original main checkout and its untracked chat files remain intact.
+- **Checks run:** Dashboard TypeScript check and git diff whitespace check pass. Chromium integration against temporary databases verified four-board navigation, board and run isolation, escaped message content, live delivery, message composition, persisted identity, authorization, and server-restart recovery with the selected run retained. Inspected development UI screenshot. Temporary test services shut down.
+- **Open issues:** The existing local trading database lacks the updated scoped-view schema; publishing it requires its original owner (the current CLI received HTTP 403). Trading UI works against the isolated current-schema fixture. Game boards are provisioned and empty until game agents connect; no game agents were launched.
+- **Next steps:** Use http://127.0.0.1:4174/?board=development. Run `npm run dashboard` from the persistent checkout to restart. Have the existing trading database owner publish the current schema and grant browser access. Connect game agents with `--board minecraft` or `--board factorio`.
+- **Context:** Running dashboard exec session 6376 and shared database session 79670. Coordination task `unified-boards` records completion. No GitHub push performed.
+
+
+## 2026-10-03 — Codex board worker — Consume live development-board tasks
+
+- **Status:** in progress
+- **Goal:** Connect to the live message board and execute tasks as they appear.
+- **Work completed:** Located the active development board (`quant-swarm-coord`, dashboard port 4174) in `/tmp/agent-swarm-dashboard`. The older trading-board token is invalid after the environment changed; current CLI identity can reach the development board. Read its coordination workflow and register under `codex-board-worker`.
+- **Next steps:** Read task dependencies/messages, claim available work, acquire file locks before edits, and post progress/results. Preserve other sessions' changes.
+
+## 2026-10-03 — Codex — Pull update and run dashboard
+
+- **Status:** complete (servers running; trading database owner action remains)
+- **Goal:** Pull the GitHub dashboard update and run it locally.
+- **Work completed:** Fetched `7201774` from `origin/phase-0-alpaca-read`, created isolated checkout `/tmp/agent-swarm-dashboard`, pulled that branch there, installed dependencies, started both dashboards and existing local SpacetimeDB data directory. Published the missing `quant-swarm-coord` database.
+- **Checks run:** Both browser bundles built and returned HTTP 200 at ports 4173 and 4174. SpacetimeDB 2.10.2 listens on port 3000. Trading module publish rejected with HTTP 403 because CLI identity is not the existing database owner.
+- **Open issues:** Existing trading database may require owner schema update and browser operator/access grants. No existing database was reset. Original main checkout and untracked chat files preserved.
+- **Next steps:** Open http://127.0.0.1:4173 (trading) or http://127.0.0.1:4174 (development). Have database owner update quant-swarm and grant browser access if needed.
+- **Context:** Running exec sessions: trading 68523, development 80006, database 79670. Server source checkout is in /tmp; no ongoing GitHub watcher installed.
 
 
 ## 2026-10-03 — Codex (codex-plan) — Three-swarm readiness and push policy
