@@ -17,6 +17,21 @@ The existing `factorio-gameplay-swarm` task remains the implementation umbrella;
 - The board currently supports one `--after` prerequisite. The linear chain below deliberately makes every mandatory prerequisite enforceable. Independent acceptance may proceed alongside implementation, but its passing result is required for release.
 - Claim the task, lock files, post contract changes, update a distinct `HANDOFF.md` entry and preserve other sessions' work. Every task: **push when finished**. Completion records must include pushed commit, check commands/results, evidence links, limitations and next steps.
 
+## Required user handoff: start, test and watch a live demo
+
+The user must be able to follow the final instructions and see the swarm running **inside the Factorio client**, with live gameplay messages on the Factorio board. This is a release acceptance gate, not optional documentation. Development task `factorio-live-demo-guide` depends on `factorio-f3-fault-suite`; deliver this production demo as soon as F3 passes, without waiting for a rocket launch. The final F4 runbook must incorporate the verified guide and any later progression changes.
+
+The guide and final user response must provide:
+
+1. **Prerequisites:** Supported and actually tested OS/hardware, exact Node/SpacetimeDB and compatible Factorio client/server/mod versions, where to install them, and game client ownership requirements. Distinguish the Linux headless host from the graphical client and document addresses/ports for the tested topology.
+2. **Copy-paste startup:** Fresh checkout and dependency installation, configuration file and environment setup, board publication/startup, Factorio server/world startup, ten-worker launch and dashboard URL with Factorio board selected. Explain which commands stay running and in which terminal. No undocumented local files or credentials may be assumed.
+3. **Visible live demo:** Exact multiplayer join or spectator steps in Factorio, server address, mod synchronization, camera/character location and what the user should see. Keep the world and agents running long enough to join and observe; document duration and budgets. Ten scripted avatars must visibly act in the real world while task-linked messages appear on the board. A headless report alone is insufficient.
+4. **Testing:** Exact commands for automated checks and a deterministic production demo requiring no paid inference. Give expected successful output, approximate duration, ten unique worker identities, ten completed five-plate production tasks and how to inspect actual game output. Include a reproducible pause/resume and worker-restart check, with expected board and game behavior.
+5. **Operations and troubleshooting:** Stop and restart commands, safe fixture reset, log/report locations, connection/port errors, client/server/mod mismatches, missing dependencies and unavailable board. Optional model setup is separate from the reproducible rules demo, with explicit budgets.
+6. **Independent replay:** The acceptance reviewer follows only the written guide from a fresh checkout and clean configuration, joins with a graphical client and verifies visible production and live messages. Record platform, commit, commands and result artifacts. Mark unavailable or untested client/platform checks as pending; do not call the live demo verified until this replay succeeds.
+
+The final implementation response must include the actual tested startup, test and demo steps, a guide link, verified commit and remaining limitations. These requirements do not assert that the demo is implemented today. Fixture production proves the demo milestone; only a real game rocket event proves victory.
+
 ## Registered work packages
 
 | Board task | Depends on | Delivery |
@@ -141,3 +156,9 @@ The current implementer should map completed work to F0/F1 acceptance before any
 - **Checks:** Read back persisted SpacetimeDB task rows and verified all 12 IDs, open statuses, prerequisite links, acceptance criteria and literal push instruction against this plan. Documentation whitespace check passed. No game or implementation tests were run for this planning-only change.
 - **Coordination:** Requested a shared `HANDOFF.md` entry/lock handover from `codex-factorio`. That file remains locked by the implementation session; this distinct entry and the planning task result preserve the handoff without editing another session's locked file. Copy this entry to the shared log when its owner releases it. Publication commit is recorded in `factorio-plan-tasks` on Development.
 - **Next:** The implementation owner maps existing work to F0/F1 evidence, then claims or allocates these packages with file-lock coordination. Independent acceptance reviews F3 and the final report. Gameplay communications use only the Factorio board.
+
+## Demo requirement handoff — factor-plan, 2026-10-03
+
+- **Status:** User startup/testing/live-demo acceptance added to the plan and registered as `factorio-live-demo-guide`, following F3 independently of rocket progression.
+- **Checks:** Board task readback and documentation whitespace checks; no live game verification performed in this planning change.
+- **Next:** Implementation owner supplies the executable guide; independent acceptance owner replays it with a graphical client. Final user handoff must include tested commands, not only a report link. Shared `HANDOFF.md` remains locked by the implementation owner; this entry is supplied for inclusion there.
