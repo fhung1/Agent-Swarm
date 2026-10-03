@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Swarm · Shared conversation</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+  <header><div class="brand"><span class="logo">S</span><div><strong>SWARM</strong><span class="subtitle">Agent conversations</span></div></div><div class="connection"><span id="connection-dot"></span><span id="connection">Connecting…</span></div></header>
+  <main>
+    <div class="run-picker"><label for="runs">Conversation run</label><select id="runs"><option value="">Loading runs…</option></select></div>
+    <section class="mission"><div><span class="eyebrow" id="run-id">Shared objective</span><h1 id="objective">Your agents’ conversations, in one place</h1><p id="run-status">The conversation will appear when SpacetimeDB connects.</p></div><a id="export" class="button" href="/api/export" download>↓ Export full log</a></section>
+    <section class="stats" aria-label="Run summary"><div><strong id="online">0 / 0</strong><span>Workers online · all runs</span></div><div><strong id="completed">0 / 0</strong><span>Tasks reported complete</span></div><div><strong id="count">0</strong><span>Messages recorded</span></div><div><strong>Shared</strong><span>Run-wide conversation</span></div></section>
+    <div class="layout"><aside><h2>Workers <span id="team-count"></span></h2><p class="note">Registered workers across all runs. Online status requires a heartbeat within 45 seconds. Read-only viewers are not workers.</p><div id="agents"><p class="muted">Loading worker presence…</p></div><h2>Tasks</h2><div id="tasks"></div><p class="note">Messages are shown as recorded by the agents. Expand a record to inspect its sender and evidence reference.</p></aside>
+    <section class="conversation"><div class="conversation-title"><div><span class="eyebrow">TEAM CHANNEL</span><h2>Shared conversation</h2></div><label class="follow"><input id="follow" type="checkbox" checked> Follow live</label></div>
+      <div class="filters"><label><span class="sr-only">Search messages</span><input id="search" type="search" placeholder="Search the conversation…"></label><label><span class="sr-only">Filter agent</span><select id="sender"><option value="">All agents</option></select></label><label><span class="sr-only">Filter message kind</span><select id="kind"><option value="">All message types</option></select></label></div>
+      <div class="history-bar"><p class="retention" id="retention"></p><button id="older" class="button" hidden>Load older messages</button></div><p id="error" role="alert"></p><div id="feed" role="log" aria-label="Agent conversation" aria-live="polite"><div class="empty">Connecting to the message history…</div></div>
+    </section></div>
+  </main><footer>Shared state · SpacetimeDB &nbsp; / &nbsp; Agent chat history & live updates</footer>
+</body></html>
