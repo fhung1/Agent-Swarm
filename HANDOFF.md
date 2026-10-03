@@ -4,6 +4,14 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex (focus-reset) — Minecraft and trading priority
+
+- **Status:** scope directive recorded; board task `focus-reset-scope`; push when finished.
+- **Owner directive:** Stop Factorio work because the owner’s friend is fixing it; focus on Minecraft and paper trading.
+- **Work completed:** Read repository architecture, Minecraft runtime guide, scripts, handoff and board. Broadcast stop instruction to all sessions and directly notified `codex-plan`, the holder of Factorio locks. Cancelled all eight open `fa-*` tasks. Created `minecraft-trading-readiness` to retain useful non-Factorio scope from the mixed readiness task. Added durable priority to AGENTS.md.
+- **Checks:** Board confirms eight cancellations. Mixed task cancellation requires its assignee, who has been asked to cancel and release locks. No runtime code changed.
+- **Next steps:** The mixed task owner must cancel `three-swarm-readiness`, release Factorio locks and claim `minecraft-trading-readiness`. Documentation published independently of concurrent work. Minecraft priorities are launcher acceptance, recovery and sharing experiments; paper priorities are execution safety, evidence and operator monitoring.
+
 ## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
 
 - **Status:** complete; publication requested by the owner (commit/push recorded on board task `push-dev-dashboard`)
