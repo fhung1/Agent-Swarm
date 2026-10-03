@@ -33,6 +33,13 @@ const TOOLS = ['claude', 'codex', 'human', 'other'];
 const TASK_STATUSES = ['open', 'claimed', 'done', 'blocked', 'cancelled'];
 const MAX_LOCK_MINUTES = 8 * 60;
 const MINUTE_MICROS = 60_000_000n;
+const PUSH_INSTRUCTION = 'push when finished';
+
+function taskDetails(details: string): string {
+  const result = details.includes(PUSH_INSTRUCTION) ? details : `${details}${details ? '\n\n' : ''}${PUSH_INSTRUCTION}`;
+  requireText(result, 'Details', 8000, true);
+  return result;
+}
 
 function requireText(value: string, label: string, max: number, allowEmpty = false): void {
   if ((!allowEmpty && !value.trim()) || value.length > max) {
@@ -99,11 +106,21 @@ export const createTask = spacetimedb.reducer(
     requireText(title, 'Title', 200); requireText(details, 'Details', 8000, true); requireText(area, 'Area', 512, true);
     if (dependsOn && !ctx.db.devTask.id.find(dependsOn)) throw new SenderError(`Unknown dependency ${dependsOn}`);
     if (ctx.db.devTask.id.find(id)) throw new SenderError(`Task ${id} already exists`);
-    ctx.db.devTask.insert({ id, title, details, area, status: 'open', createdBy: name, assignee: '', dependsOn,
+    ctx.db.devTask.insert({ id, title, details: taskDetails(details), area, status: 'open', createdBy: name, assignee: '', dependsOn,
       result: '', createdAt: ctx.timestamp, updatedAt: ctx.timestamp });
     touch(ctx, name);
   }
 );
+
+// Owner-directed metadata migration; preserve task status, ownership, dependencies and results.
+export const applyPushPolicy = spacetimedb.reducer({ name: t.string() }, (ctx, { name }) => {
+  requireSession(ctx, name);
+  for (const task of ctx.db.devTask.iter()) {
+    const details = taskDetails(task.details);
+    if (details !== task.details) ctx.db.devTask.id.update({ ...task, details, updatedAt: ctx.timestamp });
+  }
+  touch(ctx, name);
+});
 
 // Atomic: exactly one session wins a race for the same open task.
 export const claimTask = spacetimedb.reducer({ name: t.string(), id: t.string() }, (ctx, { name, id }) => {

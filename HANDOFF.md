@@ -4,6 +4,14 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
+
+- **Status:** complete; publication requested by the owner (commit/push recorded on board task `push-dev-dashboard`)
+- **Work completed:** Second dashboard at `http://127.0.0.1:4174`, started by `npm run dashboard:dev`, using generated `quant-swarm-coord` bindings and a separate browser token. Shared CSS/layout, live sessions/tasks/messages/locks, task filters/actions and message composer. Trading dashboard uses port 4173 and `quant-swarm`. No backend schema changes.
+- **Checks run:** Dashboard TypeScript pass, both browser bundles build, HTML/JS/CSS HTTP 200, headless Chrome live data/filter/draft-focus checks with no runtime exceptions, and source diff check pass. The exact staged snapshot also passes dashboard/module typechecks and builds both browser bundles in a separate temporary directory.
+- **Publication:** Commit includes both completed dashboard instances and the operator-directory view required by the trading console. Other sessions' CI, evidence selection and in-progress schema/worker edits remain unstaged. Shared Git-index access coordinated through the board.
+- **Next steps:** None. Development server remains running; restart with the startup command.
+
 ## 2026-10-03 — Codex (cedar) — Board tasks and backup/restore
 
 - **Status:** complete; pushing at owner's request
@@ -15,32 +23,14 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** Procedure is offline, macOS/Linux and SpacetimeDB 2.10.2 only. Restore drill uses committed module code to avoid concurrent schema edits. Protect credential-bearing bundles; separately retain publisher credentials, deployment configuration and API keys. Absolute artifact paths must be preserved.
 - **Next steps:** None for this task. Before unattended operation, schedule a coordinated offline backup and retain it on protected recovery storage; paper account reconciliation remains required after recovery.
 
-## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
+## 2026-10-03 — Codex — Continuous board monitoring
 
-- **Status:** complete; publication requested by the owner (commit/push recorded on board task `push-dev-dashboard`)
-- **Work completed:** Second dashboard at `http://127.0.0.1:4174`, started by `npm run dashboard:dev`, using generated `quant-swarm-coord` bindings and a separate browser token. Shared CSS/layout, live sessions/tasks/messages/locks, task filters/actions and message composer. Trading dashboard uses port 4173 and `quant-swarm`. No backend schema changes.
-- **Checks run:** Dashboard TypeScript pass, both browser bundles build, HTML/JS/CSS HTTP 200, headless Chrome live data/filter/draft-focus checks with no runtime exceptions, and source diff check pass. The exact staged snapshot also passes dashboard/module typechecks and builds both browser bundles in a separate temporary directory.
-- **Publication:** Commit includes both completed dashboard instances and the operator-directory view required by the trading console. Other sessions' CI, evidence selection and in-progress schema/worker edits remain unstaged. Shared Git-index access coordinated through the board.
-- **Next steps:** None. Development server remains running; restart with the startup command.
-
-## 2026-10-03 — Codex (repo_reader) — Repository orientation and dashboard diagnosis
-
-- **Status:** diagnosis complete for the existing local dashboard; specific failing URL not supplied
-- **Goal:** Understand the repository, connect to the coordination board, and explain why the message-board website is not working.
-- **Findings:** Registered `repo_reader` on `quant-swarm-coord`; registration/status work outside the sandbox (inside it, the SpacetimeDB CLI panics during macOS system-configuration access). The local database listens on port 3000 and the dashboard server on port 4173. Both the dashboard HTML and JavaScript return HTTP 200. `dashboard/app.ts` connects to `quant-swarm`, the paper-trading database; it does not connect to the separate `quant-swarm-coord` board.
-- **Checks run:** Board register/status/inbox, listening-port inspection, dashboard source inspection, and HTTP checks for `/` and `/dist/app.js`.
-- **Open issues:** Initial diagnosis is superseded by the completed development dashboard above. A first-time trading operator browser still needs a role grant before run data appears.
-- **Next steps:** Open development at port 4174 or trading at port 4173. Repository orientation remains partial after the user's dashboard question redirected this turn.
-
-## 2026-10-03 — Codex (codex-plan) — Local operator dashboard
-
-- **Status:** implementation complete
-- **Goal:** Resolve board task `operator-dashboard`, then stop at the owner's request.
-- **Work completed:** Built a localhost browser console with a saved SpacetimeDB identity, scoped `my_*` subscriptions, live run/task/message timeline, authenticated sender roles, linked SEC facts/sources, thesis and skeptic detail, decisions and frozen inputs, risk checks, orders/fills, account snapshots and reconciliations. Added pause/resume controls; cancel remains disabled pending an executor cancel-request path. Added an operator-only `my_agent_directory` view with indexed role reads, published the module locally, regenerated bindings, and documented setup.
-- **Files / references:** `dashboard/`, `spacetimedb/src/{schema,views}.ts`, `src/module_bindings/`, `package.json`, `README.md`; board task `operator-dashboard`.
-- **Checks run:** Dashboard TypeScript check and browser esbuild bundle passed; local module publish and binding generation passed. No browser fixture run or new tests were performed in this task.
-- **Open issues:** A live browser check of timeline updates and a fresh ungranted identity remains for later acceptance. The versioned pilot contract is a separate board task, so the dashboard labels it pending. Broker order cancel remains disabled until its reducer/workflow exists.
-- **Next steps:** Start with `npm run dashboard`, grant the browser identity `operator` and account access, then check it against a fixture run. Owner requested that this session stop after this issue.
+- **Status:** stopped at owner request after completing the next issue resolution
+- **Goal:** Monitor `quant-swarm-coord` and resolve incoming issues within existing project scope; owner then requested stopping after the current evidence issue.
+- **Work completed:** Resolved `broker-refusal-acceptance`: rejected requests without broker IDs release exposure; nonterminal states still require IDs and existing IDs cannot be cleared. Resolved `analyst-evidence-selection`: new shared `src/agents/evidence.ts` selects whole source groups deterministically, retains all 20 facts from the latest 10-K/10-Q, chooses latest quotes per feed, discloses omitted counts/IDs and excludes them from citations, and enforces prompt/reference budgets with permanent errors. Model/rules workers share selection and reuse existing published results. Documented limits in AGENTS.md and README. All owned locks released and watch process stopped.
+- **Checks run:** Full broker-refusal/process acceptance `phase-one-1791058560573` passed. Evidence changes passed typecheck/build, all 53 unit tests including five new selection tests, and structured-handler fixture `model-fixture-1791058831460` (13 synthetic responses). `git diff --check` passed. No provider or broker API calls were made by these checks.
+- **Open issues:** This runtime lacks Alpaca credentials; live connectivity/execution checks remain blocked. Other board tasks belong to remaining sessions. Dashboard/supervisor work is concurrent and unchanged by this session.
+- **Next steps:** Resume monitoring only if owner requests it. The board records both resolved tasks and the stopped monitor status. This session made no commit.
 
 ## Handoff template
 
@@ -62,16 +52,45 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 — Codex (codex-plan) — Three-swarm readiness and push policy
+
+- **Status:** in progress
+- **Goal:** Audit all current implementation plans and implement until Alpaca, Minecraft and Factorio swarms have runnable full-test paths. Owner confirmed Factorio uses headless structured state and commands.
+- **Work completed:** Reviewed current source, acceptance scripts, plans and all board tasks; added 14 uncovered backlog tasks with evidence/dependencies/checks. Published additive coordination policy: every existing task says `push when finished`, and every new task inherits it. Added the standing push instruction to AGENTS.md.
+- **Findings:** Phase 1 accepted locally; paper executor/supervisor/dashboard exist but broker acceptance remains pending. Found SEC supervisor `SYMBOL`/`SYMBOLS` mismatch and execution revalidation/reconciliation gaps. Minecraft implementation has not started; previous graphical Factorio work is deferred and does not satisfy new headless requirements.
+- **Checks:** Coordination module typecheck/publish and policy migration passed; Git diff check passed. No broker orders or paid inference made.
+- **Prerequisites:** OPENAI_API_KEY exists; Alpaca paper credentials and SEC_USER_AGENT are absent. Java is 20, Docker engine is available, Factorio runtime absent. Owner questions pending for EULA, private environment configuration and headless container setup.
+- **Next steps:** Push completed policy and confirm other sessions' completed changes are pushed; implement game module/workers/adapters/launchers and repair Alpaca integration gaps; execute isolated and live acceptance where prerequisites permit.
+
+## 2026-10-03 — Codex (repo_reader) — Repository orientation and dashboard diagnosis
+
+- **Status:** diagnosis complete for the existing local dashboard; specific failing URL not supplied
+- **Goal:** Understand the repository, connect to the coordination board, and explain why the message-board website is not working.
+- **Findings:** Registered `repo_reader` on `quant-swarm-coord`; registration/status work outside the sandbox (inside it, the SpacetimeDB CLI panics during macOS system-configuration access). The local database listens on port 3000 and the dashboard server on port 4173. Both the dashboard HTML and JavaScript return HTTP 200. `dashboard/app.ts` connects to `quant-swarm`, the paper-trading database; it does not connect to the separate `quant-swarm-coord` board.
+- **Checks run:** Board register/status/inbox, listening-port inspection, dashboard source inspection, and HTTP checks for `/` and `/dist/app.js`.
+- **Open issues:** Initial diagnosis is superseded by the completed development dashboard above. A first-time trading operator browser still needs a role grant before run data appears.
+- **Next steps:** Open development at port 4174 or trading at port 4173. Repository orientation remains partial after the user's dashboard question redirected this turn.
+
 ## 2026-10-03 — Claude Code (quant-swarm-84) — Minecraft information-sharing plan
 
-- **Status:** complete; committed
+- **Status:** complete; uncommitted
 - **Goal:** Owner direction: Minecraft first, ten agents, no orchestrator, avoid ten Microsoft accounts, privileged state allowed, focus on information sharing through SpacetimeDB.
 - **Work completed:** Researched Mineflayer and Mindcraft ("Mindflare" in the request): offline-mode servers let bots join with a username only. Rewrote `GAME_AGENT_IMPLEMENTATION_PLAN.md` around ten Mineflayer agents with privileged but local state (16-block radius so sharing matters), a fixed command set (no model-written code, no in-game chat), SpacetimeDB messages plus a shared-knowledge table with citations, confirmations and disputes, phases M0-M5, and a deferred real-client vision section. Updated the game line in `AGENTS.md`. Cancelled the 16 earlier game-* board tasks and posted nine mc-* tasks.
 - **Files / references:** `GAME_AGENT_IMPLEMENTATION_PLAN.md`, `AGENTS.md`; board tasks mc-open-decisions, mc-server, mc-agent-core, mc-spacetimedb-schema, mc-sharing-tools, mc-launcher-ten, mc-dashboard, mc-sharing-experiment, mc-reliability.
 - **Checks run:** Documentation and board only. `brew install cirruslabs/cli/tart` fails (the formula is rejected by current Homebrew); not needed for this pilot.
 - **Open issues:** Licensing of bots on an offline-mode server is the owner's call (accepted for a private localhost world). Host has Java 20; Minecraft 1.20.5+ needs Java 21. Open decisions are listed in the plan and in mc-open-decisions.
-- **Next steps:** Owner decided server 1.21.11 and model GPT-6 Astra (config/minecraft-pilot.json); remaining mc-open-decisions items still open; start mc-server and mc-spacetimedb-schema in parallel.
+- **Next steps:** Owner answers mc-open-decisions; start mc-server and mc-spacetimedb-schema in parallel.
 - **Context:** Owner chose SpacetimeDB as the only communication channel, so agents have no chat command.
+
+## 2026-10-03 — Codex (codex-plan) — Local operator dashboard
+
+- **Status:** implementation complete
+- **Goal:** Resolve board task `operator-dashboard`, then stop at the owner's request.
+- **Work completed:** Built a localhost browser console with a saved SpacetimeDB identity, scoped `my_*` subscriptions, live run/task/message timeline, authenticated sender roles, linked SEC facts/sources, thesis and skeptic detail, decisions and frozen inputs, risk checks, orders/fills, account snapshots and reconciliations. Added pause/resume controls; cancel remains disabled pending an executor cancel-request path. Added an operator-only `my_agent_directory` view with indexed role reads, published the module locally, regenerated bindings, and documented setup.
+- **Files / references:** `dashboard/`, `spacetimedb/src/{schema,views}.ts`, `src/module_bindings/`, `package.json`, `README.md`; board task `operator-dashboard`.
+- **Checks run:** Dashboard TypeScript check and browser esbuild bundle passed; local module publish and binding generation passed. No browser fixture run or new tests were performed in this task.
+- **Open issues:** A live browser check of timeline updates and a fresh ungranted identity remains for later acceptance. The versioned pilot contract is a separate board task, so the dashboard labels it pending. Broker order cancel remains disabled until its reducer/workflow exists.
+- **Next steps:** Start with `npm run dashboard`, grant the browser identity `operator` and account access, then check it against a fixture run. Owner requested that this session stop after this issue.
 
 ## 2026-10-03 21:20 UTC — Claude Code — Swarm supervisor with per-role agent counts
 
@@ -83,6 +102,15 @@ Copy this section for each handoff and fill in what applies:
 - **Open issues:** Resuming a held task after a kill was not exercised here (rules work finishes instantly); it is covered by the Phase 1 acceptance. No scheduler yet: research is seeded once per symbol at `up`. The dashboard is not started by the supervisor.
 - **Next steps:** Add `dashboard` and the future scheduler as supervised processes once they exist.
 - **Context:** Uncommitted. Test identities `swarmcheck-*` remain in the local token directory.
+
+## 2026-10-03 — Codex (codex-monitor) — Repository reading and continuous issue monitoring
+
+- **Status:** in progress
+- **Goal:** Read the repository before implementation, continually monitor the coordination board, and resolve available posted issues.
+- **Work completed:** Registered `codex-monitor`, claimed `monitor-repo-read`, inspected active sessions/tasks/locks, and started a live board subscription. Read architecture/plans, authoritative module, workers/model handlers, broker and SEC adapters, game/VM tooling, dashboard, supervisor and checks. Claimed `check-all-ci`; implementing a reproducible check runner with its own temporary server, CLI identity/config and binding drift detection.
+- **Checks run:** `npm run check:all` passed on an isolated server: generated bindings, typechecks/builds, unit tests, 13 structured fixture responses and Phase 1 process/reducer acceptance (`phase-one-1791059484023`). Runner-specific TypeScript check passed. Isolated negative checks passed for missing CLI, wrong version and a newly added reducer without updated bindings. GitHub Actions workflow added; hosted workflow execution remains pending push. Local CLI commands require sandbox escalation because the sandboxed SpacetimeDB CLI panics reading macOS networking configuration.
+- **Open issues:** Dashboard and swarm supervisor have active owners and locks; live provider/broker/game checks require their documented prerequisites.
+- **Next steps:** Close `check-all-ci` and release its locks after final diff review; continue monitoring and resolving available issues. Board direction now defers vision/game VM work in favor of ten local Mineflayer agents sharing information through SpacetimeDB; read the rewritten game plan before game work.
 
 ## 2026-10-03 20:40 UTC — Claude Code — Paper executor and reconciliation
 

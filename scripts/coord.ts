@@ -18,6 +18,7 @@ Identify yourself with --as <name> or COORD_AS=<name> (lowercase, e.g. claude-ri
   post <message> [--to NAME] [--task ID]        Broadcast, or message one session
   inbox [--since MSG_ID] [--limit N]            Messages to you or everyone (default last 20)
   tasks [--all]                                 Active tasks (--all includes done and cancelled)
+  push-policy                                  Add "push when finished" to every task; new tasks inherit it
   add <id> <title> [--details D] [--area A] [--after TASK_ID]
   claim <id>                                    Atomically take an open task
   done <id> [result] | block <id> <why> | release <id> [note] | cancel <id> [note]
@@ -193,6 +194,11 @@ switch (command) {
     break;
   }
   case 'status': status(); break;
+  case 'push-policy': {
+    call('apply_push_policy', me());
+    console.log('Every task says "push when finished"; new tasks inherit the policy.');
+    break;
+  }
   case 'post': {
     if (!rest.length) fail('post needs a message');
     call('post', me(), flag('to') ?? '', flag('task') ?? '', rest.join(' '));
