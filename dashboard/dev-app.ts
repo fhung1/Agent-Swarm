@@ -110,7 +110,7 @@ function render(): void {
   if (!ready || !connection) {
     const gate = node('div', 'gate');
     put(gate, node('div', 'brand-mark', 'QS'), node('p', 'eyebrow', 'DEVELOPMENT · LOCAL COORDINATION'),
-      node('h1', '', 'Quant Swarm'), node('p', 'lead', state));
+      node('h1', '', 'Agent Swarm'), node('p', 'lead', state));
     root.replaceChildren(gate);
     return;
   }

@@ -1,4 +1,4 @@
-# Quant Swarm backend
+# Agent Swarm backend
 
 This repository contains a SpacetimeDB 2.10.2 module, a Node.js coordination worker, and the read-only phase of the Alpaca paper adapter. The module stores runs, agents, leased tasks, messages, research evidence, theses, decisions, trade proposals, risk decisions, operator approvals, paper-account snapshots, and market observations. The adapter reads the paper account and selected market quotes; this slice has no order submission or cancellation path.
 
@@ -62,7 +62,7 @@ npm run build
 npm run ingest:sec -- --register
 spacetime call --server local quant-swarm grant_agent <SEC_INGESTOR_IDENTITY> ingestor
 spacetime call --server local quant-swarm grant_run_access <SEC_INGESTOR_IDENTITY> sec1
-RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Quant Swarm research you@example.com' npm run ingest:sec
+RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Agent Swarm research you@example.com' npm run ingest:sec
 ```
 
 The run must exist and be active. `SYMBOLS` accepts 1–20 tickers. The ingestor makes only `GET` requests to a fixed set of SEC routes, spaced 200 ms apart to stay under the SEC's 10-requests-per-second limit. Rerunning it for the same run skips filings and facts already recorded. To use real filings in the [three-agent thesis check](#three-agent-thesis-check), ingest into the run instead of using the fixture ingestor. The skeptic then passes the evidence and the coordinator records `abstain`, because no valuation model exists yet.

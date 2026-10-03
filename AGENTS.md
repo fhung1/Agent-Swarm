@@ -1,4 +1,4 @@
-# Quant Swarm: project brief
+# Agent Swarm: project brief
 
 ## Purpose
 

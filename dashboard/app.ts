@@ -101,7 +101,7 @@ function queueRender(): void {
 function connectionScreen(): void {
   const shell = node('div', 'gate');
   put(shell, node('div', 'brand-mark', 'QS'), node('p', 'eyebrow', 'PAPER TRADING · LOCAL OPERATOR CONSOLE'),
-    node('h1', '', 'Quant Swarm'), node('p', 'lead', state));
+    node('h1', '', 'Agent Swarm'), node('p', 'lead', state));
   const developmentLink = node('a', 'ghost-button', 'Development board ↗');
   developmentLink.href = 'http://127.0.0.1:4174';
   put(shell, developmentLink);
@@ -120,7 +120,7 @@ function connectionScreen(): void {
 function sidebar(runs: Run[]): HTMLElement {
   const side = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
-  put(brand, node('div', 'brand-mark', 'QS'), node('div', '', 'QUANT SWARM'));
+  put(brand, node('div', 'brand-mark', 'AS'), node('div', '', 'AGENT SWARM'));
   put(side, brand, node('div', 'side-label', 'PAPER RUNS'));
   const list = node('div', 'run-list');
   for (const run of runs) {
