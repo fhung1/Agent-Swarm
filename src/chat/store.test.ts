@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { emptyDatabase, selectRun } from './store.js';
+import { emptyDatabase, selectRun } from './store.ts';
 
 const now = 100_000;
 function databaseWithWorker(status = 'online', lastSeen = now) {

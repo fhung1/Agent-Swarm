@@ -65,11 +65,12 @@ Copy this section for each handoff and fill in what applies:
 
 ## 2026-10-03 — Codex (codex-merge) — Resolve rebase and publish chat code
 
-- **Status:** in progress
+- **Status:** rebase complete; final push pending
 - **Goal:** Preserve both handoff histories, complete the paused rebase, validate, and push the chat code.
-- **Work completed:** Preserved both sides of the HANDOFF.md conflict. The original chat commit `8022efd` is backed up on `origin/chat-work-8022efd`.
-- **Checks run:** Pending rebase and validation.
-- **Next steps:** Complete rebase, run checks, push main, and record results on the coordination board.
+- **Work completed:** Preserved both sides of the HANDOFF.md conflict and completed the rebase. Updated the chat client to use generated scoped views and corrected the TypeScript test import. The original chat commit `8022efd` is backed up on `origin/chat-work-8022efd`.
+- **Checks run:** `npm run typecheck` passed; `npm test` passed (65/65); `git diff --check` passed.
+- **Open issues:** Chat viewer requires an identity with the appropriate operator/run grants to see scoped state.
+- **Next steps:** Push main and record the result on the coordination board.
 
 
 ## 2026-10-03 — Codex — Push using registered SSH key

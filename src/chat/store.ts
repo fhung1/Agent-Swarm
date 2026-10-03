@@ -5,9 +5,9 @@ export interface ChatMessage {
   kind: string; body: string; text: string; evidenceRef: string; createdAt: string; timestampMicros: string;
 }
 export function projectDatabase(connection: DbConnection) {
-  const agents = [...connection.db.agent.iter()];
+  const agents = [...connection.db.myAgentDirectory.iter()];
   const names = new Map(agents.map(a => [a.identity.toHexString(), `${a.role} · ${a.identity.toHexString().slice(0, 12)}`]));
-  const messages: ChatMessage[] = [...connection.db.message.iter()].map(m => {
+  const messages: ChatMessage[] = [...connection.db.myMessage.iter()].map(m => {
     let text = m.body;
     try {
       const payload = JSON.parse(m.body);
@@ -26,11 +26,11 @@ export function projectDatabase(connection: DbConnection) {
   });
   return {
     messages,
-    runs: [...connection.db.run.iter()].sort((a,b) => a.createdAt.microsSinceUnixEpoch > b.createdAt.microsSinceUnixEpoch ? -1 : 1)
+    runs: [...connection.db.myRun.iter()].sort((a,b) => a.createdAt.microsSinceUnixEpoch > b.createdAt.microsSinceUnixEpoch ? -1 : 1)
       .map(r => ({ id: r.id, goal: r.goal, status: r.status })),
     agents: agents.map(a => ({ identity: a.identity.toHexString(), name: names.get(a.identity.toHexString())!, role: a.role, status: a.status,
       lastSeen: Number(a.lastSeen.microsSinceUnixEpoch / 1000n) })),
-    tasks: [...connection.db.task.iter()].map(t => ({ id: t.id, runId: t.runId, objective: t.objective, status: t.status, result: t.result, assignee: t.assignee?.toHexString() })),
+    tasks: [...connection.db.myTask.iter()].map(t => ({ id: t.id, runId: t.runId, objective: t.objective, status: t.status, result: t.result, assignee: t.assignee?.toHexString() })),
   };
 }
 export type DatabaseSnapshot = ReturnType<typeof projectDatabase>;

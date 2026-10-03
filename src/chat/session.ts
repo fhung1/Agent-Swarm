@@ -48,16 +48,16 @@ export class ChatSession {
         writeFileSync(this.options.tokenFile, savedToken, { mode: 0o600 });
         chmodSync(this.options.tokenFile, 0o600);
         const notify = () => { if (current() && this.ready) this.changed(); };
-        conn.db.message.onInsert(notify); conn.db.message.onUpdate(notify); conn.db.message.onDelete(notify);
-        conn.db.task.onInsert(notify); conn.db.task.onUpdate(notify); conn.db.task.onDelete(notify);
-        conn.db.run.onInsert(notify); conn.db.run.onUpdate(notify); conn.db.run.onDelete(notify);
-        conn.db.agent.onInsert(notify); conn.db.agent.onUpdate(notify); conn.db.agent.onDelete(notify);
+        conn.db.myMessage.onInsert(notify); conn.db.myMessage.onUpdate(notify); conn.db.myMessage.onDelete(notify);
+        conn.db.myTask.onInsert(notify); conn.db.myTask.onUpdate(notify); conn.db.myTask.onDelete(notify);
+        conn.db.myRun.onInsert(notify); conn.db.myRun.onUpdate(notify); conn.db.myRun.onDelete(notify);
+        conn.db.myAgentDirectory.onInsert(notify); conn.db.myAgentDirectory.onUpdate(notify); conn.db.myAgentDirectory.onDelete(notify);
         conn.subscriptionBuilder().onApplied(() => {
           if (!current()) return;
           this.attempts = 0; this.ready = true; this.changed();
         }).onError(lost).subscribe([
-          'SELECT * FROM agent',
-          'SELECT * FROM run', 'SELECT * FROM task', 'SELECT * FROM message',
+          'SELECT * FROM my_agent_directory',
+          'SELECT * FROM my_run', 'SELECT * FROM my_task', 'SELECT * FROM my_message',
         ]);
       }).onDisconnect(lost).onConnectError(lost).build();
   }
