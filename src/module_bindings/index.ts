@@ -42,7 +42,9 @@ import BeginInferenceReducer from "./begin_inference_reducer";
 import BeginPaperSubmissionReducer from "./begin_paper_submission_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
 import CompleteTaskReducer from "./complete_task_reducer";
+import ConfigureModelPriceReducer from "./configure_model_price_reducer";
 import ConfigureRunLimitsReducer from "./configure_run_limits_reducer";
+import ConfigureRunSpendReducer from "./configure_run_spend_reducer";
 import CreateRunReducer from "./create_run_reducer";
 import CreateTaskReducer from "./create_task_reducer";
 import FailTaskReducer from "./fail_task_reducer";
@@ -95,6 +97,7 @@ import MyInferenceAttemptRow from "./my_inference_attempt_table";
 import MyMarketClockRow from "./my_market_clock_table";
 import MyMarketObservationRow from "./my_market_observation_table";
 import MyMessageRow from "./my_message_table";
+import MyModelPriceRow from "./my_model_price_table";
 import MyOrderCancelRequestRow from "./my_order_cancel_request_table";
 import MyPaperOrderRow from "./my_paper_order_table";
 import MyPaperSubmissionRow from "./my_paper_submission_table";
@@ -214,6 +217,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessageRow),
+  myModelPrice: __table({
+    name: 'my_model_price',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyModelPriceRow),
   myOrderCancelRequest: __table({
     name: 'my_order_cancel_request',
     indexes: [
@@ -338,7 +348,9 @@ const reducersSchema = __reducers(
   __reducerSchema("begin_paper_submission", BeginPaperSubmissionReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
   __reducerSchema("complete_task", CompleteTaskReducer),
+  __reducerSchema("configure_model_price", ConfigureModelPriceReducer),
   __reducerSchema("configure_run_limits", ConfigureRunLimitsReducer),
+  __reducerSchema("configure_run_spend", ConfigureRunSpendReducer),
   __reducerSchema("create_run", CreateRunReducer),
   __reducerSchema("create_task", CreateTaskReducer),
   __reducerSchema("fail_task", FailTaskReducer),
@@ -431,4 +443,3 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
-

@@ -11,11 +11,8 @@ import {
 } from "spacetimedb";
 
 export default {
-  id: __t.string(),
   runId: __t.string(),
-  reservedInputTokens: __t.u32(),
-  reservedOutputTokens: __t.u32(),
-  model: __t.string(),
-  workId: __t.string(),
-  inputHash: __t.string(),
+  pricingVersion: __t.string(),
+  maxSpendMicros: __t.string(),
+  maxWorkerSpendMicros: __t.string(),
 };

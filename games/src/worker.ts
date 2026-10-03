@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createAsker, type Ask } from '../../src/agents/llm.ts';
+import { createAsker, MAX_OUTPUT_TOKENS, type Ask, type AskUsage } from '../../src/agents/llm.ts';
 import { connectDatabase } from './database.ts';
 import { connectBot, execute, observe, stop } from './minecraft.ts';
 import { Command, Decision, SYSTEM, type CommandValue } from './commands.ts';
@@ -38,7 +38,7 @@ if(brain==='fixture'){
     const input=JSON.parse(prompt);
     const other=input.knowledge.find((k:{author:string})=>k.author!==conn.identity!.toHexString());
     const tree=input.local.blocks.find((b:{name:string})=>b.name==='oak_log');
-    options?.onUsage?.(100,'local-fixture');
+    options?.onUsage?.({inputTokens:80,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:20},'local-fixture');
     return schema.parse({action:!other&&tree?{kind:'share',label:'oak_log',position:{x:tree.position[0],y:tree.position[1],z:tree.position[2]}}:{kind:'wait',seconds:0},reason:'Schema-validated local response fixture',citations:other?[other.id]:[]});
   };ask.model='local-fixture';
 }else if(brain!=='rules')ask=createAsker(brain==='claude'?'claude':'codex');
@@ -72,7 +72,9 @@ try {
     const actionId=recordId('game-action.',`${runId}.${name}.${step}`);
     if(ask){
       const prompt=JSON.stringify({goal:run.goal,self:name,local:state,messages,knowledge,lastActions:[...conn.db.myAction.iter()].filter(a=>a.actor.equals(conn.identity!)).slice(-3).map(a=>({command:a.commandJson,status:a.status,result:a.result}))});
-      const reservedTokens=Buffer.byteLength(SYSTEM+prompt)+32000;
+      const reservedInputTokens=Buffer.byteLength(SYSTEM+prompt)+32000;
+      const reservedOutputTokens=ask.maxOutputTokens??MAX_OUTPUT_TOKENS;
+      const reservedTokens=reservedInputTokens+reservedOutputTokens;
       const previous=[...conn.db.myInference.iter()].filter(i=>i.runId===runId&&i.workId===actionId&&i.actor.equals(conn.identity!));
       const recorded=previous.find(i=>i.status==='completed');
       if(previous.some(i=>i.status==='pending'))throw new Error('Uncertain prior inference must be reconciled before another model call');
@@ -83,20 +85,26 @@ try {
         if(current.usedCalls>=current.maxCalls||current.usedTokens+reservedTokens>current.maxTokens)throw new Error('Shared inference budget exhausted');
         if([...conn.db.myInference.iter()].filter(i=>i.runId===runId&&i.status==='pending').length>=current.maxConcurrent){await new Promise(r=>setTimeout(r,500+Math.random()*500));step--;continue;}
         writeFileSync(resolve(dir,`${inferenceId}.input.json`),JSON.stringify({system:SYSTEM,prompt,inputHash}));
-        try{await conn.reducers.beginInference({id:inferenceId,runId,reservedTokens,model:ask.model??'configured',workId:actionId,inputHash});}
+        try{await conn.reducers.beginInference({id:inferenceId,runId,reservedInputTokens,reservedOutputTokens,model:ask.model??'configured',workId:actionId,inputHash});}
         catch(error){
           // Competing workers may reserve the last slot after our snapshot check.
           if(String(error).includes('Inference budget or concurrency limit')){await new Promise(r=>setTimeout(r,500+Math.random()*500));step--;continue;}
           throw error;
         }
       }
-      let tokensUsed=reservedTokens;
+      let usage:AskUsage|undefined;
+      let actualModel=ask.model??'configured';
       const abort=new AbortController();
       const cancel=()=>{if(!conn.isActive||[...conn.db.myRun.iter()].find(r=>r.id===runId)?.status!=='active')abort.abort();};
       const watch=setInterval(cancel,250);
       try{
-        const response=recorded?Decision.parse(JSON.parse(recorded.outputJson)):await ask(Decision,SYSTEM,prompt,{signal:abort.signal,onUsage:tokens=>{tokensUsed=tokens;}});
-        if(!recorded)await conn.reducers.finishInference({id:inferenceId,tokensUsed,outputJson:JSON.stringify(response)});
+        const response=recorded?Decision.parse(JSON.parse(recorded.outputJson)):await ask(Decision,SYSTEM,prompt,{signal:abort.signal,onUsage:(observed,model)=>{usage=observed;if(model)actualModel=model;}});
+        if(!recorded){
+          if(!usage)throw new Error('Provider omitted usage; full spend reservation retained');
+          await conn.reducers.finishInference({id:inferenceId,...usage,usageKnown:true,succeeded:true,model:actualModel,outputJson:JSON.stringify(response)});
+          const audit=[...conn.db.myInference.iter()].find(i=>i.id===inferenceId);
+          if(audit?.status!=='completed')throw new Error(`Inference rejected: ${audit?.failureReason||audit?.status||'missing audit row'}`);
+        }
         command=response.action;citations=response.citations;reason=response.reason;
       }finally{clearInterval(watch);}
     }else command=rules(state);

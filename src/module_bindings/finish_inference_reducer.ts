@@ -12,7 +12,11 @@ import {
 
 export default {
   id: __t.string(),
-  tokensUsed: __t.u32(),
+  inputTokens: __t.u32(),
+  cacheReadTokens: __t.u32(),
+  cacheWriteTokens: __t.u32(),
+  outputTokens: __t.u32(),
+  usageKnown: __t.bool(),
   succeeded: __t.bool(),
   model: __t.string(),
   outputJson: __t.string(),

@@ -17,5 +17,6 @@ export default {
   model: __t.string(),
   promptVersion: __t.string(),
   inputRefs: __t.string(),
-  reservedTokens: __t.u32(),
+  reservedInputTokens: __t.u32(),
+  reservedOutputTokens: __t.u32(),
 };

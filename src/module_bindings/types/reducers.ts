@@ -14,7 +14,9 @@ import BeginInferenceReducer from "../begin_inference_reducer";
 import BeginPaperSubmissionReducer from "../begin_paper_submission_reducer";
 import ClaimTaskReducer from "../claim_task_reducer";
 import CompleteTaskReducer from "../complete_task_reducer";
+import ConfigureModelPriceReducer from "../configure_model_price_reducer";
 import ConfigureRunLimitsReducer from "../configure_run_limits_reducer";
+import ConfigureRunSpendReducer from "../configure_run_spend_reducer";
 import CreateRunReducer from "../create_run_reducer";
 import CreateTaskReducer from "../create_task_reducer";
 import FailTaskReducer from "../fail_task_reducer";
@@ -58,7 +60,9 @@ export type BeginInferenceParams = __Infer<typeof BeginInferenceReducer>;
 export type BeginPaperSubmissionParams = __Infer<typeof BeginPaperSubmissionReducer>;
 export type ClaimTaskParams = __Infer<typeof ClaimTaskReducer>;
 export type CompleteTaskParams = __Infer<typeof CompleteTaskReducer>;
+export type ConfigureModelPriceParams = __Infer<typeof ConfigureModelPriceReducer>;
 export type ConfigureRunLimitsParams = __Infer<typeof ConfigureRunLimitsReducer>;
+export type ConfigureRunSpendParams = __Infer<typeof ConfigureRunSpendReducer>;
 export type CreateRunParams = __Infer<typeof CreateRunReducer>;
 export type CreateTaskParams = __Infer<typeof CreateTaskReducer>;
 export type FailTaskParams = __Infer<typeof FailTaskReducer>;
@@ -93,4 +97,3 @@ export type SetPaperAccountBaselineParams = __Infer<typeof SetPaperAccountBaseli
 export type SetRunStatusParams = __Infer<typeof SetRunStatusReducer>;
 export type UpdateOrderCancelParams = __Infer<typeof UpdateOrderCancelReducer>;
 export type UpdatePaperOrderParams = __Infer<typeof UpdatePaperOrderReducer>;
-

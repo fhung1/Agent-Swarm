@@ -36,6 +36,15 @@ export const GameInference = __t.object("GameInference", {
   updatedAt: __t.timestamp(),
   workId: __t.string(),
   inputHash: __t.string(),
+  pricingVersion: __t.string(),
+  reservedSpendMicros: __t.u64(),
+  spendMicros: __t.u64(),
+  inputTokens: __t.u32(),
+  cacheReadTokens: __t.u32(),
+  cacheWriteTokens: __t.u32(),
+  outputTokens: __t.u32(),
+  actualModel: __t.string(),
+  failureReason: __t.string(),
 });
 export type GameInference = __Infer<typeof GameInference>;
 
@@ -74,6 +83,18 @@ export const GameMessage = __t.object("GameMessage", {
 });
 export type GameMessage = __Infer<typeof GameMessage>;
 
+export const GameModelPrice = __t.object("GameModelPrice", {
+  id: __t.string(),
+  version: __t.string(),
+  model: __t.string(),
+  inputMicrosPerMillion: __t.u64(),
+  cacheReadMicrosPerMillion: __t.u64(),
+  cacheWriteMicrosPerMillion: __t.u64(),
+  outputMicrosPerMillion: __t.u64(),
+  createdAt: __t.timestamp(),
+});
+export type GameModelPrice = __Infer<typeof GameModelPrice>;
+
 export const GameOwner = __t.object("GameOwner", {
   id: __t.string(),
   identity: __t.identity(),
@@ -90,6 +111,10 @@ export const GameRun = __t.object("GameRun", {
   maxConcurrent: __t.u32(),
   usedCalls: __t.u32(),
   usedTokens: __t.u32(),
+  pricingVersion: __t.string(),
+  maxSpendMicros: __t.u64(),
+  maxWorkerSpendMicros: __t.u64(),
+  usedSpendMicros: __t.u64(),
   createdAt: __t.timestamp(),
 });
 export type GameRun = __Infer<typeof GameRun>;
@@ -108,6 +133,9 @@ export type MyMember = __Infer<typeof MyMember>;
 
 export const MyMessage = __t.object("MyMessage", {});
 export type MyMessage = __Infer<typeof MyMessage>;
+
+export const MyModelPrice = __t.object("MyModelPrice", {});
+export type MyModelPrice = __Infer<typeof MyModelPrice>;
 
 export const MyRun = __t.object("MyRun", {});
 export type MyRun = __Infer<typeof MyRun>;

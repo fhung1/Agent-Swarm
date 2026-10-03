@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import BeginActionReducer from "./begin_action_reducer";
 import BeginInferenceReducer from "./begin_inference_reducer";
+import ConfigureSpendReducer from "./configure_spend_reducer";
 import CreateRunReducer from "./create_run_reducer";
 import FinishActionReducer from "./finish_action_reducer";
 import FinishInferenceReducer from "./finish_inference_reducer";
@@ -58,6 +59,7 @@ import MyInferenceRow from "./my_inference_table";
 import MyKnowledgeRow from "./my_knowledge_table";
 import MyMemberRow from "./my_member_table";
 import MyMessageRow from "./my_message_table";
+import MyModelPriceRow from "./my_model_price_table";
 import MyRunRow from "./my_run_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -99,6 +101,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessageRow),
+  myModelPrice: __table({
+    name: 'my_game_model_price',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyModelPriceRow),
   myRun: __table({
     name: 'my_game_run',
     indexes: [
@@ -112,6 +121,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("begin_action", BeginActionReducer),
   __reducerSchema("begin_inference", BeginInferenceReducer),
+  __reducerSchema("configure_spend", ConfigureSpendReducer),
   __reducerSchema("create_run", CreateRunReducer),
   __reducerSchema("finish_action", FinishActionReducer),
   __reducerSchema("finish_inference", FinishInferenceReducer),

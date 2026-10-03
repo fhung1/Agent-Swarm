@@ -2,7 +2,7 @@ import { t, type ViewCtx, type InferSchema } from 'spacetimedb/server';
 import spacetimedb, { agent, run, task, message, source, fact, thesis, decision, tradeProposal,
   marketObservation, accountSnapshot, riskDecision, approval, paperOrder, orderCancelRequest, tradeUpdate, fill, reconciliation,
   runMetric, runConfig, riskPolicy, marketClock, riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory,
-  paperSubmission, accountLedger, accountCheck } from './schema';
+  paperSubmission, accountLedger, accountCheck, modelPrice } from './schema';
 import { ROLES } from './access';
 
 type Context = ViewCtx<InferSchema<typeof spacetimedb>>;
@@ -110,6 +110,8 @@ export const myDecisionInput = spacetimedb.view({ name: 'my_decision_input', pub
   runs(ctx).flatMap(id => [...ctx.db.decisionInput.runId.filter(id)]));
 export const myInferenceAttempt = spacetimedb.view({ name: 'my_inference_attempt', public: true }, t.array(inferenceAttempt.rowType), ctx =>
   runs(ctx).flatMap(id => [...ctx.db.inferenceAttempt.runId.filter(id)]));
+export const myModelPrice = spacetimedb.view({ name: 'my_model_price', public: true }, t.array(modelPrice.rowType), ctx =>
+  role(ctx) === 'operator' ? [...ctx.db.modelPrice.iter()] : []);
 // Reconciliations are operator/executor-only and indexed by their recording identity's authorized account.
 export const myReconciliation = spacetimedb.view({ name: 'my_reconciliation', public: true }, t.array(reconciliation.rowType), ctx =>
   ['operator', 'executor'].includes(role(ctx) ?? '') ? accounts(ctx).flatMap(id => [...ctx.db.reconciliation.accountId.filter(id)]) : []);

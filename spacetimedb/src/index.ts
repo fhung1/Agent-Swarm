@@ -8,7 +8,8 @@ export default spacetimedb;
 export * from './records';
 export * from './paper-safety';
 export { grantRunAccess, revokeRunAccess, grantAccountAccess, revokeAccountAccess, configureRunLimits,
-  addRiskPolicy, recordMarketClock, recordDecisionInput, beginInference, finishInference } from './controls';
+  configureModelPrice, configureRunSpend, addRiskPolicy, recordMarketClock, recordDecisionInput,
+  beginInference, finishInference } from './controls';
 export * from './views';
 
 const LEASE_MICROS = 60_000_000n;

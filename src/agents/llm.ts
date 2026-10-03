@@ -6,15 +6,18 @@ import type { z } from 'zod';
 
 // One structured-output call: system instructions, a user prompt, and a zod schema for the reply.
 // Model output is a proposal. Callers must still validate it against swarm state before calling a reducer.
-export interface AskOptions { signal?: AbortSignal; onUsage?: (tokens: number, model?: string) => void }
-export type Ask = (<T extends z.ZodType>(schema: T, system: string, prompt: string, options?: AskOptions) => Promise<z.infer<T>>) & { model?: string };
+export interface AskUsage { inputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; outputTokens: number }
+export interface AskOptions { signal?: AbortSignal; onUsage?: (usage: AskUsage, model?: string) => void }
+export type Ask = (<T extends z.ZodType>(schema: T, system: string, prompt: string, options?: AskOptions) => Promise<z.infer<T>>) & {
+  model?: string; maxOutputTokens?: number;
+};
 export type Provider = 'claude' | 'codex';
 
 const DEFAULT_MODELS: Record<Provider, string> = { claude: 'claude-opus-5-5', codex: 'gpt-5.3-codex' };
 // Effort levels both providers accept.
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 type Effort = typeof EFFORTS[number];
-const MAX_OUTPUT_TOKENS = 16_000;
+export const MAX_OUTPUT_TOKENS = 16_000;
 
 export function createAsker(provider: Provider): Ask {
   const model = process.env.AGENT_MODEL ?? DEFAULT_MODELS[provider];
@@ -35,12 +38,15 @@ function claudeAsker(model: string, effort: Effort): Ask {
       model,
       max_tokens: MAX_OUTPUT_TOKENS,
       betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      fallbacks: [],
       output_config: { effort, format: betaZodOutputFormat(schema) },
       system,
       messages: [{ role: 'user', content: prompt }],
     }, { signal: options?.signal });
-    options?.onUsage?.(response.usage.input_tokens + response.usage.output_tokens, response.model);
+    const usage = response.usage;
+    if (usage.input_tokens == null || usage.output_tokens == null) throw new Error('Provider omitted token usage');
+    options?.onUsage?.({ inputTokens: usage.input_tokens, cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: usage.cache_creation_input_tokens ?? 0, outputTokens: usage.output_tokens }, response.model);
     if (response.stop_reason === 'refusal') {
       throw new Error(`Model declined (${response.stop_details?.category ?? 'unspecified'})`);
     }
@@ -64,7 +70,14 @@ function codexAsker(model: string, effort: Effort): Ask {
       text: { format: zodTextFormat(schema, 'output') },
       store: false,
     }, { signal: options?.signal });
-    if (response.usage) options?.onUsage?.(response.usage.total_tokens, response.model);
+    if (response.usage) {
+      const cached = response.usage.input_tokens_details.cached_tokens;
+      const cacheWrite = response.usage.input_tokens_details.cache_write_tokens;
+      const regularInput = response.usage.input_tokens - cached - cacheWrite;
+      if (regularInput < 0) throw new Error('Provider returned inconsistent input token usage');
+      options?.onUsage?.({ inputTokens: regularInput, cacheReadTokens: cached,
+        cacheWriteTokens: cacheWrite, outputTokens: response.usage.output_tokens }, response.model);
+    }
     if (response.status === 'incomplete') {
       throw new Error(`Model output was incomplete (${response.incomplete_details?.reason ?? 'unknown'})`);
     }

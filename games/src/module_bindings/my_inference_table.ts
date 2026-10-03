@@ -23,4 +23,13 @@ export default __t.row({
   updatedAt: __t.timestamp().name("updated_at"),
   workId: __t.string().name("work_id"),
   inputHash: __t.string().name("input_hash"),
+  pricingVersion: __t.string().name("pricing_version"),
+  reservedSpendMicros: __t.u64().name("reserved_spend_micros"),
+  spendMicros: __t.u64().name("spend_micros"),
+  inputTokens: __t.u32().name("input_tokens"),
+  cacheReadTokens: __t.u32().name("cache_read_tokens"),
+  cacheWriteTokens: __t.u32().name("cache_write_tokens"),
+  outputTokens: __t.u32().name("output_tokens"),
+  actualModel: __t.string().name("actual_model"),
+  failureReason: __t.string().name("failure_reason"),
 });

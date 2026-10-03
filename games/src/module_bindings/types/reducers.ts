@@ -8,6 +8,7 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import BeginActionReducer from "../begin_action_reducer";
 import BeginInferenceReducer from "../begin_inference_reducer";
+import ConfigureSpendReducer from "../configure_spend_reducer";
 import CreateRunReducer from "../create_run_reducer";
 import FinishActionReducer from "../finish_action_reducer";
 import FinishInferenceReducer from "../finish_inference_reducer";
@@ -24,6 +25,7 @@ import SetRunStatusReducer from "../set_run_status_reducer";
 
 export type BeginActionParams = __Infer<typeof BeginActionReducer>;
 export type BeginInferenceParams = __Infer<typeof BeginInferenceReducer>;
+export type ConfigureSpendParams = __Infer<typeof ConfigureSpendReducer>;
 export type CreateRunParams = __Infer<typeof CreateRunReducer>;
 export type FinishActionParams = __Infer<typeof FinishActionReducer>;
 export type FinishInferenceParams = __Infer<typeof FinishInferenceReducer>;

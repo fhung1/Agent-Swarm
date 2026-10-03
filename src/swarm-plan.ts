@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { usdToMicros } from './agents/spend-pricing.ts';
 
 // Pure planning for the local swarm supervisor (scripts/swarm.ts): validates the swarm config, expands per-role agent
 // counts into named processes, and lists the owner/operator commands each process needs. No I/O here.
@@ -7,8 +8,16 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SYMBOL = /^[A-Z][A-Z0-9.-]{0,15}$/;
 const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
+const USD = /^(0|[1-9]\d*)(?:\.\d{1,6})?$/;
 const brain = z.enum(['rules', 'claude', 'codex']);
 const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
+const modelPrice = z.object({
+  model: z.string().min(1).max(128),
+  inputUsdPerMillion: z.string().regex(USD),
+  cacheReadUsdPerMillion: z.string().regex(USD),
+  cacheWriteUsdPerMillion: z.string().regex(USD),
+  outputUsdPerMillion: z.string().regex(USD),
+}).strict();
 
 const modelAgent = (max: number) => z.object({
   count: z.number().int().min(0).max(max),
@@ -50,6 +59,12 @@ export const SwarmConfigSchema = z.object({
     maxConcurrent: z.number().int().min(1).max(20),
     maxAttempts: z.number().int().min(1).max(10),
   }).strict().optional(),
+  spend: z.object({
+    pricingVersion: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+    models: z.array(modelPrice).min(1).max(32),
+    maxRunUsd: z.string().regex(USD).optional(),
+    maxWorkerUsd: z.string().regex(USD).optional(),
+  }).strict().optional(),
   riskPolicyFile: z.string().min(1).default('config/risk-policy.json'),
   feed: z.enum(['sip', 'iex', 'delayed_sip', 'boats', 'overnight', 'otc']).default('iex'),
   // Periodic quote snapshots for analysts and coordinators; omit to disable.
@@ -88,6 +103,25 @@ export interface ProcessSpec {
 
 export function parseSwarmConfig(json: string): SwarmConfig {
   const config = SwarmConfigSchema.parse(JSON.parse(json));
+  const selectedModels = (['coordinator', 'analyst', 'valuation', 'portfolio', 'skeptic'] as const).flatMap(role => {
+    const spec = config.agents[role];
+    if (!spec.count || spec.brain === 'rules') return [];
+    return [spec.model ?? (spec.brain === 'claude' ? 'claude-opus-5-5' : 'gpt-5.3-codex')];
+  });
+  if (selectedModels.length && !config.spend) throw new Error('Paid model workers require explicit versioned pricing and spend configuration');
+  if (config.spend) {
+    const priced = new Set(config.spend.models.map(price => price.model));
+    if (priced.size !== config.spend.models.length) throw new Error('Duplicate model price entry');
+    const missing = [...new Set(selectedModels)].filter(model => !priced.has(model));
+    if (missing.length) throw new Error(`Missing price entry for configured model(s): ${missing.join(', ')}`);
+    // Parse now so malformed/out-of-range USD values fail before grant commands are printed.
+    for (const price of config.spend.models) {
+      usdToMicros(price.inputUsdPerMillion); usdToMicros(price.cacheReadUsdPerMillion);
+      usdToMicros(price.cacheWriteUsdPerMillion); usdToMicros(price.outputUsdPerMillion);
+    }
+    if (config.spend.maxRunUsd !== undefined) usdToMicros(config.spend.maxRunUsd);
+    if (config.spend.maxWorkerUsd !== undefined) usdToMicros(config.spend.maxWorkerUsd);
+  }
   if (config.agents.coordinator.count === 0 && config.agents.analyst.count + config.agents.valuation.count + config.agents.portfolio.count + config.agents.skeptic.count > 0) {
     throw new Error('Research workers need a coordinator to queue reviews and record decisions');
   }
@@ -203,6 +237,16 @@ export function planGrants(config: SwarmConfig, processes: ProcessSpec[], identi
     const l = config.limits;
     commands.push({ reducer: 'configure_run_limits', args: [config.runId, l.maxInferences, l.maxTokens, l.maxConcurrent, l.maxAttempts],
       note: 'model budget for the run' });
+  }
+  if (config.spend) {
+    for (const price of config.spend.models) commands.push({ reducer: 'configure_model_price',
+      args: [config.spend.pricingVersion, price.model, usdToMicros(price.inputUsdPerMillion).toString(),
+        usdToMicros(price.cacheReadUsdPerMillion).toString(), usdToMicros(price.cacheWriteUsdPerMillion).toString(),
+        usdToMicros(price.outputUsdPerMillion).toString()],
+      note: `immutable model rates (${config.spend.pricingVersion}) for ${price.model}` });
+    commands.push({ reducer: 'configure_run_spend', args: [config.runId, config.spend.pricingVersion,
+      usdToMicros(config.spend.maxRunUsd ?? '0').toString(), usdToMicros(config.spend.maxWorkerUsd ?? '0').toString()],
+    note: 'versioned model pricing and optional run/worker monetary ceilings' });
   }
   for (const p of processes) {
     const identity = identities.get(p.name);
