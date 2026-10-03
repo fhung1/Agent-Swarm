@@ -48,7 +48,7 @@ Watch the game while it runs. Press Ctrl+C to stop. The helper completes its cur
 | `GAME_GOAL` | required | One short, visually checkable goal, up to 500 characters. |
 | `GAME_MODEL` | `AGENT_MODEL` or `claude-opus-5-5` | Anthropic model used for screenshots. |
 | `GAME_MAX_STEPS` | `10` | Maximum screenshot/model cycles, from 1 to 100. |
-| `GAME_MAX_TOKENS` | `30000` | Approximate combined input/output token ceiling; the last request may cross it. |
+| `GAME_MAX_TOKENS` | `30000` | Combined input/output token budget; preflight input count plus the maximum output must fit before a request. |
 
 The agent creates `.game-runs/<run-id>/run.json`, `trace.jsonl`, full-resolution PNG captures, and resized JPEGs sent to the model. The directory is ignored by Git. Keep it private if the game UI shows personal information.
 
@@ -56,7 +56,7 @@ The agent creates `.game-runs/<run-id>/run.json`, `trace.jsonl`, full-resolution
 
 - Input is allowed only while the selected game window is foreground. The helper checks the same window ID and size before every action. Moving focus or resizing the window stops input. Minecraft selection requires a Java/Minecraft client window whose title contains “Minecraft”; it excludes the launcher.
 - The model receives the screenshot, goal, and its recent action history. It does not receive game memory, files, server telemetry, or shell access. Its response is parsed against an allowlist: up to four actions, each hold at most 600 ms, and at most 2 seconds of holds per sequence. Coordinates are normalized to 0–1000 within the captured window.
-- The helper holds keys/buttons only inside one action, releases them on normal completion or Ctrl+C, and has no persistent held-key state. A force kill of the native helper during an action is outside this first slice's recovery guarantee.
+- The helper holds keys/buttons only inside one action, releases them on normal completion or Ctrl+C, and has no persistent held-key state. An independent child watcher records held inputs and releases them when the helper closes its pipe or is killed. EOF release is checked in dry-run mode; actual macOS input release still needs the live gameplay check.
 - The run has step and token limits. It does not yet calculate a dollar spend ceiling, publish game events to SpacetimeDB, control a second client, or manage a multiplayer server. The existing [libvirt VM fleet](../../vm_fleet/README.md) is separate and requires a Linux host.
 - The code builds and its action validation has local tests. A live gameplay result still requires an installed client, macOS permissions, and a model API key. Minecraft camera and held-button behavior have not yet been verified in a live client.
 

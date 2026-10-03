@@ -12,6 +12,7 @@ import {
 
 export default {
   id: __t.string(),
+  accountId: __t.string(),
   status: __t.string(),
   details: __t.string(),
 };

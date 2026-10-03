@@ -6,7 +6,8 @@ import type { z } from 'zod';
 
 // One structured-output call: system instructions, a user prompt, and a zod schema for the reply.
 // Model output is a proposal. Callers must still validate it against swarm state before calling a reducer.
-export type Ask = <T extends z.ZodType>(schema: T, system: string, prompt: string) => Promise<z.infer<T>>;
+export interface AskOptions { signal?: AbortSignal; onUsage?: (tokens: number, model?: string) => void }
+export type Ask = (<T extends z.ZodType>(schema: T, system: string, prompt: string, options?: AskOptions) => Promise<z.infer<T>>) & { model?: string };
 export type Provider = 'claude' | 'codex';
 
 const DEFAULT_MODELS: Record<Provider, string> = { claude: 'claude-opus-5-5', codex: 'gpt-5.3-codex' };
@@ -20,14 +21,16 @@ export function createAsker(provider: Provider): Ask {
   const effort = (process.env.AGENT_EFFORT ?? 'high') as Effort;
   if (!EFFORTS.includes(effort)) throw new Error(`AGENT_EFFORT must be one of: ${EFFORTS.join(', ')}`);
   console.log(`Model brain: ${provider} (${model}, effort ${effort})`);
-  return provider === 'claude' ? claudeAsker(model, effort) : codexAsker(model, effort);
+  const ask = provider === 'claude' ? claudeAsker(model, effort) : codexAsker(model, effort);
+  ask.model = model;
+  return ask;
 }
 
 // Credentials: ANTHROPIC_API_KEY or an `ant auth login` profile.
 function claudeAsker(model: string, effort: Effort): Ask {
   let client: Anthropic | undefined;
-  return async (schema, system, prompt) => {
-    client ??= new Anthropic();
+  return async (schema, system, prompt, options) => {
+    client ??= new Anthropic({ maxRetries: 0, timeout: 120_000 });
     const response = await client.beta.messages.parse({
       model,
       max_tokens: MAX_OUTPUT_TOKENS,
@@ -36,7 +39,8 @@ function claudeAsker(model: string, effort: Effort): Ask {
       output_config: { effort, format: betaZodOutputFormat(schema) },
       system,
       messages: [{ role: 'user', content: prompt }],
-    });
+    }, { signal: options?.signal });
+    options?.onUsage?.(response.usage.input_tokens + response.usage.output_tokens, response.model);
     if (response.stop_reason === 'refusal') {
       throw new Error(`Model declined (${response.stop_details?.category ?? 'unspecified'})`);
     }
@@ -49,8 +53,8 @@ function claudeAsker(model: string, effort: Effort): Ask {
 // Credentials: OPENAI_API_KEY. Plain inference with no tools, so prompt data cannot trigger commands or file reads.
 function codexAsker(model: string, effort: Effort): Ask {
   let client: OpenAI | undefined;
-  return async (schema, system, prompt) => {
-    client ??= new OpenAI();
+  return async (schema, system, prompt, options) => {
+    client ??= new OpenAI({ maxRetries: 0, timeout: 120_000 });
     const response = await client.responses.parse({
       model,
       instructions: system,
@@ -59,7 +63,8 @@ function codexAsker(model: string, effort: Effort): Ask {
       max_output_tokens: MAX_OUTPUT_TOKENS,
       text: { format: zodTextFormat(schema, 'output') },
       store: false,
-    });
+    }, { signal: options?.signal });
+    if (response.usage) options?.onUsage?.(response.usage.total_tokens, response.model);
     if (response.status === 'incomplete') {
       throw new Error(`Model output was incomplete (${response.incomplete_details?.reason ?? 'unknown'})`);
     }

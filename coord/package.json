@@ -1,0 +1,12 @@
+{
+  "name": "quant-swarm-coord-module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local development coordination board for coding sessions",
+  "dependencies": {
+    "spacetimedb": "2.10.2"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.2"
+  }
+}

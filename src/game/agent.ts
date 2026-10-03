@@ -85,15 +85,20 @@ async function main(): Promise<void> {
         `Your recent actions and observations: ${JSON.stringify(history.slice(-5))}`,
       ].join('\n');
       const image = await fs.readFile(current.modelPath);
-      const response = await client.messages.create({
-        model,
-        max_tokens: 700,
-        system: game === 'minecraft' ? MINECRAFT_SYSTEM : FACTORIO_SYSTEM,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt },
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image.toString('base64') } },
-        ] }],
-      }, { signal: requestAbort.signal, timeout: 60_000, maxRetries: 0 });
+      const system = game === 'minecraft' ? MINECRAFT_SYSTEM : FACTORIO_SYSTEM;
+      const messages: Anthropic.MessageParam[] = [{ role: 'user', content: [
+        { type: 'text', text: prompt },
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image.toString('base64') } },
+      ] }];
+      const count = await client.messages.countTokens({ model, system, messages },
+        { signal: requestAbort.signal, timeout: 15_000, maxRetries: 0 });
+      const remaining = maxTokens - usedTokens - count.input_tokens;
+      if (remaining < 700) {
+        await trace({ step, event: 'token_limit', before: captureRecord(current, runDirectory), usedTokens });
+        break;
+      }
+      const response = await client.messages.create({ model, max_tokens: 700, system, messages },
+        { signal: requestAbort.signal, timeout: 60_000, maxRetries: 0 });
       usedTokens += response.usage.input_tokens + response.usage.output_tokens;
       if (stopping) break;
       if (response.stop_reason === 'max_tokens') throw new Error('Model output was truncated');

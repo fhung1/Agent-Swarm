@@ -2,10 +2,13 @@ import { ScheduleAt, Timestamp } from 'spacetimedb';
 import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb, { taskLease } from './schema';
 import { MESSAGE_KINDS, ROLES, WORKER_ROLES, parseRefs, requireEvidence, requireId, requireOwner, requireRole, requireRun,
-  requireSymbol, requireText, type Ctx, type Role } from './access';
+  requireSymbol, requireText, requireRunAccess, type Ctx, type Role } from './access';
 
 export default spacetimedb;
 export * from './records';
+export { grantRunAccess, revokeRunAccess, grantAccountAccess, revokeAccountAccess, configureRunLimits,
+  addRiskPolicy, recordMarketClock, recordDecisionInput, beginInference, finishInference } from './controls';
+export * from './views';
 
 const LEASE_MICROS = 60_000_000n;
 
@@ -110,6 +113,7 @@ export const claimTask = spacetimedb.reducer(
 export const renewTaskLease = spacetimedb.reducer({ id: t.string() }, (ctx, { id }) => {
   requireRole(ctx, ['coordinator', 'analyst', 'skeptic']);
   const existing = ctx.db.task.id.find(id);
+  if (existing) requireRunAccess(ctx, existing.runId);
   if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
   if (!existing.leaseUntil || existing.leaseUntil.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw new SenderError('Lease expired');
   const until = new Timestamp(ctx.timestamp.microsSinceUnixEpoch + LEASE_MICROS);
@@ -125,7 +129,8 @@ export const completeTask = spacetimedb.reducer(
     requireText(result, 'Result');
     const existing = ctx.db.task.id.find(id);
     if (existing?.status === 'completed' && existing.assignee?.equals(ctx.sender) && existing.result === result) return;
-    if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
+    if (existing) requireRunAccess(ctx, existing.runId);
+  if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
     if (!existing.leaseUntil || existing.leaseUntil.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw new SenderError('Lease expired');
     ctx.db.task.id.update({ ...existing, status: 'completed', result, leaseUntil: undefined,
       version: existing.version + 1n, updatedAt: ctx.timestamp });
@@ -139,7 +144,8 @@ export const failTask = spacetimedb.reducer(
     requireText(reason, 'Reason');
     const existing = ctx.db.task.id.find(id);
     if (existing?.status === 'failed' && existing.assignee?.equals(ctx.sender) && existing.result === reason) return;
-    if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
+    if (existing) requireRunAccess(ctx, existing.runId);
+  if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
     if (!existing.leaseUntil || existing.leaseUntil.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw new SenderError('Lease expired');
     ctx.db.task.id.update({ ...existing, status: 'failed', result: reason, leaseUntil: undefined,
       version: existing.version + 1n, updatedAt: ctx.timestamp });
@@ -171,7 +177,7 @@ export const postMessage = spacetimedb.reducer(
       if (linkedTask?.runId !== runId) throw new SenderError('Task is not in run');
       if (symbol && linkedTask.symbol !== symbol) throw new SenderError('Task is for a different symbol');
     }
-    requireEvidence(ctx, parseRefs(evidenceRef), symbol, ['source', 'fact', 'thesis']);
+    requireEvidence(ctx, parseRefs(evidenceRef), symbol, ['source', 'fact', 'thesis', 'market_observation'], runId);
     const existing = ctx.db.message.id.find(id);
     if (existing) {
       if (existing.sender.equals(ctx.sender) && existing.body === body && existing.runId === runId &&

@@ -4,20 +4,25 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/worker.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
+    "build": "esbuild src/worker.ts src/risk-worker.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
+    "check:research-fixture": "esbuild scripts/check-research-fixture.ts --bundle --platform=node --format=esm --outfile=dist/check-research-fixture.mjs && node dist/check-research-fixture.mjs",
     "worker": "node dist/worker.js",
     "alpaca:read": "node dist/alpaca-paper-adapter.js",
-    "game:build": "esbuild src/game/agent.ts --bundle --platform=node --outfile=dist/game/agent.js --format=esm && swiftc src/game/macos-desktop.swift -o dist/game/macos-desktop",
-    "game:run": "node dist/game/agent.js",
     "ingest:fixture": "node dist/fixture-ingestor.js",
     "ingest:sec": "node dist/sec-ingestor.js",
+    "game:build": "esbuild src/game/agent.ts --bundle --platform=node --outfile=dist/game/agent.js --format=esm && swiftc src/game/macos-desktop.swift -o dist/game/macos-desktop",
+    "game:run": "node dist/game/agent.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p spacetimedb/tsconfig.json",
     "db:start": "spacetime start --listen-addr 127.0.0.1:3000 --data-dir .spacetimedb-data --non-interactive",
     "db:publish": "spacetime publish --module-path spacetimedb --server local quant-swarm",
     "db:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb",
-    "test": "node --test 'src/**/*.test.ts'"
+    "test": "node --test 'src/**/*.test.ts'",
+    "check:phase-one": "esbuild scripts/check-phase-one.ts --bundle --platform=node --format=esm --outfile=dist/check-phase-one.mjs && node dist/check-phase-one.mjs",
+    "risk": "node dist/risk-worker.js"
   },
-  "workspaces": ["spacetimedb"],
+  "workspaces": [
+    "spacetimedb"
+  ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
     "openai": "^7.27.0",

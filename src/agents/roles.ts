@@ -42,16 +42,16 @@ function requireBounded(value: string, label: string): string {
 // ── Analyst: task + evidence → thesis ────────────────────────────────────────
 
 export const AnalystOutput = z.object({
-  bull_case: z.string(),
-  bear_case: z.string(),
-  assumptions: z.string(),
-  invalidation: z.string().describe('Observable condition that would prove the thesis wrong'),
-  evidence_ids: z.array(z.string()).describe('IDs from <evidence> that support the bull or bear case'),
+  bull_case: z.string().min(1).max(3000),
+  bear_case: z.string().min(1).max(3000),
+  assumptions: z.string().min(1).max(3000),
+  invalidation: z.string().min(1).max(3000).describe('Observable condition that would prove the thesis wrong'),
+  evidence_ids: z.array(z.string().min(1).max(128)).min(1).max(50).describe('IDs from <evidence> that support the bull or bear case'),
 });
 export type AnalystOutput = z.infer<typeof AnalystOutput>;
 
 export const ANALYST_SYSTEM = `You are an equity research analyst in a paper-trading research swarm.
-Write a balanced, evidence-linked thesis for one US-listed symbol. A skeptic will review it and a deterministic risk gate and a human operator must approve any trade.
+Write a balanced, evidence-linked thesis for one US-listed symbol. A skeptic will review it and a deterministic risk gate must pass any trade.
 ${SHARED_RULES}`;
 
 export function analystPrompt(
@@ -84,9 +84,9 @@ export function toPublishThesisArgs(
 
 export const SkepticOutput = z.object({
   verdict: z.enum(['supports', 'weakens', 'rejects']),
-  objections: z.array(z.string()),
-  missing_evidence: z.array(z.string()),
-  unsupported_claims: z.array(z.string()).describe('Thesis claims not backed by the cited evidence'),
+  objections: z.array(z.string().max(250)).max(5),
+  missing_evidence: z.array(z.string().max(250)).max(5),
+  unsupported_claims: z.array(z.string().max(250)).max(5).describe('Thesis claims not backed by the cited evidence'),
 }).describe('Give at most 5 short items per list, most important first');
 export type SkepticOutput = z.infer<typeof SkepticOutput>;
 
@@ -114,8 +114,12 @@ const MAX_LIST_ITEMS = 5;
 const MAX_ITEM_CHARS = 250;
 
 function clip(items: string[]): string[] {
-  return items.slice(0, MAX_LIST_ITEMS).map(item =>
-    item.length > MAX_ITEM_CHARS ? `${item.slice(0, MAX_ITEM_CHARS - 1)}…` : item);
+  return items.slice(0, MAX_LIST_ITEMS).map(item => {
+    let value = item.length > MAX_ITEM_CHARS ? `${item.slice(0, MAX_ITEM_CHARS - 1)}…` : item;
+    // Quotes, backslashes and control characters expand when serialized as JSON.
+    while (JSON.stringify(value).length > MAX_ITEM_CHARS + 2) value = `${value.slice(0, -2)}…`;
+    return value;
+  });
 }
 
 // Lists are clipped so the JSON body always fits the reducer's 4096-character message limit.
@@ -139,7 +143,7 @@ export function toCritiqueMessageArgs(
 
 export const CoordinatorOutput = z.object({
   outcome: z.enum(['trade', 'abstain', 'revise']),
-  rationale: z.string(),
+  rationale: z.string().min(1).max(3000),
   side: z.enum(['buy', 'sell']).nullable(),
   quantity: z.string().nullable().describe('Whole or fractional share count as a decimal string, e.g. "1" or "0.5"'),
   order_type: z.enum(['market', 'limit']).nullable(),
@@ -149,7 +153,7 @@ export type CoordinatorOutput = z.infer<typeof CoordinatorOutput>;
 
 export const COORDINATOR_SYSTEM = `You are the coordinator of a paper-trading research swarm.
 Weigh the thesis against the skeptic's critiques and decide: trade, abstain, or revise. Abstaining is the right call when evidence is weak or objections are unresolved.
-For a trade, give side, a quantity whose value at the quoted price stays under the stated notional cap, and an order type. The risk gate and a human operator review every proposal; you cannot bypass them.
+For a trade, give side, a quantity whose value at the quoted price stays under the stated notional cap, and an order type. The deterministic risk gate checks every proposal; you cannot bypass it. Paper execution requires a fresh passing risk decision.
 Set side, quantity, order_type, and limit_price to null unless the outcome is trade.
 ${SHARED_RULES}`;
 
@@ -178,12 +182,15 @@ export function toProposalArgs(
   ids: { proposalId: string; runId: string; thesis: ThesisView },
   quote: ObservationView | undefined,
   maxOrderNotional: number,
+  now = Date.now(),
 ) {
   if (output.outcome !== 'trade') return undefined;
   const { side, quantity, order_type: orderType } = output;
   if (!side || !quantity || !orderType) throw new Error('Trade decision is missing order parameters');
   if (!QUANTITY.test(quantity) || Number(quantity) <= 0) throw new Error(`Invalid quantity ${quantity}`);
   if (!quote || quote.symbol !== ids.thesis.symbol) throw new Error('No quote to size the order');
+  const age = now - new Date(quote.asOf).getTime();
+  if (!Number.isFinite(age) || age < 0 || age > 60_000) throw new Error('Quote is stale or future dated');
   let limitPrice = '';
   if (orderType === 'limit') {
     limitPrice = output.limit_price ?? '';

@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
+import { recordId } from './ids.js';
 
-// Records clearly labeled fixture evidence so the swarm can be exercised before the SEC ingestor exists.
+// Records clearly labeled fixture evidence for reproducible local swarm checks.
 // Fixture sources use kind `fixture` and facts use quality `fixture`; the skeptic flags both.
 const host = process.env.SPACETIMEDB_HOST ?? 'ws://localhost:3000';
 const database = process.env.SPACETIMEDB_DB_NAME ?? 'quant-swarm';
@@ -55,8 +56,8 @@ async function main(): Promise<void> {
     const prefix = `fixture.${runId}.${symbol}`;
     const asOf = Timestamp.fromDate(new Date());
     const sources = [
-      { id: `${prefix}.filing`, kind: 'fixture', uri: `fixture://quant-swarm/${symbol}/filing` },
-      { id: `${prefix}.transcript`, kind: 'fixture', uri: `fixture://quant-swarm/${symbol}/transcript` },
+      { id: recordId('', prefix, '.filing'), kind: 'fixture', uri: `fixture://quant-swarm/${symbol}/filing` },
+      { id: recordId('', prefix, '.transcript'), kind: 'fixture', uri: `fixture://quant-swarm/${symbol}/transcript` },
     ];
     for (const source of sources) {
       await idempotent(source.id, () => conn.reducers.addSource({
@@ -65,8 +66,8 @@ async function main(): Promise<void> {
       }));
     }
     const facts = [
-      { id: `${prefix}.revenue`, sourceId: sources[0].id, metric: 'revenue', value: '0', unit: 'USD' },
-      { id: `${prefix}.guidance`, sourceId: sources[1].id, metric: 'guidance_change', value: 'none', unit: 'label' },
+      { id: recordId('', prefix, '.revenue'), sourceId: sources[0].id, metric: 'revenue', value: '0', unit: 'USD' },
+      { id: recordId('', prefix, '.guidance'), sourceId: sources[1].id, metric: 'guidance_change', value: 'none', unit: 'label' },
     ];
     for (const fact of facts) {
       await idempotent(fact.id, () => conn.reducers.addFact({ ...fact, symbol, period: 'fixture', quality: 'fixture' }));

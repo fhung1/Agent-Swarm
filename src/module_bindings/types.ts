@@ -10,6 +10,13 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const AccountAccess = __t.object("AccountAccess", {
+  id: __t.string(),
+  identity: __t.identity(),
+  accountId: __t.string(),
+});
+export type AccountAccess = __Infer<typeof AccountAccess>;
+
 export const AccountSnapshot = __t.object("AccountSnapshot", {
   id: __t.string(),
   accountId: __t.string(),
@@ -49,6 +56,20 @@ export const Decision = __t.object("Decision", {
 });
 export type Decision = __Infer<typeof Decision>;
 
+export const DecisionInput = __t.object("DecisionInput", {
+  id: __t.string(),
+  runId: __t.string(),
+  thesisId: __t.string(),
+  quoteId: __t.string(),
+  critiqueRefs: __t.string(),
+  model: __t.string(),
+  promptVersion: __t.string(),
+  policyVersion: __t.string(),
+  maxOrderNotional: __t.string(),
+  capturedAt: __t.timestamp(),
+});
+export type DecisionInput = __Infer<typeof DecisionInput>;
+
 export const Fact = __t.object("Fact", {
   id: __t.string(),
   sourceId: __t.string(),
@@ -71,6 +92,32 @@ export const Fill = __t.object("Fill", {
   filledAt: __t.timestamp(),
 });
 export type Fill = __Infer<typeof Fill>;
+
+export const InferenceAttempt = __t.object("InferenceAttempt", {
+  id: __t.string(),
+  runId: __t.string(),
+  workId: __t.string(),
+  actor: __t.identity(),
+  model: __t.string(),
+  promptVersion: __t.string(),
+  inputRefs: __t.string(),
+  status: __t.string(),
+  reservedTokens: __t.u32(),
+  tokensUsed: __t.u32(),
+  startedAt: __t.timestamp(),
+  expiresAt: __t.timestamp(),
+  actualModel: __t.string(),
+  outputJson: __t.string(),
+});
+export type InferenceAttempt = __Infer<typeof InferenceAttempt>;
+
+export const MarketClock = __t.object("MarketClock", {
+  accountId: __t.string(),
+  isOpen: __t.bool(),
+  asOf: __t.timestamp(),
+  capturedAt: __t.timestamp(),
+});
+export type MarketClock = __Infer<typeof MarketClock>;
 
 export const MarketObservation = __t.object("MarketObservation", {
   id: __t.string(),
@@ -112,6 +159,78 @@ export const Message = __t.object("Message", {
 });
 export type Message = __Infer<typeof Message>;
 
+export const MyAccountSnapshot = __t.object("MyAccountSnapshot", {});
+export type MyAccountSnapshot = __Infer<typeof MyAccountSnapshot>;
+
+export const MyAgent = __t.object("MyAgent", {});
+export type MyAgent = __Infer<typeof MyAgent>;
+
+export const MyApproval = __t.object("MyApproval", {});
+export type MyApproval = __Infer<typeof MyApproval>;
+
+export const MyDecision = __t.object("MyDecision", {});
+export type MyDecision = __Infer<typeof MyDecision>;
+
+export const MyDecisionInput = __t.object("MyDecisionInput", {});
+export type MyDecisionInput = __Infer<typeof MyDecisionInput>;
+
+export const MyFact = __t.object("MyFact", {});
+export type MyFact = __Infer<typeof MyFact>;
+
+export const MyFill = __t.object("MyFill", {});
+export type MyFill = __Infer<typeof MyFill>;
+
+export const MyInferenceAttempt = __t.object("MyInferenceAttempt", {});
+export type MyInferenceAttempt = __Infer<typeof MyInferenceAttempt>;
+
+export const MyMarketClock = __t.object("MyMarketClock", {});
+export type MyMarketClock = __Infer<typeof MyMarketClock>;
+
+export const MyMarketObservation = __t.object("MyMarketObservation", {});
+export type MyMarketObservation = __Infer<typeof MyMarketObservation>;
+
+export const MyMessage = __t.object("MyMessage", {});
+export type MyMessage = __Infer<typeof MyMessage>;
+
+export const MyPaperOrder = __t.object("MyPaperOrder", {});
+export type MyPaperOrder = __Infer<typeof MyPaperOrder>;
+
+export const MyReconciliation = __t.object("MyReconciliation", {});
+export type MyReconciliation = __Infer<typeof MyReconciliation>;
+
+export const MyRiskDecision = __t.object("MyRiskDecision", {});
+export type MyRiskDecision = __Infer<typeof MyRiskDecision>;
+
+export const MyRiskDecisionHistory = __t.object("MyRiskDecisionHistory", {});
+export type MyRiskDecisionHistory = __Infer<typeof MyRiskDecisionHistory>;
+
+export const MyRiskPolicy = __t.object("MyRiskPolicy", {});
+export type MyRiskPolicy = __Infer<typeof MyRiskPolicy>;
+
+export const MyRiskReservation = __t.object("MyRiskReservation", {});
+export type MyRiskReservation = __Infer<typeof MyRiskReservation>;
+
+export const MyRun = __t.object("MyRun", {});
+export type MyRun = __Infer<typeof MyRun>;
+
+export const MyRunConfig = __t.object("MyRunConfig", {});
+export type MyRunConfig = __Infer<typeof MyRunConfig>;
+
+export const MyRunMetric = __t.object("MyRunMetric", {});
+export type MyRunMetric = __Infer<typeof MyRunMetric>;
+
+export const MySource = __t.object("MySource", {});
+export type MySource = __Infer<typeof MySource>;
+
+export const MyTask = __t.object("MyTask", {});
+export type MyTask = __Infer<typeof MyTask>;
+
+export const MyThesis = __t.object("MyThesis", {});
+export type MyThesis = __Infer<typeof MyThesis>;
+
+export const MyTradeProposal = __t.object("MyTradeProposal", {});
+export type MyTradeProposal = __Infer<typeof MyTradeProposal>;
+
 export const OwnerConfig = __t.object("OwnerConfig", {
   key: __t.string(),
   owner: __t.identity(),
@@ -134,6 +253,7 @@ export const Reconciliation = __t.object("Reconciliation", {
   status: __t.string(),
   details: __t.string(),
   capturedAt: __t.timestamp(),
+  accountId: __t.string(),
 });
 export type Reconciliation = __Infer<typeof Reconciliation>;
 
@@ -146,8 +266,44 @@ export const RiskDecision = __t.object("RiskDecision", {
   checks: __t.string(),
   decidedAt: __t.timestamp(),
   expiresAt: __t.timestamp(),
+  policyId: __t.string(),
+  snapshotId: __t.string(),
+  quoteId: __t.string(),
 });
 export type RiskDecision = __Infer<typeof RiskDecision>;
+
+export const RiskDecisionHistory = __t.object("RiskDecisionHistory", {
+  id: __t.string(),
+  proposalId: __t.string(),
+  reviewer: __t.identity(),
+  policyVersion: __t.string(),
+  outcome: __t.string(),
+  checks: __t.string(),
+  decidedAt: __t.timestamp(),
+  expiresAt: __t.timestamp(),
+  policyId: __t.string(),
+  snapshotId: __t.string(),
+  quoteId: __t.string(),
+});
+export type RiskDecisionHistory = __Infer<typeof RiskDecisionHistory>;
+
+export const RiskPolicy = __t.object("RiskPolicy", {
+  id: __t.string(),
+  runId: __t.string(),
+  accountId: __t.string(),
+  policyJson: __t.string(),
+  createdAt: __t.timestamp(),
+});
+export type RiskPolicy = __Infer<typeof RiskPolicy>;
+
+export const RiskReservation = __t.object("RiskReservation", {
+  proposalId: __t.string(),
+  accountId: __t.string(),
+  quantity: __t.string(),
+  notional: __t.string(),
+  clientOrderId: __t.string(),
+});
+export type RiskReservation = __Infer<typeof RiskReservation>;
 
 export const Run = __t.object("Run", {
   id: __t.string(),
@@ -156,6 +312,25 @@ export const Run = __t.object("Run", {
   createdAt: __t.timestamp(),
 });
 export type Run = __Infer<typeof Run>;
+
+export const RunAccess = __t.object("RunAccess", {
+  id: __t.string(),
+  identity: __t.identity(),
+  runId: __t.string(),
+});
+export type RunAccess = __Infer<typeof RunAccess>;
+
+export const RunConfig = __t.object("RunConfig", {
+  runId: __t.string(),
+  policyId: __t.string(),
+  maxInferences: __t.u32(),
+  maxTokens: __t.u32(),
+  maxConcurrent: __t.u32(),
+  maxAttempts: __t.u32(),
+  usedInferences: __t.u32(),
+  usedTokens: __t.u32(),
+});
+export type RunConfig = __Infer<typeof RunConfig>;
 
 export const RunMetric = __t.object("RunMetric", {
   id: __t.string(),

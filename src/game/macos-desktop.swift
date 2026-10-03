@@ -172,12 +172,54 @@ private func point(_ window: GameWindow, _ x: Int, _ y: Int) -> CGPoint {
             y: window.bounds.minY + (window.bounds.height - 1) * CGFloat(y) / 1000)
 }
 
+// A separate process owns a record of held input. If this helper is killed, pipe EOF
+// lets the watchdog release only the keys/buttons this action process pressed.
+private var watchdogChannel: FileHandle?
+private func notifyWatchdog(_ line: String) throws {
+    if let channel = watchdogChannel { try channel.write(contentsOf: Data((line + "\n").utf8)) }
+}
+private func inputWatchdog(dryRun: Bool) throws {
+    var keys = Set<CGKeyCode>()
+    var buttons = Set<Int>()
+    while let line = readLine() {
+        if line == "done" { break }
+        let parts = line.split(separator: " ")
+        guard parts.count == 2, let code = Int(parts[1]) else { throw DesktopError("Invalid watchdog input") }
+        switch parts[0] {
+        case "key_down", "key_up":
+            guard code >= 0 && code <= 127 && keyCodes.values.contains(CGKeyCode(code)) else { throw DesktopError("Invalid watchdog key") }
+            if parts[0] == "key_down" { keys.insert(CGKeyCode(code)) } else { keys.remove(CGKeyCode(code)) }
+        case "mouse_down", "mouse_up":
+            guard code == 0 || code == 1 else { throw DesktopError("Invalid watchdog button") }
+            if parts[0] == "mouse_down" { buttons.insert(code) } else { buttons.remove(code) }
+        default: throw DesktopError("Invalid watchdog event")
+        }
+    }
+    if dryRun { print("release keys=\(keys.count) buttons=\(buttons.count)"); return }
+    var modifiers = Set(keys.filter(isModifier))
+    for key in keys.sorted(by: { !isModifier($0) && isModifier($1) }) {
+        if isModifier(key) { modifiers.remove(key) }
+        try? postKey(key, down: false, heldModifiers: modifiers)
+    }
+    let location = CGEvent(source: nil)?.location ?? .zero
+    for button in buttons {
+        try? postMouse(button == 0 ? .leftMouseUp : .rightMouseUp, location,
+                       button == 0 ? .left : .right)
+    }
+}
+
 private func postMouse(_ type: CGEventType, _ location: CGPoint, _ button: CGMouseButton) throws {
     guard let event = CGEvent(mouseEventSource: nil, mouseType: type,
                               mouseCursorPosition: location, mouseButton: button) else {
         throw DesktopError("Could not create mouse event")
     }
+    if type == .leftMouseDown || type == .rightMouseDown {
+        try notifyWatchdog("mouse_down \(button == .left ? 0 : 1)")
+    }
     event.post(tap: .cghidEventTap)
+    if type == .leftMouseUp || type == .rightMouseUp {
+        try notifyWatchdog("mouse_up \(button == .left ? 0 : 1)")
+    }
 }
 
 private func isModifier(_ code: CGKeyCode) -> Bool { code == 56 || code == 59 }
@@ -195,7 +237,9 @@ private func postKey(_ code: CGKeyCode, down: Bool, heldModifiers: Set<CGKeyCode
     }
     if isModifier(code) { event.type = .flagsChanged }
     event.flags = flags(for: heldModifiers)
+    if down { try notifyWatchdog("key_down \(code)") }
     event.post(tap: .cghidEventTap)
+    if !down { try notifyWatchdog("key_up \(code)") }
 }
 
 private func holdKeys(_ codes: [CGKeyCode], durationMs: Int) throws {
@@ -302,6 +346,9 @@ private func execute(_ action: Action, window: GameWindow) throws {
 }
 
 private func run() throws {
+    if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "watchdog" {
+        try inputWatchdog(dryRun: CommandLine.arguments.contains("--dry-run")); return
+    }
     guard (3...4).contains(CommandLine.arguments.count) else {
         throw DesktopError("Usage: macos-desktop window|act factorio|minecraft or inspect <game> <window-id>")
     }
@@ -343,6 +390,20 @@ private func run() throws {
     let actions = try rawActions.map { try parseAction($0, game: game) }
     guard actions.reduce(0, { $0 + $1.durationMs }) <= 2000 else {
         throw DesktopError("Action sequence exceeds 2000 ms")
+    }
+    let watcher = Process()
+    let pipe = Pipe()
+    watcher.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+    watcher.arguments = ["watchdog"]
+    watcher.standardInput = pipe
+    try watcher.run()
+    try pipe.fileHandleForReading.close()
+    watchdogChannel = pipe.fileHandleForWriting
+    defer {
+        try? notifyWatchdog("done")
+        try? watchdogChannel?.close()
+        watchdogChannel = nil
+        watcher.waitUntilExit()
     }
     // A terminal Ctrl+C reaches child processes too. Finish the bounded sequence and release
     // its current key/button before the parent exits.

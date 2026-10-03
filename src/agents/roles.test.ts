@@ -20,7 +20,7 @@ test('thesis rejects invented or missing evidence', () => {
 
 const trade: CoordinatorOutput = { outcome: 'trade', rationale: 'r', side: 'buy', quantity: '1', order_type: 'market', limit_price: null };
 const pids = { proposalId: 'p-1', runId: 'demo', thesis };
-const quote = { id: 'obs-1', symbol: 'AAPL', feed: 'iex', bidPrice: '199.90', askPrice: '200.10', asOf: '2026-10-05T15:00:00Z' };
+const quote = { id: 'obs-1', symbol: 'AAPL', feed: 'iex', bidPrice: '199.90', askPrice: '200.10', asOf: new Date().toISOString() };
 
 test('abstain produces no proposal', () => {
   assert.equal(toProposalArgs({ ...trade, outcome: 'abstain' }, pids, undefined, 1000), undefined);
@@ -51,5 +51,16 @@ test('critique body is clipped to fit the message limit', () => {
 test('proposal rejects unusable quote prices before recording a trade', () => {
   for (const askPrice of ['0', '-1', 'NaN', 'Infinity', '']) {
     assert.throws(() => toProposalArgs(trade, pids, { ...quote, askPrice }, 1000), /Invalid order sizing price/);
+  }
+});
+
+test('critique bounds include JSON escaping', () => {
+  for (const character of ['"', '\\', '\u0000']) {
+    const list = Array.from({ length: 5 }, () => character.repeat(250));
+    const args = toCritiqueMessageArgs(
+      { verdict: 'weakens', objections: list, missing_evidence: list, unsupported_claims: list },
+      { messageId: 'm-1', runId: 'demo', taskId: 't-1', symbol: 'AAPL', thesisId: 'th-1' });
+    assert.ok(args.body.length <= 4096);
+    assert.equal(JSON.parse(args.body).objections.length, 5);
   }
 });

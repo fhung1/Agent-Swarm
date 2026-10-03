@@ -24,9 +24,40 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 — Codex (codex-plan) — Commit shared working tree
+
+- **Status:** complete
+- **Goal:** Commit all current project changes at the owner's request.
+- **Work completed:** Coordinated a stable shared-tree snapshot with `codex` and `quant-swarm-3d`. Added Python bytecode exclusions to `.gitignore` so generated VM cache files stay out of the commit. Included the other sessions' completed source, documentation, bindings, configuration, and coordination-board work in one commit.
+- **Files / references:** Current Git branch `phase-0-alpaca-read`; board task `commit-working-tree`.
+- **Checks run:** Reviewed working-tree status and board locks. The Phase 1 session reported final typecheck/build, 42 unit tests, fixture check, and process acceptance passing; no additional tests run in this commit task.
+- **Open issues:** Live Alpaca read and paper executor/reconciliation remain open board tasks.
+- **Next steps:** Configure paper credentials/feed for the live read; claim and build `paper-executor-reconcile`.
+
+## 2026-10-03 — Claude Code (quant-swarm-84) — SEC filing provenance
+
+- **Status:** code complete and verified; uncommitted; README wording pending with Codex (README lock)
+- **Goal:** Board task `sec-filing-provenance`: make each SEC source's checksum and artifact match the filing its URI names.
+- **Work completed:** `src/sec-ingestor.ts` now downloads each filing's primary document from the allow-listed SEC Archives route. The source checksum is that document's SHA-256. `artifact_ref` points to a content-addressed manifest listing the saved document and an excerpt of the filing's own XBRL facts (only entries with its accession), each with its SHA-256. Facts are still recorded for the filing's own period.
+- **Files / references:** `src/sec-ingestor.ts`; artifacts in `~/.local/share/quant-swarm/artifacts/sec/`.
+- **Checks run:** typecheck and build clean. Live run `sec2` (needed `grant_run_access` for the ingestor under Codex's new run-scoped access): AAPL and MSFT 10-K/10-Q recorded, 10 facts each. For AAPL 10-Q, the stored checksum equals the SHA-256 of a fresh download from the source URI; the manifest and saved copies re-hash correctly; the XBRL excerpt contains only accession 0000320193-26-000020 (112 concepts) and includes the recorded quarterly revenue. A rerun recorded nothing.
+- **Open issues:** `sec1` rows keep the old companyfacts-based checksum (reruns skip existing sources). README SEC section still describes the old artifact; replacement sentence sent to Codex. No filing text excerpts (risk factors, MD&A) are extracted for the analyst yet. `approval-contract-cleanup` was completed by Codex; only `IMPLEMENTATION_REVIEW.md` ~line 98 still says "approval screen" (sent to Codex).
+- **Next steps:** Commit `src/sec-ingestor.ts` when the owner approves; apply the README sentence once the lock is free. Consider extracting Item 1A/Item 7 text from the saved document for model analysts.
+- **Context:** None.
+
+## 2026-10-03 20:02 UTC — Codex (codex-plan) — Implementation plan issue audit
+
+- **Status:** complete
+- **Goal:** Review `IMPLEMENTATION_PLAN.md` and post unresolved issues to the new dev coordination board without taking the other Codex session's risk task.
+- **Work completed:** Registered as `codex-plan`, claimed `implementation-plan-audit`, reviewed the plan, current implementation, review notes, and board ownership. Added board tasks `approval-contract-cleanup`, `sec-filing-provenance`, `alpaca-live-read`, and `paper-executor-reconcile` (after `risk-worker`); posted three board messages covering these and remaining pilot decisions/operations gaps. Left `risk-gate-db` and `phase-one-acceptance` with `codex`.
+- **Files / references:** `IMPLEMENTATION_PLAN.md`, `IMPLEMENTATION_REVIEW.md`, `src/agents/roles.ts`, `src/sec-ingestor.ts`, `src/alpaca-paper-adapter.ts`, `spacetimedb/src/records.ts`; board database `quant-swarm-coord` messages #13–15.
+- **Checks run:** Read-only source/plan inspection and board status/inbox verification. No tests or implementation changes.
+- **Open issues:** Owner pilot configuration, live Alpaca read, paper execution/reconciliation, position review, and operator visibility remain pending; tasks and messages are on the board.
+- **Next steps:** Board task owners can claim the four open issues; confirm the model prompts reflect the no-approval decision before live proposals. No further work for this audit.
+
 ## 2026-10-03 — Claude Code — SEC EDGAR ingestor (Phase 2 start)
 
-- **Status:** complete and verified; committed
+- **Status:** complete and verified; committed (`633751e`)
 - **Goal:** Replace fixture evidence with real SEC filings.
 - **Work completed:** Added `src/sec-ingestor.ts` (`npm run ingest:sec`). For each symbol it records the latest 10-K and 10-Q as sources (`as_of` = SEC acceptance time) and up to 10 reported XBRL facts per filing for that filing's own period end. It stores the raw company-facts JSON under `~/.local/share/quant-swarm/artifacts/sec/` with its SHA-256 as the source checksum. It makes GET requests only, to allow-listed SEC routes 200 ms apart, requires `SEC_USER_AGENT` with a contact email, and is safe to rerun. It uses the existing `add_source`/`add_fact` reducers; no module change. Added the build entry, npm script, and README section.
 - **Files / references:** `src/sec-ingestor.ts`, `package.json`, `README.md` "SEC filings ingestor".
@@ -35,17 +66,46 @@ Copy this section for each handoff and fill in what applies:
 - **Next steps:** Point model-backed analysts at `sec1`-style runs. Consider an 8-K/new-filing trigger for Phase 5 reviews.
 - **Context:** The SEC contact for local runs is the owner's address, supplied only via the `SEC_USER_AGENT` env var, not stored in the repo.
 
-## 2026-10-03 — Claude Code — Phase 1 part A: protocol and three-role worker
+## 2026-10-03 20:10 UTC — Claude Code — Risk worker (risk broker) and dev coordination board
 
-- **Status:** part A committed and verified; part B (scoped read views) waits until the AI roles are wired into `src/worker.ts`
-- **Goal:** Phase 1 exit check: three workers exchange a sourced thesis and recover after a worker restart.
-- **Work completed:** Schema adds `task.role`/`depends_on`, `message.symbol`/`recipient_role`, `thesis.task_id` (defaults, migrated in place). `create_task` takes role and same-symbol dependency and accepts identical retries; `claim_task` enforces both; `post_message` enforces a kind enum and validates evidence IDs against source/fact/thesis rows of the same symbol; `publish_thesis` requires same-symbol evidence and task ownership and is retry-idempotent, as is `record_decision`. Worker acts on its granted role (analyst/skeptic/coordinator placeholder logic, no LLM), renews leases every 20 s, resumes its own claimed tasks after restart, and fails a held task on permanent error. New `src/fixture-ingestor.ts` (`npm run ingest:fixture`) and `src/tokens.ts`.
-- **Files / references:** `spacetimedb/src/{schema,access,index,records}.ts`, `src/worker.ts`, `src/fixture-ingestor.ts`, `src/tokens.ts`, `src/module_bindings/`, README "Three-agent thesis check".
-- **Checks run:** typecheck/build pass. Run `phase1`: analyst killed mid-task resumed with same identity; review queued, challenged, decided `revise`. 70 s task renewed lease 3× and completed. Rejections verified: bad kind, unknown/cross-symbol evidence, bad task role, missing/cross-symbol dependency, wrong-role claim, evidence-less thesis, thesis on unowned task. Found and fixed an infinite resume-retry loop on permanent errors.
-- **Open issues:** Public tables are still readable by any connecting client; `recipient_role` is a label, not access control. Role logic is placeholder. The worker subscribes to all `fact` and `decision` rows (no run column).
-- **Next steps:** Part B: make swarm tables private and expose identity-scoped views (`spacetimedb.view`, `ctx.sender`) for granted agents; switch worker subscriptions to the views; verify an ungranted client sees nothing. Then add an LLM-backed analyst behind the same task flow.
-- **Coordination with "Claude-backed role logic" entry:** the schema change it was waiting on has landed and is published: `postMessage` takes `symbol`/`recipientRole`, `publishThesis` takes `taskId`, `createTask` takes `role`/`dependsOn`. `src/worker.ts` was rewritten here and now dispatches on the granted role (from the `agent` table, not an env var) via `writeThesis`/`reviewThesis`/`coordinate`; plug the `src/agents/roles.ts` logic into those three functions rather than adding a parallel `AGENT_ROLE` path. Its open issue (1) still stands: `requireEvidence` does not accept `market_observation` IDs. Not changed here; deciding between accepting observations and having the adapter record sources is still open. Full typecheck, build, and `npm test` (19/19) pass with both sets of changes.
-- **Context:** Local DB contains test runs `demo` and `phase1` (including failed `t-dep`). Workers coord-1, analyst-a, skeptic-1 and the fixture ingestor have tokens under `~/.local/share/quant-swarm/tokens/`.
+- **Status:** code complete; live run blocked on Alpaca paper keys
+- **Goal:** Write the risk broker, the only gate between model-driven proposals and paper execution (owner decision: no human approval), and give coding sessions a shared coordination board.
+- **Work completed:** `src/risk-worker.ts`: a `risk`-role process. Each cycle, for each account with waiting work, it reads account, positions, open orders, clock, and quotes from Alpaca (GET-only `src/alpaca-client.ts`). It stores one `record_account_snapshot` with quotes for every exposure symbol, plus `record_market_clock`, then evaluates the stored `my_*` rows. It reviews `proposed` proposals and unsubmitted passes whose decision expired or was pinned to an older snapshot or policy. It calls `record_risk_decision` with a snapshot-based new ID plus `snapshotId`/`clockAsOf`, retries from a fresh snapshot on "Risk inputs changed", confirms the module's verdict on a mismatch, posts a decision message to the coordinator, and fails closed when a reservation's proposal is not visible. `src/agents/risk-review.ts` mirrors the module's `evaluateProposal` (`pendingIntentsFor`, `needsRefresh`, `reviewProposal`). Policy `config/risk-policy.json` is operator-provisioned with `add_risk_policy`; setup commands are in the header of `src/risk-worker.ts`. The dev coordination board is `coord/` module `quant-swarm-coord`, `scripts/coord.ts`, and the AGENTS.md "Dev coordination between sessions" section.
+- **Files / references:** `src/risk-worker.ts`, `src/alpaca-client.ts`, `src/alpaca-paper-adapter.ts`, `src/agents/risk-review{,.test}.ts`, `config/risk-policy.json`, `coord/`, `scripts/coord.ts`; board tasks `risk-gate-db` (Codex, done) and `risk-worker`.
+- **Checks run:** Whole-repo `tsc` clean; `npm test` 41/41; worker bundles; `--register` prints the identity (`risk-1`: `c200e047…4f8d`); without keys the worker exits with a clear message. Not run: a live cycle (no Alpaca keys; Alpaca origins are fixed, so it cannot be faked).
+- **Open issues:** `package.json` needs `src/risk-worker.ts` in `build` and a `risk` script (requested from Codex, which holds the lock). Every risk cycle writes a snapshot, which re-pins other unsubmitted passes (handled by the batch refresh), and the market-data adapter's snapshots also trigger refreshes. Local and module time thresholds can differ by milliseconds; the worker confirms the module's verdict and logs it.
+- **Next steps:** With keys: register and grant `risk-1` (risk role, run access, account access), `add_risk_policy` with a run-specific version, then run a proposal through. Then `paper-executor-reconcile`.
+- **Context:** Uncommitted. Not changed: `spacetimedb/src/` (Codex) and `src/worker.ts` (Codex lock).
+
+## 2026-10-03 — Codex — Fix review findings and complete Phase 1
+
+- **Status:** complete; local Phase 1 acceptance passed
+- **Goal:** Fix the implementation review bugs, then finish scoped reads and Phase 1 recovery/coordination checks.
+- **Work completed:** Private tables and indexed identity/run/account-scoped views; strict shared risk parsing, per-symbol order valuation and atomic cash/share reservations; immutable policies, market clock and authoritative database risk checks; guarded order/fill lifecycle; frozen decision inputs and durable bounded inference accounting/output replay; pause/cancellation/retry/takeover fixes and bounded derived IDs. Game input watchdog and preflight token counting implemented. Joined `quant-swarm-coord` as `codex`, claimed `risk-gate-db` and `phase-one-acceptance`, and started live watch. Updated project instructions supersede required operator approval; reservation accepts fresh `risk_passed` proposals directly. Risk re-review archives prior verdicts for unsubmitted intents. Coordinated the risk-worker contract, added its build/script, and incorporated the SEC provenance session’s matching artifact/checksum documentation.
+- **Checks run:** Final whole-repo typecheck/build and 42 unit tests passed. Scoped structured-handler fixture `model-fixture-1791058022672` passed (13 synthetic responses). Full process acceptance `phase-one-1791058021567` passed: private tables/views, run/account revocation, atomic claim race, same-token restart, three-role sourced cycle, pause/resume, 128-character task IDs, inference budgets/output audit, malformed/incorrect/changed risk inputs, audited refresh, reservation without approval, order identity/state/fill totals, expired lease takeover preserving original authorship, and 65-second task lease renewal. Database published/migrated preserving records and bindings regenerated. Game/Swift build and dry-run EOF key/button release check passed. `git diff --check` passed.
+- **Open issues:** Real Alpaca paper-account/feed read and live risk worker require credentials; paper executor/reconciliation, position monitor, production service/OIDC setup, dashboard/evaluation/restore and live game checks remain later phase exits. Optional daily-loss policy fails closed without a daily P&L input. No broker order or paid inference was sent by these acceptance checks.
+- **Next steps:** Reproduce with `npm run build` then `SPACETIME_CLI="$HOME/.local/bin/spacetime" npm run check:phase-one`. Complete Phase 0 real read; verify model research on SEC evidence and live risk inputs; then build paper executor/reconciliation. Board tasks track remaining work. Synthetic local order/fill records in the closed acceptance run are reducer fixtures, not Alpaca trades. Other sessions’ commits/changes preserved; this session made no commit.
+
+## 2026-10-03 — Codex — Full implementation review
+
+- **Status:** complete
+- **Goal:** Review implemented trading, swarm, game, and VM work against the plans and identify remaining work and correctness gaps.
+- **Work completed:** Added `IMPLEMENTATION_REVIEW.md` with phase status, implementation inventory, evidence, prioritized findings and remaining trading/game work. Updated the stale plan snapshot to reflect model integration and the recorded Codex worker pass. Main plan is Phase 1 substantially implemented with scoped reads/recovery pending; Phase 0 live Alpaca read remains pending; Phases 2–4 have foundations, and 5–6 lack operating services.
+- **Checks run:** Typecheck, worker build, 22 tests, game/Swift build, local fixture checker, Python AST parsing and all three VM example plan commands passed. Official Alpaca docs confirm the pagination cursor/page limit. DB confirms completed Codex analyst/review tasks and abstain decision; paper-order count zero. Targeted pure-risk probes reproduced malformed numeric rows passing and other-symbol market orders valued using the proposal's midpoint.
+- **Open issues:** High-priority findings: permissive risk parsing, missing pending cash reservations/wrong cross-symbol valuation, no operational risk service/material-change invalidation, missing scoped views, and weak order/fill validation. Medium findings include transient-error/pause handling, task takeover authorship collisions, decision-input/version audit gaps and protocol bounds. Live Alpaca, Claude, gameplay and VM runtime checks remain open.
+- **Next steps:** Build scoped views and Phase 1 recovery fixes; complete actual Alpaca read; implement SEC/data snapshots; finish risk/approval; then paper execution and reconciliation. Game track next step is one live client acceptance check.
+- **Context:** Review changed documentation only; it did not fix implementation findings, call a model/provider/broker, or run VM mutations. Fixture run `model-fixture-1791056537322` closed and temporary roles revoked. Prior handoff records actual Codex inference; this review inspected its durable results without repeating paid inference.
+
+## 2026-10-03 — Codex — Finish model research worker integration
+
+- **Status:** complete; live provider check remains separate
+- **Goal:** Wire analyst, skeptic, and coordinator model handlers into leased workers and verify a fixture research cycle through proposal creation.
+- **Work completed:** Finished the shared model integration. Thesis/message evidence now accepts same-symbol market observations; prompts carry quote IDs. Added atomic, coordinator-only `record_trade_decision` and identical proposal retries so a crash cannot split a new model decision from its proposal. Worker heartbeat scans trigger delayed coordinator retries; stale connection scans are ignored. Stored challenges and decisions survive brain changes. Invalid quote prices are rejected before sizing. Added a reusable local fixture checker and updated README/AGENTS.
+- **Files / references:** `src/worker.ts`, `src/agents/{roles,model-handlers,roles.test}.ts`, `spacetimedb/src/{access,index,records}.ts`, generated bindings, `scripts/check-research-fixture.ts`, `package.json`, README.
+- **Checks run:** Typecheck/build passed; existing full suite (21 tests) and updated role suite (6 tests) passed. Local module republished without table migration; bindings regenerated. Fixture checker passed trade/abstain/revise, stored-output replay, same-identity coordinator reconnection, atomic rollback, role rejection, and identical retries. Run `model-fixture-1791056451020` closed and temporary roles revoked. Local paper-order count was zero. `git diff --check` passed.
+- **Open issues:** Fixture responses exercise handlers and real reducers, not provider inference or the full worker loop. No live provider/broker requests made in this task. Scoped read views and the risk service are still pending. Historical trade decisions lacking proposals are surfaced as errors, not silently announced as complete.
+- **Next steps:** Run `SPACETIME_CLI="$HOME/.local/bin/spacetime" npm run check:research-fixture` to reproduce locally. Verify a provider-backed worker cycle with configured credentials; then implement scoped reads and wire the deterministic risk worker.
+- **Context:** Synthetic `QFIX` evidence stays in closed runs for audit and does not overlap real symbols. No orders submitted and no commit made. Other agents' changes preserved.
 
 ## 2026-10-03 19:35 UTC — Codex — Local Tart fleet
 
@@ -98,6 +158,18 @@ Copy this section for each handoff and fill in what applies:
 - **Next steps:** On a Mac with Minecraft Java Edition open, grant terminal Screen Recording and Accessibility permissions, run `npm run game:build`, inspect with `./dist/game/macos-desktop window minecraft`, then try a small `GAME=minecraft GAME_GOAL='Turn toward the visible tree' GAME_MAX_STEPS=3 npm run game:run` and review the screenshots and trace. Check camera direction, movement combinations, and crosshair button behavior before treating this as gameplay-verified.
 - **Context:** Other agents have uncommitted work in backend files; this change stays within the game implementation and its docs.
 
+## 2026-10-03 — Claude Code — Phase 1 part A: protocol and three-role worker
+
+- **Status:** paused by owner (part A done and verified; part B scoped read views waits until the AI roles are wired into `src/worker.ts`; owner asked not to commit yet; uncommitted on branch `phase-0-alpaca-read`)
+- **Goal:** Phase 1 exit check: three workers exchange a sourced thesis and recover after a worker restart.
+- **Work completed:** Schema adds `task.role`/`depends_on`, `message.symbol`/`recipient_role`, `thesis.task_id` (defaults, migrated in place). `create_task` takes role and same-symbol dependency and accepts identical retries; `claim_task` enforces both; `post_message` enforces a kind enum and validates evidence IDs against source/fact/thesis rows of the same symbol; `publish_thesis` requires same-symbol evidence and task ownership and is retry-idempotent, as is `record_decision`. Worker acts on its granted role (analyst/skeptic/coordinator placeholder logic, no LLM), renews leases every 20 s, resumes its own claimed tasks after restart, and fails a held task on permanent error. New `src/fixture-ingestor.ts` (`npm run ingest:fixture`) and `src/tokens.ts`.
+- **Files / references:** `spacetimedb/src/{schema,access,index,records}.ts`, `src/worker.ts`, `src/fixture-ingestor.ts`, `src/tokens.ts`, `src/module_bindings/`, README "Three-agent thesis check".
+- **Checks run:** typecheck/build pass. Run `phase1`: analyst killed mid-task resumed with same identity; review queued, challenged, decided `revise`. 70 s task renewed lease 3× and completed. Rejections verified: bad kind, unknown/cross-symbol evidence, bad task role, missing/cross-symbol dependency, wrong-role claim, evidence-less thesis, thesis on unowned task. Found and fixed an infinite resume-retry loop on permanent errors.
+- **Open issues:** Public tables are still readable by any connecting client; `recipient_role` is a label, not access control. Role logic is placeholder. The worker subscribes to all `fact` and `decision` rows (no run column).
+- **Next steps:** Part B: make swarm tables private and expose identity-scoped views (`spacetimedb.view`, `ctx.sender`) for granted agents; switch worker subscriptions to the views; verify an ungranted client sees nothing. Then add an LLM-backed analyst behind the same task flow.
+- **Coordination with "Claude-backed role logic" entry:** the schema change it was waiting on has landed and is published: `postMessage` takes `symbol`/`recipientRole`, `publishThesis` takes `taskId`, `createTask` takes `role`/`dependsOn`. `src/worker.ts` was rewritten here and now dispatches on the granted role (from the `agent` table, not an env var) via `writeThesis`/`reviewThesis`/`coordinate`; plug the `src/agents/roles.ts` logic into those three functions rather than adding a parallel `AGENT_ROLE` path. Its open issue (1) still stands: `requireEvidence` does not accept `market_observation` IDs. Not changed here; deciding between accepting observations and having the adapter record sources is still open. Full typecheck, build, and `npm test` (19/19) pass with both sets of changes.
+- **Context:** Local DB contains test runs `demo` and `phase1` (including failed `t-dep`). Workers coord-1, analyst-a, skeptic-1 and the fixture ingestor have tokens under `~/.local/share/quant-swarm/tokens/`.
+
 ## 2026-10-03 19:19 UTC — Codex — Mac Factorio one-agent prototype
 
 - **Status:** in progress
@@ -109,16 +181,16 @@ Copy this section for each handoff and fill in what applies:
 - **Next steps:** On a Mac with Factorio open, grant screen/input permissions, run `npm run game:build`, inspect the window with `./dist/game/macos-desktop window Factorio`, then run a short `GAME_GOAL` with a small step limit and review `.game-runs/<run-id>/trace.jsonl` plus screenshots. Confirm coordinate alignment and key release in the game before treating Phase 1 as accepted.
 - **Context:** Other uncommitted Alpaca and analyst work is present; this entry covers only new game files, game scripts, docs, and ignore rules. The current prototype is one client and does not write game events to SpacetimeDB.
 
-## 2026-10-03 — Claude Code — Claude-backed role logic and deterministic risk gate (staged)
+## 2026-10-03 — Claude Code — Model-backed roles (Claude and Codex) wired into the worker
 
-- **Status:** in progress
-- **Goal:** Prepare Phase 1/3 agent logic while the operator closes out Phase 0, without touching `src/`, bindings, or `package.json`.
-- **Work completed:** Drafted `src/agents/llm.ts` (Claude structured-output client, `claude-opus-5-5`, server-side refusal fallback), `src/agents/roles.ts` (analyst/skeptic/coordinator prompts, zod output schemas, validators that map model output to `publishThesis`/`postMessage`/`recordDecision`/`proposeTrade` args and reject uncited evidence or over-cap quantities), and `src/agents/risk.ts` (pure deterministic risk policy) with tests. Files are staged in this session's scratchpad, not yet in the repo.
-- **Files / references:** Scratch package `agents-pkg/src/agents/`; target `src/agents/`.
-- **Checks run:** `node --test` 13/13 pass; `tsc --noEmit` clean in the scratch package. No live model calls made.
-- **Open issues:** Needs `@anthropic-ai/sdk` and `zod` dependencies, and `allowImportingTsExtensions` in `tsconfig.json` for the tests. The risk worker cannot read private `account_snapshot` rows yet; it needs a scoped view or its own Alpaca read.
-- **Next steps:** After the Phase 0 commit, copy files into `src/agents/`, add deps and a `test` script, then wire roles into `src/worker.ts` via `AGENT_ROLE`.
-- **Context:** Model output is only a proposal; validators mirror reducer rules so bad output fails before a reducer call.
+- **Status:** in progress (uncommitted)
+- **Goal:** Give the Phase 1 worker model-backed analyst, skeptic, and coordinator steps on either Claude or Codex, plus a deterministic risk policy for Phase 3.
+- **Work completed:** `src/agents/llm.ts` (`createAsker('claude' | 'codex')`: Anthropic Messages API with `claude-opus-5-5` and server-side refusal fallback, or OpenAI Responses API with `gpt-5.3-codex`, no tools, `store: false`; both use zod structured outputs); `src/agents/roles.ts` (shared prompts, schemas, and validators that map model output to reducer arguments); `src/agents/model-handlers.ts` (thesis, review, and decision steps using the same record IDs as the rule-based worker); `src/agents/risk.ts` (pure risk policy, not yet run by any worker). `src/worker.ts` gains `AGENT_BRAIN=rules|claude|codex` (default `rules`) and subscribes to `trade_proposal` and `market_observation`. Added `openai` alongside `@anthropic-ai/sdk` and `zod`. README section "Model-backed roles" documents settings and credentials.
+- **Files / references:** `src/agents/`; `src/worker.ts`; `README.md`; `package.json`; `tsconfig.json`.
+- **Checks run:** `npm run typecheck` pass; `npm test` 19/19 pass; `npm run build` pass. Codex end-to-end on run `codex-e2e-1` (fixture evidence, coord-1/analyst-a/skeptic-1 with `AGENT_BRAIN=codex`, effort medium): thesis cited the four fixture IDs, skeptic posted a `challenge` (weakens), coordinator recorded `abstain` and posted the decision message. Claude path reached the model call and failed cleanly on missing Anthropic credentials (task `claude-smoke-aapl-1`, run `phase1`); no live Claude pass yet.
+- **Open issues:** No Anthropic credentials here. At effort `low`, a Codex skeptic marked fixture-only evidence as "supports"; prefer `medium` or higher. Fixture evidence cannot support a trade, so the proposal path is unexercised. The risk worker still needs account data and the Alpaca clock; `recordRiskDecision` still trusts the `risk` identity.
+- **Next steps:** Run the same check with `AGENT_BRAIN=claude` once `ANTHROPIC_API_KEY` is available; exercise a trade proposal with a stored quote; build the risk worker on `risk.ts`.
+- **Context:** Role comes from the database grant; `AGENT_BRAIN` selects only the implementation, and brains can mix within a run.
 
 ## 2026-10-03 19:15 UTC — Claude Code — Phase 0 verification
 
@@ -147,12 +219,12 @@ Copy this section for each handoff and fill in what applies:
 
 - **Status:** complete
 - **Goal:** Build a read-only Alpaca adapter that reads paper account state and selected market data, then writes timestamped snapshots to SpacetimeDB.
-- **Work completed:** Added a dedicated `market_data` role; expanded private account snapshots to store account identity/status, positions, and orders; added public quote observations and role-checked reducers; implemented a fixed-paper-host GET-only Alpaca adapter with identity registration, token persistence, quote feed/symbol configuration, and open-order pagination; documented setup and invocation.
+- **Work completed:** Added a dedicated `market_data` role; expanded private account snapshots to store account identity/status, positions, and orders; added public quote observations with atomic account-plus-market snapshot writes; implemented a fixed-paper-host GET-only Alpaca adapter with identity registration, token persistence, quote feed/symbol configuration, and open-order pagination; documented setup and invocation.
 - **Files / references:** `src/alpaca-paper-adapter.ts`; `spacetimedb/src/schema.ts`; `spacetimedb/src/access.ts`; `spacetimedb/src/records.ts`; `src/module_bindings/`; `README.md`; `IMPLEMENTATION_PLAN.md` Phase 0.
 - **Checks run:** `npm run build` passed and emitted the worker plus Alpaca adapter bundles. No tests or TypeScript typecheck run. `spacetime` CLI is not installed in this environment, so bindings were updated to match the schema and should be regenerated with CLI 2.10.2.
 - **Open issues:** Live paper credentials/feed entitlements are needed for the full acceptance check; module publish and generated-binding regeneration are pending; initial schema migration has not been exercised.
 - **Next steps:** Install/use SpacetimeDB CLI 2.10.2 to regenerate bindings, publish the module, grant the adapter `market_data`, and run it against an entitled paper account; inspect both snapshot tables to complete the live Phase 0 acceptance check.
-- **Context:** The adapter's fixed trading origin is `paper-api.alpaca.markets`; its sole HTTP helper explicitly uses GET. It has no order mutation endpoint. Account snapshots are private; quote rows are public in the local-development schema. Keep SpacetimeDB bound to localhost until scoped reads are added.
+- **Context:** The adapter's fixed trading origin is `paper-api.alpaca.markets`; its sole HTTP helper explicitly uses GET. It has no order mutation endpoint. Account snapshots are private; quote rows are public in the local-development schema. The single snapshot reducer makes their persistence atomic. Keep SpacetimeDB bound to localhost until scoped reads are added.
 
 ## 2026-10-03 — Codex — Read-only connectivity slice clarification
 

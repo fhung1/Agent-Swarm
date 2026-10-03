@@ -5,12 +5,16 @@ import * as path from 'node:path';
 import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
+import { recordId } from './ids.js';
 
 // Records the latest 10-K and 10-Q for each symbol as sources, with reported XBRL facts for each filing's own period.
+// Each source's checksum is the SHA-256 of the filing document its URI names. Its artifact is a manifest that points to
+// a saved copy of that document and to the filing's own XBRL facts, so every recorded fact traces to that filing.
 // EDGAR is public research data; this process holds no broker credentials and makes only GET requests to SEC hosts.
 const TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
 const SUBMISSIONS_PREFIX = 'https://data.sec.gov/submissions/';
 const COMPANY_FACTS_PREFIX = 'https://data.sec.gov/api/xbrl/companyfacts/';
+const ARCHIVES_PREFIX = 'https://www.sec.gov/Archives/edgar/data/';
 const REQUEST_GAP_MS = 200; // SEC fair access allows 10 requests per second; stay well below it.
 const FORMS = ['10-K', '10-Q'];
 
@@ -56,8 +60,9 @@ function parseSymbols(value: string): string[] {
 }
 
 let lastRequest = 0;
-async function getSec(url: string, userAgent: string): Promise<string> {
-  if (url !== TICKERS_URL && !url.startsWith(SUBMISSIONS_PREFIX) && !url.startsWith(COMPANY_FACTS_PREFIX)) {
+async function getSec(url: string, userAgent: string, accept = 'application/json'): Promise<Buffer> {
+  if (url !== TICKERS_URL && !url.startsWith(SUBMISSIONS_PREFIX) && !url.startsWith(COMPANY_FACTS_PREFIX) &&
+      !url.startsWith(ARCHIVES_PREFIX)) {
     throw new Error(`SEC route is not allow-listed: ${url}`);
   }
   const wait = lastRequest + REQUEST_GAP_MS - Date.now();
@@ -66,11 +71,42 @@ async function getSec(url: string, userAgent: string): Promise<string> {
   const response = await fetch(url, {
     method: 'GET',
     redirect: 'error',
-    headers: { 'user-agent': userAgent, accept: 'application/json' },
+    headers: { 'user-agent': userAgent, accept },
     signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) throw new Error(`SEC GET ${url} failed (${response.status})`);
-  return await response.text();
+  return Buffer.from(await response.arrayBuffer());
+}
+
+async function getSecJson(url: string, userAgent: string): Promise<JsonObject> {
+  return object(JSON.parse((await getSec(url, userAgent)).toString('utf8')), url);
+}
+
+function sha256(data: Buffer | string): string {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+// Writes content-addressed artifacts once; identical content always maps to the same file.
+function saveArtifact(name: string, data: Buffer | string): string {
+  fs.mkdirSync(artifactDir, { recursive: true, mode: 0o700 });
+  const file = path.join(artifactDir, name);
+  if (!fs.existsSync(file)) fs.writeFileSync(file, data, { mode: 0o600 });
+  return file;
+}
+
+// Every us-gaap/dei fact entry reported under one accession: the filing's own XBRL data, not later restatements.
+function filingFacts(companyFacts: JsonObject, accession: string): JsonObject {
+  const result: Record<string, Record<string, Record<string, FactEntry[]>>> = {};
+  for (const [taxonomy, concepts] of Object.entries(object(companyFacts.facts, 'facts'))) {
+    for (const [concept, body] of Object.entries(object(concepts, taxonomy))) {
+      for (const [unit, raw] of Object.entries(object(object(body, concept).units, `${concept} units`))) {
+        const entries = (raw as FactEntry[]).filter(entry => entry.accn === accession);
+        if (entries.length === 0) continue;
+        ((result[taxonomy] ??= {})[concept] ??= {})[unit] = entries;
+      }
+    }
+  }
+  return result;
 }
 
 function object(value: unknown, label: string): JsonObject {
@@ -152,27 +188,35 @@ async function idempotent(label: string, call: () => Promise<void>): Promise<boo
 async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: string, ciks: Map<string, string>): Promise<void> {
   const cik = ciks.get(symbol.replace('.', '-'));
   if (!cik) throw new Error(`No SEC CIK found for ${symbol}`);
-  const submissions = object(JSON.parse(await getSec(`${SUBMISSIONS_PREFIX}CIK${cik}.json`, userAgent)), 'submissions');
-  const factsBody = await getSec(`${COMPANY_FACTS_PREFIX}CIK${cik}.json`, userAgent);
-  const companyFacts = object(JSON.parse(factsBody), 'company facts');
-
-  // Keep the raw company-facts document outside SpacetimeDB; sources reference it by checksum and path.
-  const checksum = createHash('sha256').update(factsBody).digest('hex');
-  fs.mkdirSync(artifactDir, { recursive: true, mode: 0o700 });
-  const artifactPath = path.join(artifactDir, `${checksum}.json`);
-  if (!fs.existsSync(artifactPath)) fs.writeFileSync(artifactPath, factsBody, { mode: 0o600 });
+  const submissions = await getSecJson(`${SUBMISSIONS_PREFIX}CIK${cik}.json`, userAgent);
+  const companyFactsUrl = `${COMPANY_FACTS_PREFIX}CIK${cik}.json`;
+  const companyFacts = await getSecJson(companyFactsUrl, userAgent);
 
   const filings = latestFilings(submissions);
   if (filings.length === 0) throw new Error(`No 10-K or 10-Q filings found for ${symbol}`);
   for (const filing of filings) {
     const accessionDigits = filing.accession.replaceAll('-', '');
-    const sourceId = `sec.${runId}.${symbol}.${accessionDigits}`;
+    const sourceId = recordId('sec.', `${runId}.${symbol}.${accessionDigits}`);
     const acceptedAt = new Date(filing.acceptedAt);
     if (!Number.isFinite(acceptedAt.getTime())) throw new Error(`Invalid acceptance time for ${filing.accession}`);
+    if (!/^[A-Za-z0-9._-]+$/.test(filing.primaryDocument)) throw new Error(`Unexpected document name ${filing.primaryDocument}`);
+    const uri = `${ARCHIVES_PREFIX}${Number(cik)}/${accessionDigits}/${filing.primaryDocument}`;
+    const document = await getSec(uri, userAgent, 'text/html,application/xhtml+xml,*/*');
+    const checksum = sha256(document);
+    const documentPath = saveArtifact(`${checksum}${path.extname(filing.primaryDocument) || '.htm'}`, document);
+    const xbrl = JSON.stringify(filingFacts(companyFacts, filing.accession));
+    const xbrlChecksum = sha256(xbrl);
+    const xbrlPath = saveArtifact(`${xbrlChecksum}.json`, xbrl);
+    const manifest = JSON.stringify({
+      accession: filing.accession, form: filing.form, cik, symbol, reportDate: filing.reportDate,
+      acceptedAt: filing.acceptedAt,
+      document: { uri, sha256: checksum, bytes: document.length, path: documentPath },
+      xbrlFacts: { derivedFrom: companyFactsUrl, accession: filing.accession, sha256: xbrlChecksum, path: xbrlPath },
+    }, null, 2);
+    const manifestPath = saveArtifact(`${sha256(manifest)}.manifest.json`, manifest);
     const added = await idempotent(sourceId, () => conn.reducers.addSource({
-      id: sourceId, runId, symbol, kind: filing.form,
-      uri: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accessionDigits}/${filing.primaryDocument}`,
-      asOf: Timestamp.fromDate(acceptedAt), checksum, artifactRef: `file://${artifactPath}`,
+      id: sourceId, runId, symbol, kind: filing.form, uri,
+      asOf: Timestamp.fromDate(acceptedAt), checksum, artifactRef: `file://${manifestPath}`,
     }));
     let recorded = 0;
     const missing: string[] = [];
@@ -182,7 +226,7 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
       const { entry, unit, concept } = found;
       const period = entry.start ? `${entry.start}..${entry.end}` : `as of ${entry.end}`;
       if (await idempotent(`${sourceId}.${metric}`, () => conn.reducers.addFact({
-        id: `${sourceId}.${metric}`, sourceId, symbol, metric, value: String(entry.val), unit,
+        id: recordId('', sourceId, `.${metric}`), sourceId, symbol, metric, value: String(entry.val), unit,
         period: `${period} (${concept})`, quality: 'ok',
       }))) recorded++;
     }
@@ -202,7 +246,7 @@ async function main(): Promise<void> {
     const userAgent = requiredEnv('SEC_USER_AGENT');
     if (!/\S+@\S+\.\S+/.test(userAgent)) throw new Error('SEC_USER_AGENT must include a contact email, as SEC fair-access policy requires');
     const symbols = parseSymbols(requiredEnv('SYMBOLS'));
-    const tickers = object(JSON.parse(await getSec(TICKERS_URL, userAgent)), 'company tickers');
+    const tickers = await getSecJson(TICKERS_URL, userAgent);
     const ciks = new Map<string, string>();
     for (const row of Object.values(tickers)) {
       const { ticker, cik_str: cik } = object(row, 'ticker row');

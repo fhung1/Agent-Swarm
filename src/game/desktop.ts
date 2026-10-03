@@ -39,7 +39,7 @@ async function runNative(file: string, args: string[], input: string): Promise<s
     const child = spawn(file, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    const timer = setTimeout(() => child.kill('SIGTERM'), 5_000);
+    const timer = setTimeout(() => child.kill('SIGKILL'), 5_000);
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', chunk => { stdout += chunk; });
