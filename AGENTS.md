@@ -1,5 +1,10 @@
 # Quant Swarm: project brief
 
+## Current owner priority
+
+**Current owner direction:** Continue preparing Factorio, Minecraft and Alpaca paper trading for testing and operation. Earlier stop/checkpoint instructions on the merged branch are historical and superseded by this session’s explicit resumption. The live development board is authoritative; [UNFINISHED_TASKS.md](UNFINISHED_TASKS.md) preserves the earlier snapshot.
+
+
 ## Purpose
 
 Build a system in which multiple specialized agents share a live view of a changing environment, communicate through structured messages, divide work, and coordinate actions. SpacetimeDB is the shared state and communication backbone. The system should make every decision traceable: what an agent observed, what it proposed, who accepted it, what action ran, and what happened next.
@@ -59,7 +64,8 @@ Alpaca paper trading simulates fills and does not reproduce every live-market ef
 
 ## Operating principles
 
-- **push when finished:** After completing a task, run its required checks, commit its completed changes, and push the commit to the current tracking branch. Coordinate Git staging with other sessions and preserve unfinished work. Include the pushed commit and check results in the board result and handoff. Every board task must carry the literal instruction "push when finished"; this applies to future tasks as well.
+- **No new pull requests:** Commit and push completed work directly to `main`. Do not create pull requests. Existing PR #2 is the explicitly authorized exception.
+- **push when finished:** After completing a task, run its required checks, commit its completed changes, and push the commit directly to `main`. Coordinate Git staging with other sessions and preserve unfinished work. Include the pushed commit and check results in the board result and handoff. Every board task must carry the literal instruction "push when finished"; this applies to future tasks as well.
 - Continuously maintain the shared [HANDOFF.md](HANDOFF.md) while working: create an entry when you start, update it as meaningful work, findings, decisions, checks, or blockers arise, and leave it with the current status and concrete next steps before you stop. Keep your entry distinct; do not overwrite another agent's handoff.
 - Use SpacetimeDB as the source of truth for live swarm state. Store large documents or raw model traces outside hot tables and keep references in the database.
 - Make messages purposeful. Publish observations and decisions that another agent can act on; scope subscriptions by run and role.

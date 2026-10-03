@@ -1,0 +1,6 @@
+{
+  "accountSnapshotMaxAgeMs": 60000,
+  "quoteMaxAgeMs": 120000,
+  "stuckOrderMs": 300000,
+  "serviceSilentMs": 45000
+}

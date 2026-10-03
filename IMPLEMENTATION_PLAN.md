@@ -56,7 +56,7 @@ For the first pilot, combine roles where needed to keep the worker count small. 
 | `paper_order` | Proposal, client order ID, Alpaca order ID, request ID, status, submitted/updated times. |
 | `fill` | Order, event ID, quantity, price, time; deduplicated on Alpaca identifiers. |
 | `account_snapshot` | Private account ID/status, cash, buying power, equity, JSON position/order snapshots, capture time. |
-| `market_observation` | Public symbol/feed bid and ask observations with Alpaca source time and SpacetimeDB capture time. |
+| `market_observation` | Private, scoped symbol/feed bid and ask observations with Alpaca source time and SpacetimeDB capture time. |
 | `reconciliation` | Snapshot time, source IDs, discrepancies, resolution status, operator acknowledgement. |
 | `run_metric` | Research cost, latency, policy failures, order discrepancies, and portfolio metrics. |
 
@@ -131,7 +131,7 @@ Each agent role is a long-running worker process with one SpacetimeDB client con
 5. **Communicate and finish:** an agent calls `postMessage` to insert a durable row containing its authenticated sender, run/task IDs, symbol, recipient role, typed kind, body, and validated evidence references. Connected clients subscribed to the matching run receive that row as a live update; reconnecting clients see stored rows in the initial snapshot. The recipient role is a routing label; delivery is still run-wide rather than private. The worker supports deterministic rules or structured model calls for analyst, skeptic, and coordinator tasks; model coordinators consume stored skeptic challenges. The assignee can complete or fail its task while the lease is valid. Stable message IDs make identical retries idempotent.
 6. **Recover:** the worker saves one token per logical agent under `~/.local/share/quant-swarm/tokens/` by default. A direct `DbConnection` does not reconnect itself, so the worker creates a fresh connection with bounded exponential backoff, restores subscriptions, and reads a new snapshot. The module's scheduled expiry reopens a still-claimed task only if the scheduled lease version remains current. After each snapshot the worker resumes any task it still holds, using stable thesis, message, and decision IDs so a retry does not duplicate work, and records `failTask` for permanent errors instead of retrying. [Connection recovery](https://spacetimedb.com/docs/clients/connection/) · [Authentication](https://spacetimedb.com/docs/core-concepts/authentication/)
 
-The module validates roles in state-changing reducers. Public tables expose their rows to every client that can connect; role checks do not filter public reads. The current coordination and research tables are public for local development, while owner configuration, task timers, and order/risk ledger tables are private. Scoped read views and deployment authentication are still required before hosting this module beyond localhost. The worker's identity and role are separate concepts: a client-supplied role string is not proof of authority. [Table permissions](https://spacetimedb.com/docs/tables/access-permissions/) · [Views and access control](https://spacetimedb.com/docs/how-to/rls/)
+The module validates roles in state-changing reducers. All authoritative trading/research tables are private; indexed identity/run/account-scoped views enforce reads and live revocation. The separate localhost development board uses public tables and self-declared session names. Production service identities and deployment provisioning remain required before remote hosting. The worker's identity and role are separate concepts: a client-supplied role string is not proof of authority. [Table permissions](https://spacetimedb.com/docs/tables/access-permissions/) · [Views and access control](https://spacetimedb.com/docs/how-to/rls/)
 
 ### First connection milestone
 
@@ -151,8 +151,8 @@ Risk is recomputed in the module against an immutable operator policy and stored
 | 1 | Local swarm core complete and acceptance passed. Production service/OIDC provisioning remains deployment work. |
 | 2 | SEC primary-filing artifacts/manifests and accession-filtered facts, evidence/thesis pipeline, immutable decision inputs and model audit implemented. Qualitative excerpts, richer research/exit semantics and a real model-backed sourced decision acceptance remain. |
 | 3 | Authoritative policy/risk gate and regression checks passed. Risk-worker implementation and build integration are complete; live broker inputs remain unverified. |
-| 4 | Validated order-ledger foundation exists; broker submission, cancellation, stream updates and reconciliation remain. |
+| 4 | Paper-only polling executor, stable client IDs, durable bounded attempts, authoritative pre-submit revalidation and full cash/position/open-order reconciliation interlock implemented. Local real-process mock-broker timeout/restart/partial/final fill and mismatch drills pass. Live broker acceptance, per-order operator cancellation and trade-update stream remain. |
 | 5 | Position monitoring not implemented. |
-| 6 | Durable inference accounting and metric/log foundations exist; dashboard, currency-cost reporting, evaluation, alerts and restore drills remain. |
+| 6 | Trading/development dashboards, supervisor, isolated CI checks and verified offline backup/restore implemented. Currency-cost reporting, evaluation/benchmark, alerts and production deployment remain. |
 
 See [IMPLEMENTATION_REVIEW.md](IMPLEMENTATION_REVIEW.md) for original findings and follow-up resolutions. `scripts/check-phase-one.ts` creates clearly labeled synthetic local order/fill records for reducer regression; these are not broker trades. The first risk-passed and reconciled Alpaca paper-order demo has not run.

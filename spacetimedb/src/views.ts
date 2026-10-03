@@ -1,7 +1,8 @@
 import { t, type ViewCtx, type InferSchema } from 'spacetimedb/server';
 import spacetimedb, { agent, run, task, message, source, fact, thesis, decision, tradeProposal,
   marketObservation, accountSnapshot, riskDecision, approval, paperOrder, orderCancelRequest, fill, reconciliation,
-  runMetric, runConfig, riskPolicy, marketClock, riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory } from './schema';
+  runMetric, runConfig, riskPolicy, marketClock, riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory,
+  paperSubmission, accountLedger, accountCheck } from './schema';
 import { ROLES } from './access';
 
 type Context = ViewCtx<InferSchema<typeof spacetimedb>>;
@@ -86,6 +87,12 @@ export const myOrderCancelRequest = spacetimedb.view({ name: 'my_order_cancel_re
   }) : []);
 export const myFill = spacetimedb.view({ name: 'my_fill', public: true }, t.array(fill.rowType), ctx =>
   orders(ctx).flatMap(order => [...ctx.db.fill.orderId.filter(order.id)]));
+export const myPaperSubmission = spacetimedb.view({name:'my_paper_submission',public:true},t.array(paperSubmission.rowType),ctx=>
+  orders(ctx).flatMap(order=>[...ctx.db.paperSubmission.orderId.filter(order.id)]));
+export const myAccountLedger = spacetimedb.view({name:'my_account_ledger',public:true},t.array(accountLedger.rowType),ctx=>
+  accounts(ctx).flatMap(id=>{const row=ctx.db.accountLedger.accountId.find(id);return row?[row]:[];}));
+export const myAccountCheck = spacetimedb.view({name:'my_account_check',public:true},t.array(accountCheck.rowType),ctx=>
+  accounts(ctx).flatMap(id=>{const row=ctx.db.accountCheck.accountId.find(id);return row?[row]:[];}));
 export const myRunMetric = spacetimedb.view({ name: 'my_run_metric', public: true }, t.array(runMetric.rowType), ctx =>
   ['operator', 'coordinator', 'risk'].includes(role(ctx) ?? '') ? runs(ctx).flatMap(id => [...ctx.db.runMetric.runId.filter(id)]) : []);
 export const myRunConfig = spacetimedb.view({ name: 'my_run_config', public: true }, t.array(runConfig.rowType), ctx =>

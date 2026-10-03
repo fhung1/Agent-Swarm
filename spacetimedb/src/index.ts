@@ -6,6 +6,7 @@ import { MESSAGE_KINDS, ROLES, WORKER_ROLES, parseRefs, requireEvidence, require
 
 export default spacetimedb;
 export * from './records';
+export * from './paper-safety';
 export { grantRunAccess, revokeRunAccess, grantAccountAccess, revokeAccountAccess, configureRunLimits,
   addRiskPolicy, recordMarketClock, recordDecisionInput, beginInference, finishInference } from './controls';
 export * from './views';

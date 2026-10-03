@@ -4,7 +4,7 @@ import { recordId } from '../ids.js';
 import type { Ask } from './llm.js';
 import { DeferredWorkError } from '../work-errors.js';
 
-export const PROMPT_VERSION = 'research-v2';
+export const PROMPT_VERSION = 'research-v3-sec-excerpts';
 export function accountedAsk(ask: Ask, conn: DbConnection, runId: string, workId: string,
   refs: string, signal?: AbortSignal): Ask {
   const wrapped: Ask = async (schema, system, prompt) => {

@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
+import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, scopedProcessEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
 
 // fileURLToPath decodes the URL, so paths with spaces ("Quant Swarm") resolve correctly.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -96,7 +96,7 @@ function build(): void {
 }
 
 function processEnv(p: ProcessSpec, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  return { ...ENV, ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
+  return { ...scopedProcessEnv(p,ENV), ...p.env, AGENT_NAME: p.name, [p.tokenFileEnv]: tokenPath(p.name), ...extra };
 }
 
 function missingSecrets(processes: ProcessSpec[]): string[] {

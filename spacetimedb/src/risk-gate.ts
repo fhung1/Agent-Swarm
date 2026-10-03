@@ -43,6 +43,7 @@ export function requireCurrentRisk(ctx: Ctx, proposalId: string): void {
   const risk = ctx.db.riskDecision.proposalId.find(proposalId);
   if (!risk || risk.outcome !== 'pass' || risk.expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw new SenderError('Risk approval expired');
   const current = evaluateProposal(ctx, proposalId);
+  if(ctx.db.accountCheck.accountId.find(current.policyRow.accountId)?.status==='mismatch')throw new SenderError('Account reconciliation mismatch blocks trading');
   if (risk.policyId !== current.policyRow.id || risk.snapshotId !== current.snapshot.id || risk.quoteId !== current.quote.id) {
     throw new SenderError('Risk inputs changed; fresh review required');
   }
