@@ -61,6 +61,22 @@ Copy this section for each handoff and fill in what applies:
 
 <!-- Add each new handoff below this line, newest first. -->
 
+## 2026-10-03 — Codex — Push using registered SSH key
+
+- **Status:** publishing feature branch
+- **Goal:** Push the committed code using the newly registered SSH key.
+- **Checks run:** GitHub SSH authentication succeeded as BobyWoby. Main push rejected as non-fast-forward; fetched substantial upstream changes.
+- **Next steps:** Publish feature branch and open PR per user authorization, preserving upstream main.
+
+
+## 2026-10-03 — Codex — Register GitHub SSH key
+
+- **Status:** blocked on GitHub registration permission
+- **Goal:** Create a dedicated SSH key and register its public key on GitHub.
+- **Work completed:** Created dedicated Ed25519 key at `~/.ssh/id_ed25519_github_agent_swarm` with public counterpart `.pub`; configured repository-local core.sshCommand to use it for SSH connections. Existing HTTPS remote unchanged.
+- **Checks run:** GitHub POST /user/keys returned HTTP 403: Resource not accessible by personal access token. Key has not been registered or verified with GitHub.
+- **Next steps:** Add public key through GitHub SSH key settings or authenticate with key-management permission, then verify SSH authentication. SSH authentication alone does not grant repository write access.
+
 ## 2026-10-03 — Codex — Open pull request via fork
 
 - **Status:** blocked
