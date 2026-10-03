@@ -51,11 +51,16 @@ export const SwarmConfigSchema = z.object({
     everySeconds: z.number().int().min(30).max(86_400),
     symbols: z.array(z.string().regex(SYMBOL)).min(1).max(50),
   }).strict().optional(),
-  // Seeds one analyst thesis task per symbol on `swarm up`, after loading evidence.
+  // Seeds analyst thesis tasks after loading evidence; schedule opts into recurring bounded cycles.
   research: z.object({
     symbols: z.array(z.string().regex(SYMBOL)).min(1).max(50),
     evidence: z.enum(['fixture', 'sec', 'none']).default('fixture'),
     objective: z.string().min(1).max(1000).default('Assess the stored evidence and write a balanced, sourced thesis'),
+    schedule: z.object({
+      everySeconds: z.number().int().min(60).max(31_536_000),
+      maxCycles: z.number().int().min(1).max(1000),
+      maxPendingCycles: z.number().int().min(1).max(10).default(1),
+    }).strict().optional(),
   }).strict().optional(),
 }).strict();
 
@@ -82,6 +87,15 @@ export function parseSwarmConfig(json: string): SwarmConfig {
   }
   if (config.agents.executor.count && !config.agents.risk.count) {
     throw new Error('An executor needs the risk broker: only fresh risk passes can be submitted');
+  }
+  if (config.research?.schedule) {
+    if (!config.limits) throw new Error('Scheduled research requires explicit durable run limits');
+    if (config.research.evidence === 'none') throw new Error('Scheduled research requires fresh evidence ingestion');
+    if (new Set(config.research.symbols).size !== config.research.symbols.length) throw new Error('Duplicate scheduled research symbols');
+    if (!config.agents.analyst.count || !config.agents.skeptic.count || !config.agents.coordinator.count) {
+      throw new Error('Scheduled research requires analyst, skeptic and coordinator workers');
+    }
+    if (config.research.evidence === 'sec' && config.runId.length > 64) throw new Error('SEC ingestion requires a run ID of at most 64 characters');
   }
   return config;
 }
