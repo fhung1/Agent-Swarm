@@ -41,6 +41,8 @@ One worker owns exactly one client and one desktop for the duration of a run. Th
 3. Isolate displays and input. Prefer one Linux VM or graphical session per client for the first implementation. Containers with separate X displays are an optimization to assess only after graphics and input isolation pass the two-client test. Do not put ten clients in ten windows on one ordinary desktop: focus, mouse capture, and held keys would collide.
 4. The orchestrator can run on the current Mac while game clients run on one or more graphics-capable hosts. Benchmark CPU, RAM, graphics utilization, frame rate, and server tick performance with 1, 2, 5, then 10 clients. Choose the number of hosts from measured headroom; no fixed VM size is assumed.
 
+The first game-neutral libvirt fleet manager is in [vm_fleet/README.md](vm_fleet/README.md). It clones a prepared desktop template, starts and stops guest VMs, reports status, and can read guest IPs through QEMU Guest Agent. It does not prepare the template or provide the screenshot/input adapter.
+
 ## Desktop adapter contract
 
 Build a small service inside each desktop, reachable only by its assigned worker. It exposes only:

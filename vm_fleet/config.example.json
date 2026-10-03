@@ -1,0 +1,8 @@
+{
+  "ssh_target": "vm-host",
+  "libvirt_uri": "qemu:///system",
+  "template": "qs-desktop-template",
+  "name_prefix": "qs-agent",
+  "count": 10,
+  "state_file": ".vm-fleet-state.json"
+}

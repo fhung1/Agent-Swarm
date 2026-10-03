@@ -1,0 +1,24 @@
+{
+  "name": "quant-swarm",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/worker.ts --bundle --platform=node --outfile=dist/worker.js --format=esm",
+    "worker": "node dist/worker.js",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p spacetimedb/tsconfig.json",
+    "db:start": "spacetime start --listen-addr 127.0.0.1:3000 --data-dir .spacetimedb-data --non-interactive",
+    "db:publish": "spacetime publish --module-path spacetimedb --server local quant-swarm",
+    "db:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb"
+  },
+  "workspaces": ["spacetimedb"],
+  "dependencies": {
+    "spacetimedb": "2.10.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.6.2",
+    "undici": "^6.19.2"
+  }
+}

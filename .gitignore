@@ -1,0 +1,14 @@
+node_modules
+dist
+*.log
+
+.DS_Store
+
+spacetime.local.json
+.env*
+.tokens/
+.spacetimedb-data/
+
+# Local libvirt fleet connection details and managed-domain UUIDs.
+vm_fleet/config.json
+vm_fleet/.vm-fleet-state.json*
