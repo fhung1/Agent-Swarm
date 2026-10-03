@@ -4,7 +4,7 @@ import spacetimedb from './schema';
 import { decimal, validOrderTransition } from './domain';
 import { evaluateProposal, requireCurrentRisk } from './risk-gate';
 import { parsePositions, parseOpenOrders } from './risk';
-import { parseRefs, requireEvidence, requireId, requireRole, requireRun, requireRunAccess, requireSymbol, requireText, type Ctx } from './access';
+import { parseRefs, requireAccountAccess, requireEvidence, requireId, requireRole, requireRun, requireRunAccess, requireSymbol, requireText, type Ctx } from './access';
 
 const marketObservationInput = t.object('MarketObservationInput', {
   id: t.string(), symbol: t.string(), feed: t.string(), bidPrice: t.string(), bidSize: t.string(),
@@ -223,6 +223,55 @@ export const updatePaperOrder = spacetimedb.reducer(
     if (status === 'filled' && total !== decimal(linked.quantity, 6, true)) throw new SenderError('Filled status requires reconciled fills');
     ctx.db.paperOrder.id.update({ ...existing, alpacaOrderId, status, updatedAt: ctx.timestamp });
   }
+);
+
+const TERMINAL_ORDER_STATUSES = ['filled', 'canceled', 'expired', 'rejected', 'replaced'];
+
+export const requestOrderCancel = spacetimedb.reducer(
+  { orderId: t.string(), reason: t.string() },
+  (ctx, { orderId, reason }) => {
+    requireRole(ctx, ['operator']); requireText(reason, 'Cancellation reason', 512);
+    const order = ctx.db.paperOrder.id.find(orderId);
+    if (!order) throw new SenderError('Order not found');
+    const proposal = ctx.db.tradeProposal.id.find(order.proposalId);
+    const reservation = ctx.db.riskReservation.proposalId.find(order.proposalId);
+    if (!proposal || !reservation) throw new SenderError('Order linkage missing');
+    requireRunAccess(ctx, proposal.runId); requireAccountAccess(ctx, reservation.accountId);
+    if (TERMINAL_ORDER_STATUSES.includes(order.status)) throw new SenderError('Order is already terminal');
+    if (!order.alpacaOrderId) throw new SenderError('Order has not been accepted by the broker');
+    const existing = ctx.db.orderCancelRequest.orderId.find(orderId);
+    if (existing) {
+      if (existing.requestedBy.equals(ctx.sender) && existing.reason === reason) return;
+      throw new SenderError('Cancellation already requested');
+    }
+    ctx.db.orderCancelRequest.insert({ orderId, requestedBy: ctx.sender, reason, status: 'requested', detail: '',
+      requestedAt: ctx.timestamp, updatedAt: ctx.timestamp });
+  },
+);
+
+export const updateOrderCancel = spacetimedb.reducer(
+  { orderId: t.string(), status: t.string(), detail: t.string() },
+  (ctx, { orderId, status, detail }) => {
+    requireRole(ctx, ['executor']);
+    if (!['broker_requested', 'resolved', 'refused'].includes(status)) throw new SenderError('Invalid cancellation status');
+    if (detail.length > 1024) throw new SenderError('Cancellation detail too long');
+    const request = ctx.db.orderCancelRequest.orderId.find(orderId);
+    const order = ctx.db.paperOrder.id.find(orderId);
+    if (!request || !order) throw new SenderError('Cancellation request not found');
+    const proposal = ctx.db.tradeProposal.id.find(order.proposalId);
+    const reservation = ctx.db.riskReservation.proposalId.find(order.proposalId);
+    if (!proposal || !reservation) throw new SenderError('Order linkage missing');
+    requireRunAccess(ctx, proposal.runId); requireAccountAccess(ctx, reservation.accountId);
+    const allowed = request.status === 'requested'
+      ? ['broker_requested', 'resolved', 'refused']
+      : request.status === 'broker_requested' ? ['broker_requested', 'resolved', 'refused'] : [request.status];
+    if (!allowed.includes(status)) throw new SenderError('Invalid cancellation transition');
+    if (status === 'resolved' && !TERMINAL_ORDER_STATUSES.includes(order.status)) {
+      throw new SenderError('Resolved cancellation requires a terminal order');
+    }
+    if (request.status === status && request.detail === detail) return;
+    ctx.db.orderCancelRequest.orderId.update({ ...request, status, detail, updatedAt: ctx.timestamp });
+  },
 );
 
 export const recordFill = spacetimedb.reducer(

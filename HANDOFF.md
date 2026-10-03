@@ -73,6 +73,20 @@ Copy this section for each handoff and fill in what applies:
 - **Files / references:** Rebased chat commits `bb62af4` and `5eb852a` pushed to `origin/main`.
 - **Next steps:** None for the rebase or push.
 
+## 2026-10-03 — Codex (codex-monitor) — Operator order cancellation
+
+- **Status:** complete; board task `trading-operator-cancel` (push when finished).
+- **Goal:** Add durable, authorized operator requests to cancel paper orders, process them in the executor, and expose the control in the trading dashboard.
+- **Work completed:** Added private durable cancellation requests with operator/account authorization and scoped operator/executor views. The executor submits requests to Alpaca, records broker acceptance separately, reconciles terminal outcomes, and handles already-pending/refused requests. The dashboard exposes a per-order request control and live audit state. Generated bindings and Phase 1 acceptance cover unauthorized access, request/order separation, partial-fill races, and terminal resolution.
+- **Checks run:** Full `check:all` under Node 24 passed: binding drift, typechecks, builds, 64 unit tests, structured fixtures, and isolated Phase 1 recovery/risk/cancellation acceptance (`phase-one-1791066473505`). `git diff --check` passed. No broker or model API calls.
+- **Open issues:** Live Alpaca cancellation remains part of the credentialed paper-order acceptance task. REST polling resolves the request; the separate trade-update stream task will reduce confirmation latency.
+- **Next steps:** None for this task.
+
+## 2026-10-03 — Concurrent session handoff pointers
+
+- **Codex Factorio:** Completed immediate-push policy and Factorio architecture work are recorded in [docs/handoffs/codex-factor.md](docs/handoffs/codex-factor.md).
+- **Merge fix:** Development dashboard token recovery and current operation-journal work are recorded in [docs/handoffs/merge-fix.md](docs/handoffs/merge-fix.md).
+- **Codex queue:** Pilot configuration and Markdown task coverage are recorded in [docs/handoffs/codex-queue.md](docs/handoffs/codex-queue.md).
 
 ## 2026-10-03 — Codex — Push using registered SSH key
 
@@ -549,6 +563,15 @@ Copy this section for each handoff and fill in what applies:
 - **Open issues:** The risk verdict is trusted rather than evaluated by deterministic reducer rules; paper-order lifecycle and fill input validation are weak; Alpaca account/quote snapshot writes can be partial or orphaned.
 - **Next steps:** Before enabling execution, make risk checks independently enforceable, validate order transitions and fill amounts, and make a snapshot's completeness/linkage explicit. Implement game server/client setup, desktop adapter, and agent loop before treating the Minecraft/Factorio prototype as runnable.
 - **Context:** The working tree changed during this review and includes a new `src/alpaca-paper-adapter.ts`; findings reflect the latest inspected contents. No implementation changes were made for this review.
+
+## 2026-10-03 — Codex monitor — Monitor unclaimed board tasks
+
+- **Status:** waiting for available work.
+- **Goal:** Monitor the coordination board and complete unclaimed tasks requested by the operator.
+- **Work completed:** Registered `codex-monitor` on `quant-swarm-coord`; inspected all tasks and started live watch (exec session `35066`). The only task, `resolve-rebase`, was already claimed by `merge-fix` and is now done. No unclaimed tasks exist.
+- **Checks run:** Coordination status, complete task list, inbox, and live task/lock updates. No implementation changes or tests needed.
+- **Context:** System Node 20 cannot directly run the TypeScript CLI, so bundled `scripts/coord.ts` to `/tmp/quant-coord-monitor.mjs` with installed esbuild. The bundle uses the same reducers and database. Waited for `merge-fix` to release HANDOFF.md before writing this entry.
+- **Next steps:** Claim the next available task atomically, lock its files, implement and check it, then commit/push and report the result. A watch process alone logs changes; it does not perform autonomous model work after the assistant turn ends.
 
 ## 2026-10-03 — Codexq — Board access over Tailscale
 

@@ -55,6 +55,7 @@ const cancelRequested = new Set<string>();
 let lastReconciliation: string | undefined;
 
 type PaperOrderRow = { id: string; proposalId: string; clientOrderId: string; alpacaOrderId: string; status: string; submittedAt: Timestamp };
+type CancelRequestRow = { orderId: string; status: string; reason: string; detail: string };
 
 // Fill totals are fixed-point with 6 decimals.
 function formatUnits(units: bigint): string {
@@ -155,6 +156,49 @@ async function settle(conn: DbConnection, order: PaperOrderRow, account: string,
   await submit(conn, order, account, issues);
 }
 
+async function processOperatorCancel(
+  conn: DbConnection, order: PaperOrderRow, request: CancelRequestRow, issues: string[],
+): Promise<void> {
+  if (TERMINAL.has(order.status)) {
+    if (request.status === 'requested' || request.status === 'broker_requested') {
+      await conn.reducers.updateOrderCancel({
+        orderId: order.id, status: 'resolved', detail: `Broker order reached terminal state ${order.status}`,
+      });
+    }
+    return;
+  }
+  if (request.status !== 'requested' || !order.alpacaOrderId) return;
+  try {
+    const accepted = await cancelOrder(credentials!, order.alpacaOrderId);
+    if (accepted) {
+      await conn.reducers.updateOrderCancel({
+        orderId: order.id, status: 'broker_requested', detail: 'Alpaca accepted the cancellation request',
+      });
+      console.log(`Operator cancellation requested for ${order.id}: ${request.reason}`);
+      return;
+    }
+    const broker = await getOrder(credentials!, order.alpacaOrderId);
+    if (!broker) {
+      await conn.reducers.updateOrderCancel({ orderId: order.id, status: 'refused', detail: 'Broker order was not found' });
+      return;
+    }
+    await recordBrokerState(conn, order, broker, issues);
+    const brokerStatus = String(broker.status ?? 'unknown');
+    const mapped = nextStatus(order.status, brokerStatus);
+    if (mapped === 'pending_cancel') {
+      await conn.reducers.updateOrderCancel({
+        orderId: order.id, status: 'broker_requested', detail: 'Broker reports cancellation pending',
+      });
+    } else if (!mapped || !TERMINAL.has(mapped)) {
+      await conn.reducers.updateOrderCancel({
+        orderId: order.id, status: 'refused', detail: `Alpaca refused cancellation while order was ${brokerStatus}`,
+      });
+    }
+  } catch (error) {
+    issues.push(`${order.id}: cancellation attempt failed: ${String((error as Error).message ?? error).slice(0, 200)}`);
+  }
+}
+
 async function reserveNew(conn: DbConnection, account: string): Promise<void> {
   const ordered = new Set([...conn.db.myPaperOrder.iter()].map(o => o.proposalId));
   const now = Date.now();
@@ -187,7 +231,10 @@ async function cycle(conn: DbConnection): Promise<void> {
     const runs = new Map([...conn.db.myRun.iter()].map(r => [r.id, r.status]));
     const proposals = new Map([...conn.db.myTradeProposal.iter()].map(p => [p.id, p]));
     const orders = [...conn.db.myPaperOrder.iter()];
+    const cancellationRequests = new Map([...conn.db.myOrderCancelRequest.iter()].map(request => [request.orderId, request]));
     for (const order of orders) {
+      const operatorCancel = cancellationRequests.get(order.id);
+      if (operatorCancel) await processOperatorCancel(conn, order, operatorCancel, issues);
       if (TERMINAL.has(order.status)) continue;
       const reservation = [...conn.db.myRiskReservation.iter()].find(r => r.proposalId === order.proposalId);
       if (reservation && reservation.accountId !== account) { issues.push(`${order.id}: reserved for account ${reservation.accountId}, credentials are for ${account}`); continue; }
@@ -309,7 +356,7 @@ function connect(): void {
         })
         .subscribe([
           'SELECT * FROM my_agent', 'SELECT * FROM my_run', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
-          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_fill',
+          'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request', 'SELECT * FROM my_fill',
           'SELECT * FROM my_run_config', 'SELECT * FROM my_risk_policy', 'SELECT * FROM my_account_snapshot',
           'SELECT * FROM my_market_observation', 'SELECT * FROM my_market_clock', 'SELECT * FROM my_reconciliation',
         ]);

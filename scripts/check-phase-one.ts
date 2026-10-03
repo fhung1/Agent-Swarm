@@ -21,7 +21,7 @@ const clients: any[] = [];
 const workers: ChildProcess[] = [];
 const logs = new Map<ChildProcess, string>();
 const call = (...args: string[]) => execFileSync(cli, [...cliConfig, 'call', '--server', server, database, ...args], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] });
-const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt'];
+const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','order_cancel_request','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt'];
 const now = () => Timestamp.fromDate(new Date());
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(fn: () => unknown, label: string, timeout = 20000) {
@@ -200,13 +200,21 @@ try {
   await assert.rejects(executor.conn.reducers.recordFill({...fill,id:`${runId}.overfill`,alpacaActivityId:`${runId}.overfill`,quantity:'2',filledAt:now()}),/Cumulative fills/);
   await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'partially_filled'});
   await assert.rejects(executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'accepted'}),/Invalid order transition/);
-  console.log('PASS malformed account rejection, authoritative verdict, risk-only reservation, broker identity and fill/state validation');
-  // New proposal same symbol is deterministically rejected due to the outstanding reservation.
+  // A new proposal for the same symbol is rejected while the first reservation is outstanding.
   const duplicate = await propose('duplicate','QPHASE');
   await assert.rejects(risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.dup`,proposalId:duplicate}),/authoritative evaluation/);
   await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.dup`,proposalId:duplicate,outcome:'reject'});
-  // A refused request before broker order creation has no ID, but is still terminal.
+  await assert.rejects(stranger.conn.reducers.requestOrderCancel({orderId,reason:'unauthorized'}),/Role not authorized/);
+  await op.conn.reducers.requestOrderCancel({orderId,reason:'Phase-one cancellation race check'});
+  await waitFor(()=>op.conn.db.myOrderCancelRequest.orderId.find(orderId)?.status==='requested','operator cancellation request');
+  assert.equal(op.conn.db.myPaperOrder.id.find(orderId)?.status,'partially_filled');
+  await executor.conn.reducers.updateOrderCancel({orderId,status:'broker_requested',detail:'Fixture broker accepted request'});
+  await assert.rejects(executor.conn.reducers.updateOrderCancel({orderId,status:'resolved',detail:'too early'}),/terminal order/);
   await executor.conn.reducers.updatePaperOrder({id:orderId,alpacaOrderId:'fixture-broker',status:'canceled'});
+  await executor.conn.reducers.updateOrderCancel({orderId,status:'resolved',detail:'Broker order reached terminal state canceled'});
+  await waitFor(()=>op.conn.db.myOrderCancelRequest.orderId.find(orderId)?.status==='resolved','resolved cancellation audit');
+  console.log('PASS authoritative risk, ledger validation, durable cancellation request and partial-fill cancellation race');
+  // A refused request before broker order creation has no ID, but is still terminal.
   const refusedProposal = await propose('refused','QPHASE');
   await risk.conn.reducers.recordRiskDecision({...verdict,id:`${runId}.risk.refused`,proposalId:refusedProposal});
   const refusedOrder = `${runId}.order.refused`;

@@ -195,6 +195,9 @@ export type MyMarketObservation = __Infer<typeof MyMarketObservation>;
 export const MyMessage = __t.object("MyMessage", {});
 export type MyMessage = __Infer<typeof MyMessage>;
 
+export const MyOrderCancelRequest = __t.object("MyOrderCancelRequest", {});
+export type MyOrderCancelRequest = __Infer<typeof MyOrderCancelRequest>;
+
 export const MyPaperOrder = __t.object("MyPaperOrder", {});
 export type MyPaperOrder = __Infer<typeof MyPaperOrder>;
 
@@ -233,6 +236,17 @@ export type MyThesis = __Infer<typeof MyThesis>;
 
 export const MyTradeProposal = __t.object("MyTradeProposal", {});
 export type MyTradeProposal = __Infer<typeof MyTradeProposal>;
+
+export const OrderCancelRequest = __t.object("OrderCancelRequest", {
+  orderId: __t.string(),
+  requestedBy: __t.identity(),
+  reason: __t.string(),
+  status: __t.string(),
+  detail: __t.string(),
+  requestedAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type OrderCancelRequest = __Infer<typeof OrderCancelRequest>;
 
 export const OwnerConfig = __t.object("OwnerConfig", {
   key: __t.string(),
