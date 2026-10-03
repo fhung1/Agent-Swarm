@@ -63,11 +63,13 @@ import RecordRiskDecisionReducer from "./record_risk_decision_reducer";
 import RecordRunMetricReducer from "./record_run_metric_reducer";
 import RecordTradeDecisionReducer from "./record_trade_decision_reducer";
 import RenewTaskLeaseReducer from "./renew_task_lease_reducer";
+import RequestOrderCancelReducer from "./request_order_cancel_reducer";
 import ReservePaperOrderReducer from "./reserve_paper_order_reducer";
 import RevokeAccountAccessReducer from "./revoke_account_access_reducer";
 import RevokeAgentReducer from "./revoke_agent_reducer";
 import RevokeRunAccessReducer from "./revoke_run_access_reducer";
 import SetRunStatusReducer from "./set_run_status_reducer";
+import UpdateOrderCancelReducer from "./update_order_cancel_reducer";
 import UpdatePaperOrderReducer from "./update_paper_order_reducer";
 
 // Import all procedure arg schemas
@@ -85,6 +87,7 @@ import MyInferenceAttemptRow from "./my_inference_attempt_table";
 import MyMarketClockRow from "./my_market_clock_table";
 import MyMarketObservationRow from "./my_market_observation_table";
 import MyMessageRow from "./my_message_table";
+import MyOrderCancelRequestRow from "./my_order_cancel_request_table";
 import MyPaperOrderRow from "./my_paper_order_table";
 import MyReconciliationRow from "./my_reconciliation_table";
 import MyRiskDecisionRow from "./my_risk_decision_table";
@@ -187,6 +190,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyMessageRow),
+  myOrderCancelRequest: __table({
+    name: 'my_order_cancel_request',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyOrderCancelRequestRow),
   myPaperOrder: __table({
     name: 'my_paper_order',
     indexes: [
@@ -311,11 +321,13 @@ const reducersSchema = __reducers(
   __reducerSchema("record_run_metric", RecordRunMetricReducer),
   __reducerSchema("record_trade_decision", RecordTradeDecisionReducer),
   __reducerSchema("renew_task_lease", RenewTaskLeaseReducer),
+  __reducerSchema("request_order_cancel", RequestOrderCancelReducer),
   __reducerSchema("reserve_paper_order", ReservePaperOrderReducer),
   __reducerSchema("revoke_account_access", RevokeAccountAccessReducer),
   __reducerSchema("revoke_agent", RevokeAgentReducer),
   __reducerSchema("revoke_run_access", RevokeRunAccessReducer),
   __reducerSchema("set_run_status", SetRunStatusReducer),
+  __reducerSchema("update_order_cancel", UpdateOrderCancelReducer),
   __reducerSchema("update_paper_order", UpdatePaperOrderReducer),
 );
 

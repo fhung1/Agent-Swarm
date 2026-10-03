@@ -1,6 +1,6 @@
 import { t, type ViewCtx, type InferSchema } from 'spacetimedb/server';
 import spacetimedb, { agent, run, task, message, source, fact, thesis, decision, tradeProposal,
-  marketObservation, accountSnapshot, riskDecision, approval, paperOrder, fill, reconciliation,
+  marketObservation, accountSnapshot, riskDecision, approval, paperOrder, orderCancelRequest, fill, reconciliation,
   runMetric, runConfig, riskPolicy, marketClock, riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory } from './schema';
 import { ROLES } from './access';
 
@@ -80,6 +80,10 @@ export const myRiskDecisionHistory = spacetimedb.view({ name: 'my_risk_decision_
   ['operator', 'risk', 'executor'].includes(role(ctx) ?? '') ? proposals(ctx).flatMap(p =>
     [...ctx.db.riskDecisionHistory.proposalId.filter(p.id)].filter(row => accounts(ctx).includes(ctx.db.riskPolicy.id.find(row.policyId)?.accountId ?? ''))) : []);
 export const myPaperOrder = spacetimedb.view({ name: 'my_paper_order', public: true }, t.array(paperOrder.rowType), orders);
+export const myOrderCancelRequest = spacetimedb.view({ name: 'my_order_cancel_request', public: true }, t.array(orderCancelRequest.rowType), ctx =>
+  ['operator', 'executor'].includes(role(ctx) ?? '') ? orders(ctx).flatMap(order => {
+    const row = ctx.db.orderCancelRequest.orderId.find(order.id); return row ? [row] : [];
+  }) : []);
 export const myFill = spacetimedb.view({ name: 'my_fill', public: true }, t.array(fill.rowType), ctx =>
   orders(ctx).flatMap(order => [...ctx.db.fill.orderId.filter(order.id)]));
 export const myRunMetric = spacetimedb.view({ name: 'my_run_metric', public: true }, t.array(runMetric.rowType), ctx =>

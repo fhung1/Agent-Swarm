@@ -296,6 +296,20 @@ function riskOrders(conn: DbConnection, run: Run): HTMLElement {
 function orderDetail(conn: DbConnection, order: PaperOrder): HTMLElement {
   const box = node('div', 'order-detail');
   put(box, field('Paper order', `${order.status} · ${order.clientOrderId}`), field('Alpaca ID', order.alpacaOrderId || 'Not assigned'));
+  const request = all(conn.db.myOrderCancelRequest.iter()).find(row => row.orderId === order.id);
+  if (request) {
+    put(box, field('Cancellation', `${request.status} · ${request.reason}${request.detail ? ` · ${request.detail}` : ''}`));
+  } else if (order.alpacaOrderId && !['filled', 'canceled', 'expired', 'rejected', 'replaced'].includes(order.status)) {
+    const cancel = node('button', 'ghost-button', 'Request cancellation');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => {
+      cancel.disabled = true;
+      void conn.reducers.requestOrderCancel({ orderId: order.id, reason: 'Requested from operator dashboard' })
+        .catch(error => notice(`Could not request cancellation: ${String(error)}`))
+        .finally(() => { cancel.disabled = false; });
+    });
+    put(box, cancel);
+  }
   const fills = all(conn.db.myFill.iter()).filter(row => row.orderId === order.id);
   for (const fill of fills) put(box, field('Fill', `${fill.quantity} @ ${fill.price} · ${when(fill.filledAt)} · ${fill.alpacaActivityId}`));
   return box;
@@ -366,10 +380,7 @@ function render(): void {
       notice(`Could not ${target === 'paused' ? 'pause' : 'resume'} run: ${String(error)}`);
     }).finally(() => { statusButton.disabled = false; });
   });
-  const cancel = node('button', 'ghost-button', 'Cancel order');
-  cancel.disabled = true;
-  cancel.title = 'Order cancellation becomes available when the executor exposes a cancel-request path.';
-  put(controls, statusButton, cancel);
+  put(controls, statusButton);
   put(header, title, controls);
   put(main, header, summary(conn, run, account));
   if (state.startsWith('Could not')) put(main, node('p', 'error', state));
@@ -414,7 +425,7 @@ function connect(): void {
       for (const view of [conn.db.myAgent, conn.db.myAgentDirectory, conn.db.myRun, conn.db.myRunConfig,
         conn.db.myRiskPolicy, conn.db.myTask, conn.db.myMessage, conn.db.mySource, conn.db.myFact,
         conn.db.myMarketObservation, conn.db.myThesis, conn.db.myDecision, conn.db.myDecisionInput,
-        conn.db.myTradeProposal, conn.db.myRiskDecision, conn.db.myPaperOrder, conn.db.myFill,
+        conn.db.myTradeProposal, conn.db.myRiskDecision, conn.db.myPaperOrder, conn.db.myOrderCancelRequest, conn.db.myFill,
         conn.db.myAccountSnapshot, conn.db.myReconciliation]) {
         view.onInsert(queueRender); view.onUpdate(queueRender); view.onDelete(queueRender);
       }
@@ -427,7 +438,7 @@ function connect(): void {
           'SELECT * FROM my_message', 'SELECT * FROM my_source', 'SELECT * FROM my_fact',
           'SELECT * FROM my_market_observation', 'SELECT * FROM my_thesis', 'SELECT * FROM my_decision',
           'SELECT * FROM my_decision_input', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
-          'SELECT * FROM my_paper_order', 'SELECT * FROM my_fill', 'SELECT * FROM my_account_snapshot',
+          'SELECT * FROM my_paper_order', 'SELECT * FROM my_order_cancel_request', 'SELECT * FROM my_fill', 'SELECT * FROM my_account_snapshot',
           'SELECT * FROM my_reconciliation',
         ]);
     })
