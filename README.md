@@ -165,7 +165,7 @@ spacetime call --server local quant-swarm grant_agent <DASHBOARD_IDENTITY> opera
 spacetime call --server local quant-swarm grant_account_access <DASHBOARD_IDENTITY> <ALPACA_ACCOUNT_ID>
 ```
 
-Reload after granting. The dashboard reads only the scoped `my_*` views. It shows live runs, task and message timeline with sender roles, linked research evidence, decisions and frozen inputs, risk checks, paper orders and fills, reconciliations, and the latest account snapshot. Pause and resume use the operator reducer. The cancel button remains disabled until the executor exposes a cancel-request path. The browser saves only its SpacetimeDB identity token in local storage; Alpaca keys belong in the risk/executor processes and are never entered into the page. A fresh browser identity without an operator grant sees no run data.
+Reload after granting. The dashboard reads only the scoped `my_*` views. It shows live runs, task and message timeline with sender roles, linked research evidence, decisions and frozen inputs, risk checks, paper orders and fills, reconciliations, and the latest account snapshot. Pause and resume use the operator reducer. An operator with account access can request cancellation of a broker-accepted, nonterminal paper order. The durable request remains distinct from the order state: the executor records when Alpaca accepts the request, then resolves it only after reconciliation observes a terminal broker status. The browser saves only its SpacetimeDB identity token in local storage; Alpaca keys belong in the risk/executor processes and are never entered into the page. A fresh browser identity without an operator grant sees no run data.
 
 ### Development coordination dashboard
 

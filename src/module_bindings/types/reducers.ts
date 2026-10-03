@@ -35,11 +35,13 @@ import RecordRiskDecisionReducer from "../record_risk_decision_reducer";
 import RecordRunMetricReducer from "../record_run_metric_reducer";
 import RecordTradeDecisionReducer from "../record_trade_decision_reducer";
 import RenewTaskLeaseReducer from "../renew_task_lease_reducer";
+import RequestOrderCancelReducer from "../request_order_cancel_reducer";
 import ReservePaperOrderReducer from "../reserve_paper_order_reducer";
 import RevokeAccountAccessReducer from "../revoke_account_access_reducer";
 import RevokeAgentReducer from "../revoke_agent_reducer";
 import RevokeRunAccessReducer from "../revoke_run_access_reducer";
 import SetRunStatusReducer from "../set_run_status_reducer";
+import UpdateOrderCancelReducer from "../update_order_cancel_reducer";
 import UpdatePaperOrderReducer from "../update_paper_order_reducer";
 
 export type AddFactParams = __Infer<typeof AddFactReducer>;
@@ -71,10 +73,12 @@ export type RecordRiskDecisionParams = __Infer<typeof RecordRiskDecisionReducer>
 export type RecordRunMetricParams = __Infer<typeof RecordRunMetricReducer>;
 export type RecordTradeDecisionParams = __Infer<typeof RecordTradeDecisionReducer>;
 export type RenewTaskLeaseParams = __Infer<typeof RenewTaskLeaseReducer>;
+export type RequestOrderCancelParams = __Infer<typeof RequestOrderCancelReducer>;
 export type ReservePaperOrderParams = __Infer<typeof ReservePaperOrderReducer>;
 export type RevokeAccountAccessParams = __Infer<typeof RevokeAccountAccessReducer>;
 export type RevokeAgentParams = __Infer<typeof RevokeAgentReducer>;
 export type RevokeRunAccessParams = __Infer<typeof RevokeRunAccessReducer>;
 export type SetRunStatusParams = __Infer<typeof SetRunStatusReducer>;
+export type UpdateOrderCancelParams = __Infer<typeof UpdateOrderCancelReducer>;
 export type UpdatePaperOrderParams = __Infer<typeof UpdatePaperOrderReducer>;
 
