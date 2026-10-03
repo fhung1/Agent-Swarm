@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "esbuild src/worker.ts src/risk-worker.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
+    "build": "esbuild src/worker.ts src/risk-worker.ts src/executor.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
     "check:research-fixture": "esbuild scripts/check-research-fixture.ts --bundle --platform=node --format=esm --outfile=dist/check-research-fixture.mjs && node dist/check-research-fixture.mjs",
     "worker": "node dist/worker.js",
     "alpaca:read": "node dist/alpaca-paper-adapter.js",
@@ -18,7 +18,9 @@
     "db:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb",
     "test": "node --test 'src/**/*.test.ts'",
     "check:phase-one": "esbuild scripts/check-phase-one.ts --bundle --platform=node --format=esm --outfile=dist/check-phase-one.mjs && node dist/check-phase-one.mjs",
-    "risk": "node dist/risk-worker.js"
+    "risk": "node dist/risk-worker.js",
+    "executor": "node dist/executor.js",
+    "swarm": "node scripts/swarm.ts"
   },
   "workspaces": [
     "spacetimedb"

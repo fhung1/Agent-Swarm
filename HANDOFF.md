@@ -24,6 +24,28 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 21:20 UTC — Claude Code — Swarm supervisor with per-role agent counts
+
+- **Status:** complete
+- **Goal:** One command to run the whole swarm, with a configurable number of agents per role (owner request; board task `swarm-supervisor`).
+- **Work completed:** `scripts/swarm.ts` (`npm run swarm -- plan|register|grants [--apply]|up [--start-db] [--no-build]|status`) and `src/swarm-plan.ts` (pure config validation, per-role count expansion, grant planning) with `src/swarm-plan.test.ts`; `config/swarm.example.json`; `logs/` and `config/swarm.json` git-ignored; README "Run the whole swarm". Counts: analysts and skeptics 0–20; coordinator, risk, executor 0–1 (each acts on the whole run or account). Identities are read from each token's `hex_identity` claim; `register` creates missing ones (workers run briefly, others use `--register`). `grants --apply` makes the owner operator, creates a missing run, applies limits, grants roles, run and account access, and adds a run-specific policy (`<version>.<runId>`); repeat-safe. `up` checks secrets (names only) and grants, takes a quote snapshot, ingests evidence and queues one thesis task per research symbol, then supervises processes (prefixed console plus `logs/<name>.log`, exponential-backoff restarts, periodic market data, Ctrl+C stops all).
+- **Files / references:** `scripts/swarm.ts`, `src/swarm-plan{,.test}.ts`, `config/swarm.example.json`, `package.json` (`swarm`), `.gitignore`, `README.md`.
+- **Checks run:** `tsc` clean (repo, plus a targeted check of `scripts/swarm.ts`); `npm test` 59/59. Acceptance on local run `swarm-check-1791059043` (rules brains, fixture evidence, 1 coordinator, 2 analysts, 1 skeptic): `register` created 5 identities; `grants --apply` ran 12 commands, and a rerun ran 11 (run creation skipped); `up` queued 2 thesis tasks and completed both cycles to `revise` decisions with no manual commands (analyst-1 lost both claims to analyst-2, as expected); `kill -9` on the skeptic restarted it in 2 s with the same identity; SIGINT stopped every process and removed the state file. Test run closed afterwards. Not run: model, Alpaca, or SEC processes (no credentials).
+- **Open issues:** Resuming a held task after a kill was not exercised here (rules work finishes instantly); it is covered by the Phase 1 acceptance. No scheduler yet: research is seeded once per symbol at `up`. The dashboard is not started by the supervisor.
+- **Next steps:** Add `dashboard` and the future scheduler as supervised processes once they exist.
+- **Context:** Uncommitted. Test identities `swarmcheck-*` remain in the local token directory.
+
+## 2026-10-03 20:40 UTC — Claude Code — Paper executor and reconciliation
+
+- **Status:** code complete; live run blocked on Alpaca paper keys
+- **Goal:** Submit risk-passed proposals to Alpaca paper trading with no human approval, and keep orders, fills, and reconciliation in the ledger.
+- **Work completed:** `src/executor.ts` (`executor` role, `npm run executor`). Each 10 s cycle: reserves fresh risk passes (`reserve_paper_order`; stale passes are left for the risk broker to refresh); submits with a deterministic client order ID per proposal (`qs-` + SHA-256 prefix) as a `day` order. A submission without a broker ID is looked up by client order ID first; "not found" counts as "never placed" only after 60 s, and resubmission reuses the same ID, so a retry cannot place a second order. A refusal is double-checked by lookup before the order is recorded `rejected`. Fills are recorded from FILL activities before status, because the module requires fills to sum to the quantity. Statuses follow the module's transition table (`spacetimedb/src/domain.ts`, shared). Open orders of a paused or closed run are cancelled. Reconciliation is recorded at startup and whenever the discrepancy set changes (unrecorded fills, status conflicts, unknown `qs-` broker orders). `src/alpaca-orders.ts`: paper-only order client (fixed paper origin, allow-listed POST/GET/DELETE routes). `src/agents/execution{,.test}.ts`: pure logic. Module: `update_paper_order` now accepts `rejected` with an empty broker ID, only when the order never had one (published locally; signature unchanged).
+- **Files / references:** above, plus `package.json` (`build`, `executor`); board task `paper-executor-reconcile`. Alpaca API facts checked against docs.alpaca.markets (orders, by-client-order-ID lookup, FILL activities, cancel 204/422).
+- **Checks run:** Whole-repo `tsc` clean; `npm test` 48/48; module typecheck and local publish (data preserved); `--register` prints identity (`executor-1`: `c2008e18…91c9`); exits cleanly without keys. Not run: any Alpaca call (no credentials). Requested Codex acceptance coverage for the refusal path.
+- **Open issues:** Fill quantities with more than 6 decimals (module limit) are reported as mismatches, not recorded. Day orders only; no extended hours. Cancellation happens only on run pause/close. In-process submit bookkeeping resets on restart (safe because of client-ID dedupe and the pre-reject lookup).
+- **Next steps:** With keys: register and grant `executor-1` (executor role, run access, account access), then run risk broker and executor together on one proposal and confirm order, fill, and reconciliation rows.
+- **Context:** Uncommitted.
+
 ## 2026-10-03 — Codex (codex-plan) — Commit shared working tree
 
 - **Status:** complete

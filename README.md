@@ -67,6 +67,34 @@ RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Quant Swarm research you@example.c
 
 The run must exist and be active. `SYMBOLS` accepts 1–20 tickers. The ingestor makes only `GET` requests to a fixed set of SEC routes, spaced 200 ms apart to stay under the SEC's 10-requests-per-second limit. Rerunning it for the same run skips filings and facts already recorded. To use real filings in the [three-agent thesis check](#three-agent-thesis-check), ingest into the run instead of using the fixture ingestor. The skeptic then passes the evidence and the coordinator records `abstain`, because no valuation model exists yet.
 
+### Run the whole swarm
+
+The supervisor starts every process for one run from a config file, so you don't need a terminal per agent or hand-typed grants. Copy `config/swarm.example.json` to `config/swarm.json` (ignored by git) and set how many agents of each type to run:
+
+```json
+"agents": {
+  "coordinator": { "count": 1, "brain": "claude" },
+  "analyst": { "count": 3, "brain": "claude" },
+  "skeptic": { "count": 2, "brain": "codex", "effort": "medium" },
+  "risk": { "count": 1 },
+  "executor": { "count": 1 }
+}
+```
+
+Each role takes a `count`; the model roles also take `brain` (`rules`, `claude`, or `codex`), and optionally `model` and `effort`. Analysts and skeptics can run up to 20 copies each, because they compete for tasks through atomic claims. The coordinator, risk broker, and executor are limited to one each: each acts on the whole run or account, so a second copy would duplicate model decisions, invalidate the other's risk snapshots, or race on broker orders. Other fields set the run ID, the Alpaca account (detected from your keys when empty), the order cap, model budget limits, periodic quote snapshots (`marketData`), and the symbols to research with `fixture` or `sec` evidence (`research`).
+
+With the local server running (`npm run db:start`):
+
+```sh
+npm run swarm -- plan              # processes, roles, brains, and required environment variables
+npm run swarm -- register          # create an identity for each process that has none
+npm run swarm -- grants            # print the owner setup commands; add --apply to run them
+npm run swarm -- up                # seed research, start everything, restart crashes; Ctrl+C stops all
+npm run swarm -- status            # process state, heartbeats, and run progress (from another terminal)
+```
+
+`grants --apply` runs as the owner CLI identity: it makes the owner an operator, creates the run if it doesn't exist, applies model limits, grants each process its role and run access (plus account access for the risk broker, executor, and market data), and adds a run-specific copy of the risk policy. Every step is safe to repeat. `up` refuses to start if a secret it needs is missing from your shell (for example `OPENAI_API_KEY` for a Codex brain, the Alpaca paper keys for risk, executor, and market data, or `SEC_USER_AGENT` for SEC evidence); values are read from the environment and never stored. Before starting the long-running processes, it takes one quote snapshot and, for each research symbol without a thesis task, loads evidence and queues one. Output goes to the console with a `[name]` prefix and to `logs/<name>.log`. Pass `--start-db` to have the supervisor start the database server too, and `--config <file>` to use another config.
+
 ### Run a worker
 
 After publishing the module and building the worker, start a worker in another terminal:

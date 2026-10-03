@@ -19,3 +19,7 @@ vm_fleet/tart-macos.json
 vm_fleet/tart-linux.json
 vm_fleet/.tart-*-fleet-state.json*
 vm_fleet/*.tart.log
+
+# Swarm supervisor logs and local config (copy config/swarm.example.json).
+logs/
+config/swarm.json

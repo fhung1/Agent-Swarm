@@ -1,0 +1,19 @@
+{
+  "runId": "pilot-1",
+  "goal": "Paper pilot: research a small US equity universe and trade within the risk policy",
+  "namePrefix": "swarm",
+  "accountId": "",
+  "agents": {
+    "coordinator": { "count": 1, "brain": "claude" },
+    "analyst": { "count": 2, "brain": "claude" },
+    "skeptic": { "count": 1, "brain": "codex", "effort": "medium" },
+    "risk": { "count": 1 },
+    "executor": { "count": 1 }
+  },
+  "maxOrderNotional": 1000,
+  "limits": { "maxInferences": 50, "maxTokens": 1000000, "maxConcurrent": 2, "maxAttempts": 3 },
+  "riskPolicyFile": "config/risk-policy.json",
+  "feed": "iex",
+  "marketData": { "everySeconds": 300, "symbols": ["AAPL", "MSFT"] },
+  "research": { "symbols": ["AAPL", "MSFT"], "evidence": "sec" }
+}

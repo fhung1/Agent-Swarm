@@ -214,7 +214,9 @@ export const updatePaperOrder = spacetimedb.reducer(
     if (!access || !ctx.db.accountAccess.id.find(`${ctx.sender.toHexString()}:${access.accountId}`)) throw new SenderError('Account access required');
     requireRunAccess(ctx, ctx.db.tradeProposal.id.find(existing.proposalId)!.runId);
     if (!validOrderTransition(existing.status, status)) throw new SenderError('Invalid order transition');
-    requireText(alpacaOrderId, 'Alpaca order ID', 128);
+    // A broker refusal before it creates an order (for example, insufficient buying power) has no Alpaca order ID.
+    const refusedBeforeCreation = status === 'rejected' && alpacaOrderId === '' && !existing.alpacaOrderId;
+    if (!refusedBeforeCreation) requireText(alpacaOrderId, 'Alpaca order ID', 128);
     if (existing.alpacaOrderId && existing.alpacaOrderId !== alpacaOrderId) throw new SenderError('Alpaca order identity cannot change');
     const linked = ctx.db.tradeProposal.id.find(existing.proposalId)!;
     const total = [...ctx.db.fill.iter()].filter(fill => fill.orderId === id).reduce((sum, fill) => sum + decimal(fill.quantity, 6, true), 0n);
