@@ -6,13 +6,13 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 
 ## 2026-10-03 — Codex queue — Resolve and merge PR #2
 
-- **Status:** merge conflicts resolved; final integration checks passed; publishing to main and then stopping at owner request.
+- **Status:** complete; PR #2 merged, final integration c30e86f pushed to main, and this session stopped at owner request.
 - **Work:** Combined cancellation tables/views/controls with paper submission and account reconciliation safety; retained both handoff histories, configurable dashboard connections plus Tailscale defaults and token recovery. Removed unfinished alert-view UI wiring because no backend alert view exists; retained alert evaluator/tests. Fixed Minecraft launcher environment typing and development browser task-ID selector; updated browser coverage for cancellation.
 - **Checks:** Initial isolated check:all passed: 112 unit tests, generated bindings, typechecks/builds, structured fixtures, worker recovery/risk and executor crash/fill/reconciliation. Minecraft typecheck, 2 unit tests, worker/dashboard build and module typecheck passed. Both trading and development real-Chromium acceptance passed against isolated fixtures. Diff/conflict-marker checks passed. No real broker/provider/gameplay calls.
 - **Policy:** Owner explicitly resumed all three applications; merged branch stop-all notes are historical. AGENTS.md now requires direct commits/pushes to main and no new PRs. This existing PR is the authorized exception.
 - **Latest-main integration:** Preserved research scheduler, trade-update stream, shared board and branding. Combined SEC narrative facts with verified excerpt artifacts; at most two narrative chunks per section keep both formats within the 40-fact paired-filing limit, with omitted characters retained in the artifact/manifest. Fixed native TypeScript test import and kept undici external to avoid ESM executor crash; mock broker now denies external stream connections. Final check:all passed with 133 unit tests, generated-binding/type/build checks, structured fixtures, process recovery/risk and mock-broker executor timeout/restart/fill/reconciliation acceptance. undici is an external runtime dependency.
 - **Stop request:** Owner requested stopping after this merge; no further tasks will be started. The session’s earlier board watcher has been stopped.
-- **Publication:** PR branch head d4ca6a3 is retained as merge parent; published merge hash and GitHub merged status will be recorded on board resolve-pr-conflicts. Concurrent shared edits were preserved using /tmp/quant-pr2-resolve.
+- **Publication:** PR branch head d4ca6a3 is retained in merge b67aaa3; final integration c30e86f was pushed to main. GitHub confirms PR #2 closed and merged at 2026-10-03T23:01:55Z. Concurrent shared edits were preserved using /tmp/quant-pr2-resolve.
 
 ## 2026-10-03 — Codex — SEC narrative evidence
 
