@@ -1,0 +1,1 @@
+{"version":"2.0.77","scenario":"cooperative-starter","seed":424242,"agentCount":10,"gamePort":34197,"rconPort":27015,"boardHost":"ws://127.0.0.1:3000","boardDatabase":"quant-swarm-factorio-coord","observationRadius":32,"deadlineSeconds":1200,"stepsPerWorker":1000,"brain":"rules"}
