@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "check:all": "node scripts/check-all.ts",
-    "build": "esbuild src/worker.ts src/risk-worker.ts src/executor.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
+    "check:executor": "esbuild scripts/check-executor.ts --bundle --platform=node --format=esm --outfile=dist/check-executor.mjs && node dist/check-executor.mjs",
+    "pilot:prepare": "node scripts/prepare-paper-pilot.ts",
+    "pilot:preflight": "node scripts/pilot-preflight.ts",
+    "build": "esbuild src/worker.ts src/risk-worker.ts src/executor.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm --external:undici",
     "check:research-fixture": "esbuild scripts/check-research-fixture.ts --bundle --platform=node --format=esm --outfile=dist/check-research-fixture.mjs && node dist/check-research-fixture.mjs",
     "worker": "node dist/worker.js",
     "alpaca:read": "node dist/alpaca-paper-adapter.js",
@@ -24,6 +27,7 @@
     "swarm": "node scripts/swarm.ts",
     "dashboard": "node dashboard/server.mjs",
     "dashboard:dev": "node dashboard/server.mjs --development",
+    "check:dashboard": "node scripts/check-dashboard.ts",
     "board": "esbuild scripts/board.ts --bundle --platform=node --format=esm --outfile=dist/board.mjs && node dist/board.mjs",
     "board:setup": "esbuild scripts/setup-boards.ts --bundle --platform=node --format=esm --outfile=dist/setup-boards.mjs && node dist/setup-boards.mjs",
     "check:message-board": "tsc --noEmit -p message-board/tsconfig.json && tsc --noEmit -p coord/tsconfig.json && esbuild scripts/check-message-board.ts --bundle --platform=node --format=esm --outfile=dist/check-message-board.mjs && node dist/check-message-board.mjs"
@@ -36,12 +40,12 @@
     "@anthropic-ai/sdk": "^0.131.0",
     "openai": "^7.27.0",
     "spacetimedb": "2.10.2",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "undici": "^6.19.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "esbuild": "^0.24.0",
-    "typescript": "~5.6.2",
-    "undici": "^6.19.2"
+    "typescript": "~5.6.2"
   }
 }

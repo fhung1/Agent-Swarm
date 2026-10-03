@@ -2,6 +2,8 @@
 
 > **Historical snapshot.** Findings and line references below describe the repository at the time of this review. The follow-up table records fixes known when the review was updated, but later implementation should be read from [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [README.md](README.md), and the live `quant-swarm-coord` board. [docs/markdown-task-coverage.md](docs/markdown-task-coverage.md) maps every remaining release gate to a board task. Do not use an unresolved statement in the original findings as current architecture guidance.
 
+The current paper safety integration adds authoritative pre-submit risk/reconciliation checks, durable submission attempts and cash/position/open-order ledger reconciliation. An actual executor process passes mock-broker accepted-before-timeout/restart, partial/final fills and external-activity interlocks without broker requests. Live Alpaca acceptance still requires paper credentials. Minecraft server, game module, ten-worker launcher and dashboard are implemented in `games/`, with ten-minute connectivity, crafting, cross-agent citations, restart/output-reuse and one approved model smoke check; sustained gameplay and sharing experiments remain separate acceptance tasks. Factorio live setup is deferred by the owner.
+
 The repo has a working local research swarm: separate worker identities, leased tasks, persisted evidence and messages, analyst/skeptic/coordinator model handlers, and durable decisions and bounded proposals. It also has a read-only Alpaca adapter, an initial pure risk evaluator, order-ledger reducers, a separate one-client macOS game agent, and two VM lifecycle providers.
 
 The follow-up completed **Phase 1 for the local prototype**, including its scoped reads and process recovery acceptance. Phase 0 is implemented but lacks its real Alpaca exit check. Pieces of Phases 2–4 have been built ahead of their acceptance checks. The complete Alpaca paper-trading demo has not happened; later local reducer checks use synthetic order/fill records.
@@ -9,6 +11,8 @@ The follow-up completed **Phase 1 for the local prototype**, including its scope
 This review inspected the current working tree, including uncommitted work, rather than only the last commit. Existing handoffs establish historical checks; checks rerun for this review are listed below. The original review made no implementation changes; the follow-up resolutions are recorded below.
 
 ## Fixes and acceptance follow-up
+
+**Current status (2026-10-03, later implementation):** The polling paper executor, risk worker, supervisor, trading/development dashboards, isolated CI runner and verified backup/restore now exist. The original phase table and findings below are historical; use the current matrix in IMPLEMENTATION_PLAN.md and the coordination board for remaining work. Real Alpaca credentials/feed acceptance is pending. Concrete execution gaps are tracked as `executor-submit-revalidation`, `executor-durable-attempts`, `account-reconciliation-interlock`, `alpaca-trade-update-stream`, `operator-order-cancel` and `executor-failure-drills`. SEC supervisor symbol routing is fixed in `fad241a`; excerpts, amendment/freshness semantics, valuation and real-model research acceptance remain scoped. No per-order human approval is part of the current path.
 
 The findings below describe the original review. The subsequent bug-fix task implemented these changes:
 

@@ -166,6 +166,14 @@ export function researchSymbolEnv(ingestor: ProcessSpec, symbol: string): Record
   return ingestor.script === 'sec-ingestor.js' ? { SYMBOLS: symbol } : { SYMBOL: symbol };
 }
 
+export function scopedProcessEnv(process:ProcessSpec,base:Record<string,string|undefined>):Record<string,string|undefined>{
+  const env={...base};
+  for(const key of ['ALPACA_API_KEY','ALPACA_API_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','ANTHROPIC_AUTH_TOKEN','SEC_USER_AGENT']){
+    if(!process.secrets.includes(key)&&!(key==='ANTHROPIC_AUTH_TOKEN'&&process.secrets.includes('ANTHROPIC_API_KEY')))delete env[key];
+  }
+  return env;
+}
+
 // Owner/operator commands, in order. Each is safe to repeat (grants and identical policies are no-ops); the run is
 // created only when it does not exist yet, because creating it twice is an error.
 export function planGrants(config: SwarmConfig, processes: ProcessSpec[], identities: Map<string, string>,

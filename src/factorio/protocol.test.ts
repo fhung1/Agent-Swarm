@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeOperation, validateCommand, type Operation } from './protocol.js';
+import { encodeOperation, validateCommand, type Operation } from './protocol.ts';
 const operation: Operation = { version: 1, worldId: 'world-1', historyId: 'history-1', operationId: 'take-1', actorId: 12,
   command: { kind: 'take', targetId: 20, item: 'iron-ore', quantity: 5 } };
 test('operation digest and request are stable across property insertion order', () => {

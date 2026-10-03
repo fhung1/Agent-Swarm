@@ -1,0 +1,1 @@
+{"name":"quant-swarm-game-module","private":true,"type":"module","dependencies":{"spacetimedb":"2.10.2"},"devDependencies":{"typescript":"~5.6.2"}}

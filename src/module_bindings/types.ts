@@ -17,6 +17,22 @@ export const AccountAccess = __t.object("AccountAccess", {
 });
 export type AccountAccess = __Infer<typeof AccountAccess>;
 
+export const AccountCheck = __t.object("AccountCheck", {
+  accountId: __t.string(),
+  status: __t.string(),
+  details: __t.string(),
+  checkedAt: __t.timestamp(),
+});
+export type AccountCheck = __Infer<typeof AccountCheck>;
+
+export const AccountLedger = __t.object("AccountLedger", {
+  accountId: __t.string(),
+  cash: __t.string(),
+  positionsJson: __t.string(),
+  createdAt: __t.timestamp(),
+});
+export type AccountLedger = __Infer<typeof AccountLedger>;
+
 export const AccountSnapshot = __t.object("AccountSnapshot", {
   id: __t.string(),
   accountId: __t.string(),
@@ -159,6 +175,12 @@ export const Message = __t.object("Message", {
 });
 export type Message = __Infer<typeof Message>;
 
+export const MyAccountCheck = __t.object("MyAccountCheck", {});
+export type MyAccountCheck = __Infer<typeof MyAccountCheck>;
+
+export const MyAccountLedger = __t.object("MyAccountLedger", {});
+export type MyAccountLedger = __Infer<typeof MyAccountLedger>;
+
 export const MyAccountSnapshot = __t.object("MyAccountSnapshot", {});
 export type MyAccountSnapshot = __Infer<typeof MyAccountSnapshot>;
 
@@ -200,6 +222,9 @@ export type MyOrderCancelRequest = __Infer<typeof MyOrderCancelRequest>;
 
 export const MyPaperOrder = __t.object("MyPaperOrder", {});
 export type MyPaperOrder = __Infer<typeof MyPaperOrder>;
+
+export const MyPaperSubmission = __t.object("MyPaperSubmission", {});
+export type MyPaperSubmission = __Infer<typeof MyPaperSubmission>;
 
 export const MyReconciliation = __t.object("MyReconciliation", {});
 export type MyReconciliation = __Infer<typeof MyReconciliation>;
@@ -267,6 +292,18 @@ export const PaperOrder = __t.object("PaperOrder", {
   updatedAt: __t.timestamp(),
 });
 export type PaperOrder = __Infer<typeof PaperOrder>;
+
+export const PaperSubmission = __t.object("PaperSubmission", {
+  id: __t.string(),
+  orderId: __t.string(),
+  actor: __t.identity(),
+  attempt: __t.u32(),
+  status: __t.string(),
+  details: __t.string(),
+  startedAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type PaperSubmission = __Infer<typeof PaperSubmission>;
 
 export const Reconciliation = __t.object("Reconciliation", {
   id: __t.string(),

@@ -4,6 +4,11 @@ import { watch } from 'node:fs';
 
 const development = process.argv.includes('--development');
 const mode = development ? 'development' : 'trading';
+const database = process.env.SPACETIMEDB_DB_NAME ?? (development ? 'quant-swarm-coord' : 'quant-swarm');
+const host = process.env.SPACETIMEDB_HOST;
+const port = Number(process.env.DASHBOARD_PORT ?? (development ? 4174 : 4173));
+if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('DASHBOARD_PORT must be between 1 and 65535');
+if (host && !/^wss?:\/\//.test(host)) throw new Error('SPACETIMEDB_HOST must be a ws:// or wss:// URI');
 const directory = `dashboard/dist/${mode}`;
 await mkdir(directory, { recursive: true });
 const html = (await readFile('dashboard/index.html', 'utf8'))
@@ -20,12 +25,13 @@ const build = await context({
   platform: 'browser',
   format: 'esm',
   target: 'es2022',
+  define: { __DASHBOARD_CONFIG__: JSON.stringify({ host, database }) },
   outfile: `${directory}/app.js`,
   logLevel: 'info',
 });
 await build.watch();
-const server = await build.serve({ host: process.env.DASHBOARD_HOST ?? '127.0.0.1', port: development ? 4174 : 4173, servedir: directory });
-console.log(`${development ? 'Development board (quant-swarm-coord)' : 'Trading dashboard (quant-swarm)'}: http://${server.host}:${server.port}`);
+const server = await build.serve({ host: process.env.DASHBOARD_HOST ?? '127.0.0.1', port, servedir: directory });
+console.log(`${development ? 'Development board' : 'Trading dashboard'} (${database}): http://${server.host}:${server.port}`);
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => { styleWatcher.close(); void build.dispose().then(() => process.exit(0)); });

@@ -56,7 +56,7 @@ For the first pilot, combine roles where needed to keep the worker count small. 
 | `paper_order` | Proposal, client order ID, Alpaca order ID, request ID, status, submitted/updated times. |
 | `fill` | Order, event ID, quantity, price, time; deduplicated on Alpaca identifiers. |
 | `account_snapshot` | Private account ID/status, cash, buying power, equity, JSON position/order snapshots, capture time. |
-| `market_observation` | Public symbol/feed bid and ask observations with Alpaca source time and SpacetimeDB capture time. |
+| `market_observation` | Private, scoped symbol/feed bid and ask observations with Alpaca source time and SpacetimeDB capture time. |
 | `reconciliation` | Snapshot time, source IDs, discrepancies, resolution status, operator acknowledgement. |
 | `run_metric` | Research cost, latency, policy failures, order discrepancies, and portfolio metrics. |
 

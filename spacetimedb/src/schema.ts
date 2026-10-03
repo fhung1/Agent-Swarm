@@ -71,6 +71,16 @@ export const orderCancelRequest = table({ name: 'order_cancel_request' }, {
   orderId: t.string().primaryKey(), requestedBy: t.identity(), reason: t.string(), status: t.string(),
   detail: t.string(), requestedAt: t.timestamp(), updatedAt: t.timestamp(),
 });
+export const paperSubmission = table({ name: 'paper_submission' }, {
+  id: t.string().primaryKey(), orderId: t.string().index('btree'), actor: t.identity(),
+  attempt: t.u32(), status: t.string(), details: t.string(), startedAt: t.timestamp(), updatedAt: t.timestamp(),
+});
+export const accountLedger = table({ name: 'account_ledger' }, {
+  accountId: t.string().primaryKey(), cash: t.string(), positionsJson: t.string(), createdAt: t.timestamp(),
+});
+export const accountCheck = table({ name: 'account_check' }, {
+  accountId: t.string().primaryKey(), status: t.string(), details: t.string(), checkedAt: t.timestamp(),
+});
 export const tradeUpdate = table({ name: 'trade_update' }, {
   id: t.string().primaryKey(), orderId: t.string().index('btree'), alpacaOrderId: t.string(),
   event: t.string(), brokerStatus: t.string(), executionId: t.string(), brokerTimestamp: t.timestamp(),
@@ -135,6 +145,6 @@ const spacetimedb = schema({
   ownerConfig, agent, run, task, taskLease, message, source, fact, thesis,
   decision, tradeProposal, riskDecision, approval, paperOrder, orderCancelRequest, tradeUpdate, fill, accountSnapshot,
   marketObservation, reconciliation, runMetric, runAccess, accountAccess, riskPolicy, runConfig, marketClock,
-  riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory,
+  riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory, paperSubmission, accountLedger, accountCheck,
 });
 export default spacetimedb;

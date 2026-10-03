@@ -39,6 +39,7 @@ import AddRiskPolicyReducer from "./add_risk_policy_reducer";
 import AddSourceReducer from "./add_source_reducer";
 import ApproveProposalReducer from "./approve_proposal_reducer";
 import BeginInferenceReducer from "./begin_inference_reducer";
+import BeginPaperSubmissionReducer from "./begin_paper_submission_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
 import CompleteTaskReducer from "./complete_task_reducer";
 import ConfigureRunLimitsReducer from "./configure_run_limits_reducer";
@@ -46,6 +47,7 @@ import CreateRunReducer from "./create_run_reducer";
 import CreateTaskReducer from "./create_task_reducer";
 import FailTaskReducer from "./fail_task_reducer";
 import FinishInferenceReducer from "./finish_inference_reducer";
+import FinishPaperSubmissionReducer from "./finish_paper_submission_reducer";
 import GrantAccountAccessReducer from "./grant_account_access_reducer";
 import GrantAgentReducer from "./grant_agent_reducer";
 import GrantRunAccessReducer from "./grant_run_access_reducer";
@@ -53,6 +55,7 @@ import HeartbeatReducer from "./heartbeat_reducer";
 import PostMessageReducer from "./post_message_reducer";
 import ProposeTradeReducer from "./propose_trade_reducer";
 import PublishThesisReducer from "./publish_thesis_reducer";
+import ReconcilePaperAccountReducer from "./reconcile_paper_account_reducer";
 import RecordAccountSnapshotReducer from "./record_account_snapshot_reducer";
 import RecordDecisionReducer from "./record_decision_reducer";
 import RecordDecisionInputReducer from "./record_decision_input_reducer";
@@ -66,9 +69,11 @@ import RecordTradeUpdateReducer from "./record_trade_update_reducer";
 import RenewTaskLeaseReducer from "./renew_task_lease_reducer";
 import RequestOrderCancelReducer from "./request_order_cancel_reducer";
 import ReservePaperOrderReducer from "./reserve_paper_order_reducer";
+import ResolveUncertainPaperIntentReducer from "./resolve_uncertain_paper_intent_reducer";
 import RevokeAccountAccessReducer from "./revoke_account_access_reducer";
 import RevokeAgentReducer from "./revoke_agent_reducer";
 import RevokeRunAccessReducer from "./revoke_run_access_reducer";
+import SetPaperAccountBaselineReducer from "./set_paper_account_baseline_reducer";
 import SetRunStatusReducer from "./set_run_status_reducer";
 import UpdateOrderCancelReducer from "./update_order_cancel_reducer";
 import UpdatePaperOrderReducer from "./update_paper_order_reducer";
@@ -76,6 +81,8 @@ import UpdatePaperOrderReducer from "./update_paper_order_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import MyAccountCheckRow from "./my_account_check_table";
+import MyAccountLedgerRow from "./my_account_ledger_table";
 import MyAccountSnapshotRow from "./my_account_snapshot_table";
 import MyAgentRow from "./my_agent_table";
 import MyAgentDirectoryRow from "./my_agent_directory_table";
@@ -90,6 +97,7 @@ import MyMarketObservationRow from "./my_market_observation_table";
 import MyMessageRow from "./my_message_table";
 import MyOrderCancelRequestRow from "./my_order_cancel_request_table";
 import MyPaperOrderRow from "./my_paper_order_table";
+import MyPaperSubmissionRow from "./my_paper_submission_table";
 import MyReconciliationRow from "./my_reconciliation_table";
 import MyRiskDecisionRow from "./my_risk_decision_table";
 import MyRiskDecisionHistoryRow from "./my_risk_decision_history_table";
@@ -108,6 +116,20 @@ import MyTradeUpdateRow from "./my_trade_update_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  myAccountCheck: __table({
+    name: 'my_account_check',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAccountCheckRow),
+  myAccountLedger: __table({
+    name: 'my_account_ledger',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAccountLedgerRow),
   myAccountSnapshot: __table({
     name: 'my_account_snapshot',
     indexes: [
@@ -206,6 +228,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyPaperOrderRow),
+  myPaperSubmission: __table({
+    name: 'my_paper_submission',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyPaperSubmissionRow),
   myReconciliation: __table({
     name: 'my_reconciliation',
     indexes: [
@@ -306,6 +335,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_source", AddSourceReducer),
   __reducerSchema("approve_proposal", ApproveProposalReducer),
   __reducerSchema("begin_inference", BeginInferenceReducer),
+  __reducerSchema("begin_paper_submission", BeginPaperSubmissionReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
   __reducerSchema("complete_task", CompleteTaskReducer),
   __reducerSchema("configure_run_limits", ConfigureRunLimitsReducer),
@@ -313,6 +343,7 @@ const reducersSchema = __reducers(
   __reducerSchema("create_task", CreateTaskReducer),
   __reducerSchema("fail_task", FailTaskReducer),
   __reducerSchema("finish_inference", FinishInferenceReducer),
+  __reducerSchema("finish_paper_submission", FinishPaperSubmissionReducer),
   __reducerSchema("grant_account_access", GrantAccountAccessReducer),
   __reducerSchema("grant_agent", GrantAgentReducer),
   __reducerSchema("grant_run_access", GrantRunAccessReducer),
@@ -320,6 +351,7 @@ const reducersSchema = __reducers(
   __reducerSchema("post_message", PostMessageReducer),
   __reducerSchema("propose_trade", ProposeTradeReducer),
   __reducerSchema("publish_thesis", PublishThesisReducer),
+  __reducerSchema("reconcile_paper_account", ReconcilePaperAccountReducer),
   __reducerSchema("record_account_snapshot", RecordAccountSnapshotReducer),
   __reducerSchema("record_decision", RecordDecisionReducer),
   __reducerSchema("record_decision_input", RecordDecisionInputReducer),
@@ -333,9 +365,11 @@ const reducersSchema = __reducers(
   __reducerSchema("renew_task_lease", RenewTaskLeaseReducer),
   __reducerSchema("request_order_cancel", RequestOrderCancelReducer),
   __reducerSchema("reserve_paper_order", ReservePaperOrderReducer),
+  __reducerSchema("resolve_uncertain_paper_intent", ResolveUncertainPaperIntentReducer),
   __reducerSchema("revoke_account_access", RevokeAccountAccessReducer),
   __reducerSchema("revoke_agent", RevokeAgentReducer),
   __reducerSchema("revoke_run_access", RevokeRunAccessReducer),
+  __reducerSchema("set_paper_account_baseline", SetPaperAccountBaselineReducer),
   __reducerSchema("set_run_status", SetRunStatusReducer),
   __reducerSchema("update_order_cancel", UpdateOrderCancelReducer),
   __reducerSchema("update_paper_order", UpdatePaperOrderReducer),

@@ -4,6 +4,16 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex queue — Resolve and merge PR #2
+
+- **Status:** complete; PR #2 merged, final integration c30e86f pushed to main, and this session stopped at owner request.
+- **Work:** Combined cancellation tables/views/controls with paper submission and account reconciliation safety; retained both handoff histories, configurable dashboard connections plus Tailscale defaults and token recovery. Removed unfinished alert-view UI wiring because no backend alert view exists; retained alert evaluator/tests. Fixed Minecraft launcher environment typing and development browser task-ID selector; updated browser coverage for cancellation.
+- **Checks:** Initial isolated check:all passed: 112 unit tests, generated bindings, typechecks/builds, structured fixtures, worker recovery/risk and executor crash/fill/reconciliation. Minecraft typecheck, 2 unit tests, worker/dashboard build and module typecheck passed. Both trading and development real-Chromium acceptance passed against isolated fixtures. Diff/conflict-marker checks passed. No real broker/provider/gameplay calls.
+- **Policy:** Owner explicitly resumed all three applications; merged branch stop-all notes are historical. AGENTS.md now requires direct commits/pushes to main and no new PRs. This existing PR is the authorized exception.
+- **Latest-main integration:** Preserved research scheduler, trade-update stream, shared board and branding. Combined SEC narrative facts with verified excerpt artifacts; at most two narrative chunks per section keep both formats within the 40-fact paired-filing limit, with omitted characters retained in the artifact/manifest. Fixed native TypeScript test import and kept undici external to avoid ESM executor crash; mock broker now denies external stream connections. Final check:all passed with 133 unit tests, generated-binding/type/build checks, structured fixtures, process recovery/risk and mock-broker executor timeout/restart/fill/reconciliation acceptance. undici is an external runtime dependency.
+- **Stop request:** Owner requested stopping after this merge; no further tasks will be started. The session’s earlier board watcher has been stopped.
+- **Publication:** PR branch head d4ca6a3 is retained in merge b67aaa3; final integration c30e86f was pushed to main. GitHub confirms PR #2 closed and merged at 2026-10-03T23:01:55Z. Concurrent shared edits were preserved using /tmp/quant-pr2-resolve.
+
 ## 2026-10-03 — Codex — SEC narrative evidence
 
 - **Status:** complete; board task `trading-qualitative-evidence` (push when finished).
@@ -31,6 +41,33 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Context:** Installed locked dependencies and used Node 24 because the default Node 20 cannot run native TypeScript. Created the missing local coordination database and registered/claimed/locked this task.
 - **Next steps:** None.
 
+
+## 2026-10-03 — Codex (focus-reset) — Owner stop-all checkpoint
+
+- **Status:** All development stopped at owner request; saving all current shared changes as an unfinished checkpoint.
+- **Work completed:** Broadcast and directly delivered stop instructions to registered sessions. Archived 57 unfinished/cancelled task contracts, including all 33 active tasks, with original ownership, dependencies, details and results in `UNFINISHED_TASKS.md`. Retired active board tasks administratively using the recorded assignee labels required by the shared-identity board; cancellation notes identify focus-reset and the owner directive. Cancellation is not completion or acknowledgement.
+- **Validation:** Snapshot and board-state review only; no new implementation or runtime acceptance checks. This checkpoint contains unfinished work from multiple sessions and does not establish readiness.
+- **Publication:** Commit/push result is recorded in the final board broadcast.
+- **Next steps:** None authorized. Resume only on a new owner instruction using the archived task contracts.
+
+## 2026-10-03 — Codex (focus-reset) — Minecraft and trading priority
+
+- **Status:** scope directive recorded; board task `focus-reset-scope`; push when finished.
+- **Owner directive:** Stop Factorio work because the owner’s friend is fixing it; focus on Minecraft and paper trading.
+- **Work completed:** Read repository architecture, Minecraft runtime guide, scripts, handoff and board. Broadcast stop instruction to all sessions and directly notified `codex-plan`, the holder of Factorio locks. Cancelled all eight open `fa-*` tasks. Created `minecraft-trading-readiness` to retain useful non-Factorio scope from the mixed readiness task. Added durable priority to AGENTS.md.
+- **Checks:** Board confirms eight cancellations. Mixed task cancellation requires its assignee, who has been asked to cancel and release locks. No runtime code changed.
+- **Next steps:** The mixed task owner must cancel `three-swarm-readiness`, release Factorio locks and claim `minecraft-trading-readiness`. Documentation published independently of concurrent work. Minecraft priorities are launcher acceptance, recovery and sharing experiments; paper priorities are execution safety, evidence and operator monitoring.
+
+## 2026-10-03 21:46 UTC — Codex (codex-next) — Operator alerts
+
+- **Status:** in progress; board task `operator-alerts` claimed, push when finished.
+- **Goal:** Add account-scoped operational alerts for stale data, stuck/rejected orders, silent services or trade updates, reconciliation mismatches, and policy exposure breaches; show open alerts in the operator dashboard.
+- **Work completed:** Added deterministic alert derivation and example thresholds in `src/alerts.ts` and `config/alerts.example.json`, with five focused forced-condition tests in `src/alerts.test.ts`. Confirmed current mismatch blocking exists at executor submission; the risk-decision pass reducer needs a coordinated guard if it is not added by the current risk-gate owner.
+- **Files / references:** Board task `operator-alerts`; `src/alerts.ts`, `src/alerts.test.ts`, `config/alerts.example.json`.
+- **Checks run:** `node --test src/alerts.test.ts` passed (5/5); focused TypeScript check for both alert files passed.
+- **Open issues:** Alert persistence, scoped module view, worker wiring, dashboard display, and mismatch pass protection remain. Current sessions hold `spacetimedb/src/`, `src/module_bindings/`, `package.json`, and `dashboard/`; requests for transfer are posted on the coordination board. No alert data has been written to the live database.
+- **Next steps:** Finish module table/reducer/view, standalone monitor service and setup, integrate the dashboard after its acceptance task releases `dashboard/`, run forced-condition and dashboard checks, then commit and push only this task's changes and mark the board task done.
+- **Context:** `repo_reader` said it will release the dashboard path after pushing `dashboard-runtime-acceptance`; `codex-plan` expects to release module/package paths after its paper safety checks. Risk-gate mismatch pass guard is coordinated with `codex-plan`.
 
 ## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
 
@@ -60,6 +97,23 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** This runtime lacks Alpaca credentials; live connectivity/execution checks remain blocked. Other board tasks belong to remaining sessions. Dashboard/supervisor work is concurrent and unchanged by this session.
 - **Next steps:** Resume monitoring only if owner requests it. The board records both resolved tasks and the stopped monitor status. This session made no commit.
 
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation and acceptance checks complete; publication commit recorded on the board after push
+- **Goal:** Complete `sec-filing-excerpts`; push when finished.
+- **Work completed:** Risk-factor/MD&A extraction with document checksums, normalized offsets, deterministic <=240-character excerpt fact chunks and richer bounded artifacts. Verified source-matched reads stay inside SEC_ARTIFACT_DIR, reject symlinks and report unavailable/truncated evidence. Legacy manifests use original verified documents. Citation/prompt budgets remain enforced; inference audit uses `research-v3-sec-excerpts`.
+- **Checks:** Trimmed real AAPL 10-K/10-Q fixtures and corruption/path/offset/budget checks pass. Isolated database replay of saved real AAPL/MSFT filings produced 4 sources/56 facts including 16 excerpts; verified all offsets, recovered an interrupted ingestion and proved duplicate-free reruns. Full typecheck/build/unit checks pass; exact publication checkout checks are recorded on the board. No new SEC download or provider/broker calls.
+- **Limitations:** Heading matching is heuristic, full excerpt cap 3,200 characters per section, hot fact cap 240 characters/two chunks per section. Fresh SEC endpoint acceptance still needs a real contact User-Agent. Shared worker artifact access is required.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:
@@ -78,6 +132,25 @@ Copy this section for each handoff and fill in what applies:
 ```
 
 ## Handoffs
+
+## 2026-10-03 — Codex (repo_reader) — Development board runtime acceptance
+
+- **Status:** in progress; push when finished
+- **Goal:** Verify development board message/task controls in a real browser, extending the previously verified live reads.
+- **Work completed:** Added shared isolated browser/database infrastructure and a two-tab development-board fixture for message routing, competing claims, dependencies, block/release/takeover/completion, locks and recovery. Trading acceptance now uses the same helper.
+- **Files / references:** `scripts/dashboard-test-env.ts`, `scripts/check-dashboard.ts`, `scripts/check-dev-dashboard.ts`, planned `docs/dev-dashboard-acceptance.md`; board task `dev-dashboard-runtime-acceptance`.
+- **Checks / findings:** Strict runner/helper TypeScript passes. Initial Chrome runs exposed background-tab animation-frame throttling in the test driver; the driver now activates the inspected tab. Trading regression against concurrently edited dashboard/backend needs diagnosis; browser failures now include rendered text and runtime exceptions.
+- **Next steps:** Finish both browser runs, document observed results, and commit/push each completed task through an independent checkout while the shared Git index is reserved. No Factorio work.
+
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
 
 <!-- Add each new handoff below this line, newest first. -->
 
@@ -287,15 +360,38 @@ Copy this section for each handoff and fill in what applies:
 - **Context:** Running exec sessions: trading 68523, development 80006, database 79670. Server source checkout is in /tmp; no ongoing GitHub watcher installed.
 
 
+## 2026-10-03 — Codex (cedar) — SEC cache and retry
+
+- **Status:** complete; pushed by cedar as `427b9d8`
+- **Goal:** Complete board task `sec-cache-retry` without changing trading/executor interfaces.
+- **Work underway:** Conditional SEC HTTP revalidation, checksum-verified cached bytes, short TTL for mutable feeds and three bounded transient retries honoring Retry-After; preserve provenance.
+- **Checks / publication:** Typecheck/build and 74 unit tests passed (11 new cache tests); real local HTTP fixtures verified 503 recovery and restart/304. Checksum-verified conditional caching, three bounded retries, route guard and 5-minute mutable/24-hour filing TTL are documented in `docs/sec-cache.md`. No external SEC/model/broker calls. Completion evidence added at cedar's request while codex-plan held the lock.
+
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation/checks complete; waiting for the other session's Git-index commit window to finish before push
+- **Goal:** Complete `sec-filing-excerpts` and push when finished.
+- **Work completed:** Added bounded risk-factor and MD&A text artifacts and manifest references; workers verify content-addressed files within SEC_ARTIFACT_DIR, document/source matching, byte bounds and symlink/path restrictions. Legacy manifests derive excerpts from the verified original document. Source IDs remain the citations; missing/truncated text is disclosed and shared evidence budgets include excerpt text. New inference audit uses prompt version `research-v3-sec-excerpts`. No schema changes.
+- **Checks run:** Full typecheck/build and all 88 unit tests pass, including eight extractor/artifact/security checks and six evidence-selection checks. Offline smoke on all four saved AAPL/MSFT 10-K/10-Q filings found both sections. Both-company prompts retained all 20 labeled fixture facts at 15,704/15,728 characters. Diff check passed. No downloads, model or broker calls.
+- **Limitations:** Heading extraction is heuristic and bounded to 3,200 characters per section; unsupported layouts or incomplete evidence remain explicit research limitations. Workers need the SEC artifact directory shared/mounted locally.
+- **Next steps:** Commit/push this completed task after the shared Git-index lock releases, record its implementation commit, and mark the board task done.
+
+## 2026-10-03 — Codex (codex-next) — Operator alerts
+
+- **Status:** in progress; entry added while codex-plan holds the handoff lock
+- **Work underway:** Board task `operator-alerts`; alerts and dashboard runtime configuration. Trading module/bindings transfer is waiting for codex-plan's paper safety commit. Verification and push pending.
+
 ## 2026-10-03 — Codex (codex-plan) — Three-swarm readiness and push policy
 
 - **Status:** in progress
 - **Goal:** Audit all current implementation plans and implement until Alpaca, Minecraft and Factorio swarms have runnable full-test paths. Owner confirmed Factorio uses headless structured state and commands.
-- **Work completed:** Reviewed current source, acceptance scripts, plans and all board tasks; added 14 uncovered backlog tasks with evidence/dependencies/checks. Published additive coordination policy: every existing task says `push when finished`, and every new task inherits it. Added the standing push instruction to AGENTS.md.
-- **Findings:** Phase 1 accepted locally; paper executor/supervisor/dashboard exist but broker acceptance remains pending. Found SEC supervisor `SYMBOL`/`SYMBOLS` mismatch and execution revalidation/reconciliation gaps. Minecraft implementation has not started; previous graphical Factorio work is deferred and does not satisfy new headless requirements.
-- **Checks:** Coordination module typecheck/publish and policy migration passed; Git diff check passed. No broker orders or paid inference made.
-- **Prerequisites:** OPENAI_API_KEY exists; Alpaca paper credentials and SEC_USER_AGENT are absent. Java is 20, Docker engine is available, Factorio runtime absent. Owner questions pending for EULA, private environment configuration and headless container setup.
-- **Next steps:** Push completed policy and confirm other sessions' completed changes are pushed; implement game module/workers/adapters/launchers and repair Alpaca integration gaps; execute isolated and live acceptance where prerequisites permit.
+- **Work completed:** Audited source, plans and board; added 14 uncovered trading tasks, eight headless Factorio tasks and readiness tracking. Every existing/new board task now says `push when finished`; AGENTS.md retains this instruction. Pushed policy `6e90bc6`, SEC supervisor symbol fix `fad241a`, other sessions' completed CI/evidence changes `78c38aa`, and executor-side pre-submit checks/uncertain-exposure retention `f9da58d` to `origin/phase-0-alpaca-read`.
+- **Minecraft implementation:** New isolated `games/` package: checksum-verified private Java 21/Minecraft 1.21.11 server, ten independent Mineflayer workers with persistent identities/local observations/bounded commands, private indexed game views and authenticated messages/knowledge/action/model audit, shared durable budgets, pause/revocation/disconnect cancellation, restart output reuse and conservative uncertain-action recovery, launcher and operator dashboard at port 4175. Game database is `quant-swarm-games`, separate from trading and coordination. Worlds/binaries/tokens/traces remain ignored.
+- **Checks:** Isolated `npm run check:all` passed 59 unit tests, 13 synthetic model responses and full Phase 1 acceptance `phase-one-1791060946572`; executor changes passed 61 unit tests/typecheck/build. Game typecheck/build/unit and real database authorization/citation/idempotence/budget/revocation checks pass. Ten actual bots stayed connected for 600 seconds; a live survival bot mined five logs/crafted a table in an explicitly labeled log fixture; real Chrome verified ungranted isolation, live grants, pause/resume and revocation. Ten fixture-response workers exercised budget/output/action/cross-agent citation paths without external inference. Initial concurrent collection exposed chunk-readiness and timeout cancellation issues, now fixed; inference-audit migration preserved existing rows.
+- **Additional checks:** `check:workers` passed ten independent workers/20 completed actions and inferences, cross-agent citations, shared two-call concurrency, restart step limits and recorded-output reuse. Owner approved one `gpt-6-astra` request to the Responses endpoint with only local Minecraft state/goal; run `minecraft-model-smoke` completed one structured model decision and recorded its `share` action. No broker orders were made.
+- **Prerequisites / remaining gaps:** Alpaca keys and SEC_USER_AGENT are absent; owner will supply them. Owner approved stale trading-lock transfer; authoritative pre-submit transition, durable attempts and account-ledger reconciliation are now being implemented under our module locks. Minecraft EULA accepted. Thirty-minute ten-worker gameplay, matched-seed sharing experiments and full recovery drills are not yet accepted. Owner later deferred Factorio live tests because it is not installed; its headless backlog remains scoped, unimplemented and unlaunched.
+- **Publication / current checks:** Minecraft pushed as `397358f`; server/schema/core/sharing/dashboard board tasks done. Paper module now has private `paper_submission`, `account_ledger` and `account_check` tables, deterministic full-account comparisons, atomic pre-submit risk/grant/pause/reconciliation checks, three persistent attempts with uncertainty grace, explicit audited paused-run recovery, and safe reserved-risk refresh. Actual executor mock-broker drill passed acceptance-before-timeout/abrupt restart with one POST, partial/final fills, cash drift/external-order interlocks and recovery; all broker HTTP was intercepted with fake keys. `pilot:prepare` discovers the paper account via one GET and creates ignored config; `pilot:preflight` makes no provider calls. Final isolated CI suite is running after the last uncertainty guard.
+- **Next steps:** Push final paper safety/test/setup/docs commit once checks pass, release module/package locks to codex-next, and run real paper acceptance when credentials/SEC contact arrive. Minecraft code is runnable; the plan's 30-minute active-worker check and experiment/reliability acceptance remain on the board. Factorio remains owner-deferred. Exact Git push destination and branch are owner-authorized.
 
 ## 2026-10-03 — Codex (repo_reader) — Repository orientation and dashboard diagnosis
 

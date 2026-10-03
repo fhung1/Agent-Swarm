@@ -75,6 +75,23 @@ test('selection reserves space for a skeptic thesis reference in the reducer pro
   assert.ok(selected.allowedIds.size+1<=50);
 });
 
+test('qualitative filing excerpts use source citations and count toward the evidence budget',()=>{
+  const filing=source('annual','10-K');
+  filing.qualitative={ sections:[{section:'risk_factors',text:'Supplier concentration could disrupt production.',
+    startLine:10,endLine:12,charactersOmitted:2000,startOffset:100,endOffset:146,quality:'ok'}],missing:['mda: heading not found'] };
+  const selected=selectEvidence([filing],facts(filing,10),[]);
+  const prompt=analystPrompt('QFIX','Research',selected.sources,selected.facts,[],selected.omitted);
+  assert.ok(prompt.includes('filing excerpt from source annual, risk_factors'));
+  assert.ok(prompt.includes('Supplier concentration'));
+  assert.ok(prompt.includes('omitted 2000 characters'));
+  assert.ok(prompt.includes('mda: heading not found'));
+  assert.equal(selected.allowedIds.size,11);
+  assert.doesNotThrow(()=>toPublishThesisArgs({...output,evidence_ids:['annual']},ids,selected.allowedIds));
+  assert.throws(()=>toPublishThesisArgs({...output,evidence_ids:['risk_factors']},ids,selected.allowedIds),/unknown evidence/);
+  filing.qualitative.sections[0].text='x'.repeat(EVIDENCE_LIMITS.chars);
+  assert.throws(()=>selectEvidence([filing],facts(filing,10),[]),PermanentWorkError);
+});
+
 test('fresh SEC filings require all supported narrative sections and their citations',()=>{
   const asOf = new Date(Date.now() - 2 * 86_400_000).toISOString();
   const annual: SourceView = { id:'annual-sec', symbol:'QFIX', kind:'10-K', uri:'https://www.sec.gov/Archives/edgar/data/1/annual.htm', asOf };
