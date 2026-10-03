@@ -11,6 +11,8 @@ Keep the local SpacetimeDB server running at port 3000. The development instance
 
 The trading instance still uses its operator/account grants. Neither instance reads the other database. Both HTTP servers bind to localhost only.
 
+The server accepts `SPACETIMEDB_HOST`, `SPACETIMEDB_DB_NAME` and `DASHBOARD_PORT` for isolated local instances. Browser tokens are separated by host/database. Restart the server after changing configuration. Run the real trading-browser acceptance with `node scripts/check-dashboard.ts`; see [the acceptance guide](../docs/dashboard-acceptance.md) for prerequisites and coverage.
+
 Regenerate development bindings after changing `coord/src/index.ts`:
 
 ```sh

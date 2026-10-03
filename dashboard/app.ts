@@ -1,9 +1,9 @@
 import { DbConnection } from '../src/module_bindings/index.js';
 import type { AccountSnapshot, Decision, Fact, Message, PaperOrder, Run, Source, Thesis } from '../src/module_bindings/types.js';
+import { dashboardConfig, dashboardTokenKey } from './config.js';
 
-const HOST = 'ws://127.0.0.1:3000';
-const DATABASE = 'quant-swarm';
-const TOKEN_KEY = 'quant-swarm:dashboard:token';
+const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm');
+const TOKEN_KEY = dashboardTokenKey('dashboard', HOST, DATABASE);
 const root = document.querySelector<HTMLElement>('#app');
 if (!root) throw new Error('Dashboard root is missing');
 
@@ -110,7 +110,7 @@ function connectionScreen(): void {
     put(box, node('h2', '', 'Grant this browser identity'),
       node('p', 'muted', 'The owner grants the operator role from the local SpacetimeDB CLI. Account access is granted separately.'),
       field('Identity', identity));
-    const command = node('code', 'command', `spacetime call --server local quant-swarm grant_agent ${identity} operator`);
+    const command = node('code', 'command', `spacetime call --server ${HOST.replace(/^ws/, 'http')} ${DATABASE} grant_agent ${identity} operator`);
     put(box, command, node('p', 'muted small', 'After granting, reload this page. Grant account access with grant_account_access to show balances and orders. The token stays in this browser’s local storage.'));
     put(shell, box);
   }

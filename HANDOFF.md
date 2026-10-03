@@ -32,6 +32,15 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** This runtime lacks Alpaca credentials; live connectivity/execution checks remain blocked. Other board tasks belong to remaining sessions. Dashboard/supervisor work is concurrent and unchanged by this session.
 - **Next steps:** Resume monitoring only if owner requests it. The board records both resolved tasks and the stopped monitor status. This session made no commit.
 
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:
