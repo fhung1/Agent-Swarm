@@ -1,5 +1,7 @@
 # Quant Swarm implementation review — 2026-10-03
 
+> **Historical snapshot.** Findings and line references below describe the repository at the time of this review. The follow-up table records fixes known when the review was updated, but later implementation should be read from [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [README.md](README.md), and the live `quant-swarm-coord` board. [docs/markdown-task-coverage.md](docs/markdown-task-coverage.md) maps every remaining release gate to a board task. Do not use an unresolved statement in the original findings as current architecture guidance.
+
 The repo has a working local research swarm: separate worker identities, leased tasks, persisted evidence and messages, analyst/skeptic/coordinator model handlers, and durable decisions and bounded proposals. It also has a read-only Alpaca adapter, an initial pure risk evaluator, order-ledger reducers, a separate one-client macOS game agent, and two VM lifecycle providers.
 
 The follow-up completed **Phase 1 for the local prototype**, including its scoped reads and process recovery acceptance. Phase 0 is implemented but lacks its real Alpaca exit check. Pieces of Phases 2–4 have been built ahead of their acceptance checks. The complete Alpaca paper-trading demo has not happened; later local reducer checks use synthetic order/fill records.
@@ -28,19 +30,19 @@ The owner has superseded per-order human approval: a fresh authoritative risk pa
 
 Phase 1 acceptance passed through `npm run check:phase-one` in run `phase-one-1791058021567`: actual claim-racing workers, sourced three-role decisions, same-token restart, pause/resume, lease takeover, 65-second lease renewal, grant revocation, long IDs, budgets, and risk/ledger checks. The separate structured-handler fixture also passed with 13 synthetic responses. Real Alpaca connectivity, broker execution/reconciliation, deployment service identities, and live gameplay remain separate exit checks. Initial SEC ingestion now saves the primary filing document, a checksum-matched manifest and accession-filtered XBRL facts. The provenance session verified this on `sec2`. Qualitative excerpts, richer research semantics and a model-backed real-company decision remain Phase 2 work.
 
-## Original trading plan assessment
+## Original trading plan assessment (historical)
 
-| Phase | Current implementation | Remaining work / exit check |
+| Phase | Implementation at review time | Remaining work recorded at review time |
 | --- | --- | --- |
 | 0 — Connectivity | SpacetimeDB CLI/SDK 2.10.2, local published database, generated bindings, persistent client tokens. Alpaca adapter reads account, positions, paginated open orders, and selected quotes using fixed hosts and GET only. Account and quote rows persist atomically. | Run the actual Alpaca paper-account read with credentials and an entitled feed; confirm response parsing and resulting records. Synthetic fixture snapshots do not satisfy this check. |
 | 1 — Swarm core | 19 tables; owner grants; role-gated reducers; typed durable messages; task dependencies, atomic versioned claims, 60-second leases and renewals; snapshot-before-work and reconnect reconciliation. Three roles support rules or structured Claude/Codex inference. Trade decisions and proposals commit atomically and accept identical retries. | Scoped read views, authorization for private account/order consumers, run membership, deployment authentication, and recovery/error improvements. Local coordination/restart checks passed. A Codex three-worker fixture run completed; Claude inference has not passed. |
 | 2 — Research | Sources, dated facts, thesis citations, skeptic challenges, explicit trade/abstain/revise decisions, fixture ingestor. Same-symbol market observations can be cited. | SEC ingestion; artifact store and document excerpts; reporting/filing/amendment metadata; extraction and valuation quality checks; deterministic freshness rules; immutable decision-input snapshots; model/prompt/version metadata; structured catalysts, holding horizon, review dates and exit paths. A sourced real-company cycle is still missing. |
 | 3 — Risk and review | Pure deterministic evaluator with tests; separate risk authority; risk expiry, operator approval and gated reservation reducers. | Running risk worker, authorized account/order views, Alpaca clock/calendar ingestion, versioned policy storage, aggregate reservations and portfolio limits, strict input parsing, material-change invalidation, operator approval interface. No deployed proposal-to-risk-to-approval workflow exists. |
-| 4 — Paper execution | Private order/fill/reconciliation tables, unique proposal/client-order identifiers, gated order-intent reservation, update/fill reducers. | Actual paper executor; submit/lookup/cancel calls; uncertain-submission recovery; trade-update stream; partial-fill/account-activity reconciliation; validated state transitions; startup and periodic reconciliation; timeout and external-activity drills. The current Alpaca adapter cannot submit an order. |
+| 4 — Paper execution | Private order/fill/reconciliation tables, unique proposal/client-order identifiers, gated order-intent reservation, update/fill reducers. | Actual paper executor; submit/lookup/cancel calls; uncertain-submission recovery; trade-update stream; partial-fill/account-activity reconciliation; validated state transitions; startup and periodic reconciliation; timeout and external-activity drills. The adapter inspected at review time could not submit an order. |
 | 5 — Position monitoring | Thesis invalidation text and stored position snapshots are foundations. | Scheduled/event-triggered thesis review, position-to-thesis linkage, hold/reduce/exit proposals and exit checks through the same risk/approval path. No position-monitor service exists. |
 | 6 — Evaluation and operations | Metric/reconciliation tables, logs, setup docs and local fixture checks. | Automated metrics and cost collection, benchmarks, decision-quality review, portfolio reports, dashboard/alerts, deployment supervision, failure drills, backup/restore and reproducible CI checks. |
 
-There is no operator dashboard or approval screen. The `run` schema currently stores only ID, goal, status and creation time; the planned universe, policy version, model budget and cadence are not durable run configuration. Dedicated valuation and portfolio analysts have not been implemented; the first analyst/skeptic/coordinator combination is intentional and sufficient to prove coordination.
+At review time there was no operator dashboard or approval screen. The reviewed `run` schema stored only ID, goal, status and creation time; the planned universe, policy version, model budget and cadence were not durable run configuration. Dedicated valuation and portfolio analysts had not been implemented; the first analyst/skeptic/coordinator combination was intentional and sufficient to prove coordination.
 
 ## Evidence and checks
 
@@ -90,7 +92,7 @@ This track is separate from the Alpaca phases and follows `GAME_AGENT_IMPLEMENTA
 - **Linux game control is missing:** the current worker rejects non-macOS platforms and uses macOS capture/input APIs. Linux VM lifecycle support does not imply Linux agent support.
 - **Reliability limit:** held input uses normal-path cleanup and bounded sequences; forced termination of the native helper has no independent input-release watchdog. The game token budget is checked around completed requests and can overshoot by one inference. Fix and verify these before concurrent/unattended game runs.
 
-## Next implementation work
+## Next implementation work recorded by the review (historical)
 
 1. Complete the Phase 0 real Alpaca paper-account/feed read and the live risk-worker check with configured credentials. Local reducer fixtures do not satisfy broker connectivity acceptance.
 2. Complete Phase 2 research acceptance on real SEC evidence: usable filing excerpts, valuation/catalyst context, holding horizon, review/exit conditions and a model-backed thesis/challenge/decision trace. Define the pilot universe, cadence, benchmark, entitlements and limits.
@@ -100,3 +102,5 @@ This track is separate from the Alpaca phases and follows `GAME_AGENT_IMPLEMENTA
 6. Add the Phase 6 operator trace/dashboard, evaluation/benchmark reports, monetary cost accounting, alerts, deployment supervision and backup/restore drill.
 
 Phase 1 is locally accepted. Game work remains a separate track: prove one running client’s capture, input, model loop and termination before scaling the fleet.
+
+Current replacements for this list are tracked explicitly: connectivity (`trading-connectivity-acceptance`), sourced model research (`trading-qualitative-evidence`, `trading-team-roles`, `trading-model-acceptance`), live risk (`trading-risk-live-acceptance`), broker acceptance (`trading-paper-order-acceptance`), position review (`trading-position-reviews`), and evaluation/operations (`trading-evaluation-alerts`, `trading-ops-deployment`, `trading-live-demo-guide`). The executor, operator cancellation, trade-update stream, dashboards, CI-style isolated checks, and backup/restore drill were implemented after the original assessment; their existence does not satisfy the remaining credentialed exit checks.
