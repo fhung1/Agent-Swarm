@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { selectEvidence, assertPromptBudget, EVIDENCE_LIMITS, MAX_PROMPT_CHARS } from './evidence.ts';
+import { selectEvidence, assertNarrativeCitations, assertPromptBudget, EVIDENCE_LIMITS, MAX_PROMPT_CHARS } from './evidence.ts';
 import { analystPrompt, toPublishThesisArgs, type SourceView, type FactView, type ObservationView } from './roles.ts';
 import { PermanentWorkError } from '../work-errors.ts';
 
@@ -73,4 +73,33 @@ test('selection reserves space for a skeptic thesis reference in the reducer pro
   const selected=selectEvidence([filing],rows,[]);
   assert.ok(selected.refs.length+129<=4096);
   assert.ok(selected.allowedIds.size+1<=50);
+});
+
+test('fresh SEC filings require all supported narrative sections and their citations',()=>{
+  const asOf = new Date(Date.now() - 2 * 86_400_000).toISOString();
+  const annual: SourceView = { id:'annual-sec', symbol:'QFIX', kind:'10-K', uri:'https://www.sec.gov/Archives/edgar/data/1/annual.htm', asOf };
+  const narrative: FactView[] = [
+    ['business','business excerpt with enough text to establish useful filing context.'],
+    ['risk_factors','risk factors excerpt with enough text to describe a material business risk.'],
+    ['management_discussion','management discussion excerpt with enough text to describe operating results.'],
+  ].map(([section,value])=>({ id:`annual-sec.${section}`, sourceId:annual.id, symbol:annual.symbol,
+    metric:`filing_${section}_01`, value:value.repeat(2), unit:'text', period:'Item; accession; accepted date', quality:'ok' }));
+  const selected = selectEvidence([annual], narrative, []);
+  assert.deepEqual(selected.narrativeRefs, {
+    business:['annual-sec.business'], risk_factors:['annual-sec.risk_factors'],
+    management_discussion:['annual-sec.management_discussion'],
+  });
+  assert.doesNotThrow(()=>assertNarrativeCitations('annual-sec.business,annual-sec.risk_factors,annual-sec.management_discussion',selected.narrativeRefs));
+  assert.throws(()=>assertNarrativeCitations('annual-sec.business,annual-sec.management_discussion',selected.narrativeRefs),/risk factors/);
+
+  assert.throws(()=>selectEvidence([annual],narrative.filter(fact=>fact.metric!=='filing_business_01'),[]),/missing a fresh business/);
+});
+
+test('stale SEC evidence fails closed before thesis selection',()=>{
+  const stale: SourceView = { id:'stale-sec', symbol:'QFIX', kind:'10-Q', uri:'https://www.sec.gov/Archives/edgar/data/1/stale.htm',
+    asOf:new Date(Date.now() - 401 * 86_400_000).toISOString() };
+  const narrative: FactView[] = ['risk_factors','management_discussion'].map(section=>({ id:`stale-sec.${section}`,
+    sourceId:stale.id,symbol:stale.symbol,metric:`filing_${section}_01`,value:'A sufficiently long stale filing excerpt with cited context.',
+    unit:'text',period:'Item; accession; accepted date',quality:'ok' }));
+  assert.throws(()=>selectEvidence([stale],narrative,[]),/older than 400 days/);
 });

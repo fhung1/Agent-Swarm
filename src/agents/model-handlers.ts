@@ -4,7 +4,7 @@ import { recordId } from '../ids.js';
 import { accountedAsk, PROMPT_VERSION } from './accounted-ask.js';
 import { isPermanent } from '../work-errors.js';
 import type { Ask } from './llm.js';
-import { selectEvidence, assertPromptBudget } from './evidence.js';
+import { selectEvidence, assertNarrativeCitations, assertPromptBudget } from './evidence.js';
 import {
   ANALYST_SYSTEM, AnalystOutput, COORDINATOR_SYSTEM, CoordinatorOutput, SKEPTIC_SYSTEM, SkepticOutput,
   analystPrompt, coordinatorPrompt, skepticPrompt, toCritiqueMessageArgs, toDecisionArgs, toProposalArgs,
@@ -57,14 +57,14 @@ export async function modelWriteThesis(ask: Ask, conn: DbConnection, task: Task,
   const thesisId = recordId('thesis.', task.id);
   // A resumed task may already have published its thesis; do not pay for a second model call.
   if (!conn.db.myThesis.id.find(thesisId)) {
-    const { sources, facts, observations, omitted, allowedIds: allowed, refs } = evidenceFor(conn, runId, task.symbol);
+    const { sources, facts, observations, omitted, allowedIds: allowed, refs, narrativeRefs } = evidenceFor(conn, runId, task.symbol);
     if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
     const prompt = analystPrompt(task.symbol, task.objective, sources, facts, observations, omitted);
     assertPromptBudget(ANALYST_SYSTEM,prompt);
     const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(AnalystOutput, ANALYST_SYSTEM,
       prompt);
     await conn.reducers.publishThesis(
-      toPublishThesisArgs(output, { thesisId, runId, taskId: task.id, symbol: task.symbol }, allowed));
+      toPublishThesisArgs(output, { thesisId, runId, taskId: task.id, symbol: task.symbol }, allowed, narrativeRefs));
   }
   if (!conn.db.myMessage.id.find(recordId('', thesisId, '.claim'))) await conn.reducers.postMessage({
     id: recordId('', thesisId, '.claim'), runId, taskId: task.id, symbol: task.symbol, recipientRole: 'coordinator',
@@ -111,6 +111,8 @@ export async function modelDecide(
     let summary = existing ? { outcome: existing.outcome, rationale: existing.rationale } : undefined;
     let proposalNote = '';
     if (!summary) {
+      const currentEvidence = evidenceFor(conn, runId, thesis.symbol);
+      assertNarrativeCitations(thesis.evidenceRefs, currentEvidence.narrativeRefs);
       let input = conn.db.myDecisionInput.id.find(ids.decisionId);
       if (!input) {
         const critiques = [...conn.db.myMessage.iter()]

@@ -4,6 +4,24 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex — SEC narrative evidence
+
+- **Status:** complete; board task `trading-qualitative-evidence` (push when finished).
+- **Work completed:** The SEC ingestor now extracts bounded, deterministic excerpts from substantive filing sections: Item 1, 1A, and 7 for 10-Ks; Item 1A and 2 for 10-Qs. It saves a content-addressed narrative artifact, records source-linked excerpt facts with SEC accession and acceptance time, and lists the artifact and fact IDs in the existing filing manifest. Evidence selection fails permanently for a fresh SEC archive filing that lacks required excerpts or is older than 400 days. Analysts must cite the selected risk-factor and management-discussion excerpts, plus the business excerpt when available; the coordinator rechecks this before a trade decision.
+- **Files / references:** `src/sec-ingestor.ts`, `src/sec-narrative.ts`, `src/agents/evidence.ts`, `src/agents/model-handlers.ts`, `src/agents/roles.ts` and their tests.
+- **Checks run:** `npm run typecheck`, `npm run build`, `git diff --check`, and bundled Node tests for narrative extraction and evidence selection: 10 passing tests. `npm test` is unavailable with the current Node 20 runner because its literal `src/**/*.test.ts` glob is not expanded; the targeted bundled test command avoids that runner limitation.
+- **Open issues:** Existing SEC sources can gain narrative facts on a rerun, but their manifests retain the prior artifact reference because sources are immutable. The operator docs sentence was sent to the session holding the README branding lock. No provider, SEC network, or broker request was made for this task.
+- **Next steps:** Rerun `npm run ingest:sec` in an active SEC run after publishing to attach fresh narrative facts; `trading-sec-updates` covers amendments and event-driven filings.
+
+## 2026-10-03 — merge-fix — Visible Factorio demo
+
+- Status: in progress; task `factorio-live-launch` (push when finished).
+- User goal: launch ten agents in actual Factorio, using a separate gameplay board on the shared message-board feature; provide a local-agent setup prompt afterward.
+- Scope: demo launcher/workers, remote join and operator guide. Coordinating with codexq (runtime/bridge) and codex-factorio (shared board); isolated worktree `/tmp/quant-factorio-live`.
+- Checks: pending live production; matching client OS/version requested asynchronously.
+- Next: integrate owners' tested branches, launch ten workers, verify resource production and publish join instructions.
+- Other session handoff: [codex-factor](docs/handoffs/codex-factor.md) records completed policy/Factorio contract and active research scheduler work.
+
 ## 2026-10-03 — Codex (merge-fix) — Resolve interrupted rebase
 
 - **Status:** complete; board task `resolve-rebase` (push when finished).
