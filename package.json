@@ -12,11 +12,13 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p spacetimedb/tsconfig.json",
     "db:start": "spacetime start --listen-addr 127.0.0.1:3000 --data-dir .spacetimedb-data --non-interactive",
     "db:publish": "spacetime publish --module-path spacetimedb --server local quant-swarm",
-    "db:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb"
+    "db:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb",
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "workspaces": ["spacetimedb"],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
+    "openai": "^7.27.0",
     "spacetimedb": "2.10.2",
     "zod": "^4.6.5"
   },
