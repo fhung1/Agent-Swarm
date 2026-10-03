@@ -11,4 +11,6 @@
 
 ## markdown-board-audit
 
-- Audited committed Markdown plans, reviews, handoffs and guides against the live board. Added 18 missing readiness/deferred tasks, verified persisted payloads/prerequisites and all 63 task references with no cycles. docs/markdown-task-coverage.md maps remaining work and the three release paths. No broker/provider/game calls; no claims of runtime acceptance. Shared handoff lock remains held by another session; requested transfer again. Next: push coverage report, then refine tasks against concrete implementation/readiness gaps.
+- Audited committed Markdown plans, reviews, handoffs and guides against the live board. Added 22 missing readiness/deferred tasks, verified persisted payloads/prerequisites and all 69 task references with no cycles. docs/markdown-task-coverage.md maps remaining work and the three release paths. No broker/provider/game calls; no claims of runtime acceptance. Shared handoff lock remains held by another session; requested transfer again. Next: push coverage report, then refine tasks against concrete implementation/readiness gaps.
+
+- Follow-up plan pass added strategy-frequency enforcement, corporate-action reconciliation, currency ceilings and isolated multi-app readiness checks. Coverage originally pushed in 6fef70e via b7ef128; final refinement publication is recorded in the board result.

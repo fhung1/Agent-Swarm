@@ -12,6 +12,10 @@ All tracked Markdown at the audit snapshot was inventoried, including plans, BAC
 | IMPLEMENTATION_PLAN Phase 0: real read-only account/data check | `trading-connectivity-acceptance`; credentials/account/feed choices tracked in `trading-pilot-choices` |
 | Phase 1: identities, scoped views, claims, leases, replay and recovery | Implemented; `scripts/check-phase-one.ts`, `scripts/check-all.ts`, review follow-up and pushed `resolve-rebase` results record local acceptance. Deployment identity remains `trading-ops-deployment`. |
 | Phase 2: narrative evidence, valuation/portfolio roles, real sourced model cycle | `trading-qualitative-evidence`, `trading-team-roles`, `trading-model-acceptance` |
+| Versioned maximum order frequency, allowed order types/TIF and no-trade strategy constraints | `trading-strategy-contract` |
+| Corporate actions/symbol changes with blocked submissions pending reconciliation/review | `trading-corporate-actions` |
+| Enforced currency ceilings in addition to token budgets | `inference-spend-enforcement` (shared integration with game budgets) |
+| Unified isolated test/run readiness with explicit prerequisite blockers | `multi-app-readiness-check` |
 | New/amended filings and recurring research, missing from initial backlog | `trading-sec-updates`, `trading-research-scheduler` |
 | Phase 3: risk rules and freshness | Local authoritative gate implemented (`spacetimedb/src/risk.ts`, `risk-gate.ts`, regression/process checks); actual service acceptance is `trading-risk-live-acceptance` |
 | Phase 4: trade updates, cancellation, partial/uncertain fills, external activity, live order reconciliation | `trading-order-stream`, `trading-operator-cancel`, `trading-paper-order-acceptance` |
@@ -44,13 +48,14 @@ All tracked Markdown at the audit snapshot was inventoried, including plans, BAC
 
 ## Added tasks
 
-The audit added these 18 tasks; existing backlog/package tasks were preserved:
+The audit added these 22 tasks; existing backlog/package tasks were preserved:
 
-- Trading: `trading-pilot-choices`, `trading-risk-live-acceptance`, `trading-research-scheduler`, `trading-sec-updates`, `trading-ops-deployment`, `trading-dashboard-acceptance`, `trading-live-demo-guide`.
+- Trading: `trading-pilot-choices`, `trading-risk-live-acceptance`, `trading-research-scheduler`, `trading-sec-updates`, `trading-ops-deployment`, `trading-dashboard-acceptance`, `trading-live-demo-guide`, `trading-strategy-contract`, `trading-corporate-actions`.
 - Minecraft: `minecraft-pilot-choices`, `minecraft-live-demo-guide`.
 - Factorio: `factorio-acceptance-review`, `factorio-gameplay-swarm`, `factorio-sharing-eval`.
 - Deferred: `factorio-client-join`, `factorio-desktop-adapter`, `vision-vm-runtime`, `vision-linux-isolation`, `optional-track-selection`.
 - Documentation: `docs-current-state`.
+- Shared acceptance/budgets: `multi-app-readiness-check`, `inference-spend-enforcement`.
 
 Each carries source references, concrete deliverables, acceptance criteria, dependencies where enforceable, and the literal “push when finished” instruction. The board accepts one prerequisite: additional required gates are explicit in task details and the checklist below. A ready claim does not mean all release conditions are satisfied. Deferred children remain open behind blocked prerequisites because the board cannot block an unclaimable dependent task; they are not ready to execute.
 
@@ -58,12 +63,12 @@ Each carries source references, concrete deliverables, acceptance criteria, depe
 
 | Application | Minimum gates before reporting ready |
 | --- | --- |
-| Paper trading | Operator-selected valid pilot; real account/feed connectivity; fresh authoritative risk-service checks; sourced model cycle; trade-update/cancel and timeout/restart/partial/external-activity evidence; actual reconciled paper order; scoped dashboard/control checks; scheduler/review/alert coverage; reproducible guide and chosen deployment/backup procedure. No live credentials or endpoint. |
+| Paper trading | Operator-selected valid pilot; real account/feed connectivity; fresh authoritative risk-service checks; sourced model cycle; trade-update/cancel and timeout/restart/partial/external-activity evidence; actual reconciled paper order; scoped dashboard/control checks; scheduler/review/alert coverage; authoritative frequency/strategy and currency limits; corporate-action reconciliation; reproducible guide and chosen deployment/backup procedure. No live credentials or endpoint. |
 | Minecraft | Resolved pilot budgets/goal; operator EULA and supported private server; ten idle joins; bounded command/model checks; private game-board audit; ten-agent run without orchestrator; information-mode comparison; recovery; visible licensed-client/operator guide replay. |
 | Factorio | Version/scenario contract; real runtime and action receipts; durable board identity/claims; journals/reservations/recovery; verified plates; ten workers; dashboard pause/stop; F3 fault suite and independent visible demo. F4 readiness additionally needs freeplay chain, bounded attempt evidence and final runbook. An honest failed rocket report never proves victory. |
 
 ## Verification and limitations
 
-Read back the persisted task table after additions: **63 total records**, all **18 new task payloads and prerequisite links** verified, all prerequisite IDs exist, and the graph is acyclic. Later concurrent edits may change counts/status. Existing Factorio IDs and BACKLOG tasks were matched to records; cancelled aliases map to active replacements, not lost requirements. The audit did not run game clients, broker orders or provider inference, and does not reuse draft code as acceptance evidence. Source-level pilot checks are recorded separately in `docs/handoffs/codex-queue.md`.
+Read back the persisted task table after additions: **69 total records**, all **22 new task payloads and prerequisite links** verified, all prerequisite IDs exist, and the graph is acyclic. Later concurrent edits may change counts/status. Existing Factorio IDs and BACKLOG tasks were matched to records; cancelled aliases map to active replacements, not lost requirements. The audit did not run game clients, broker orders or provider inference, and does not reuse draft code as acceptance evidence. Source-level pilot checks are recorded separately in `docs/handoffs/codex-queue.md`.
 
 Next planning passes should turn concrete failures from acceptance runs into narrow follow-up tasks, rather than declaring readiness from this inventory alone. Keep the three final demo/release tasks open until their required evidence exists.
