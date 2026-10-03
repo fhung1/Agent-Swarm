@@ -7,6 +7,8 @@ import {
   paperOrderIdFor,
 } from './agents/execution.js';
 import { recordId } from './ids.js';
+import { submissionBlock } from './agents/submission.js';
+import { parseRiskPolicy, pendingIntentsFor } from './agents/risk-review.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 
 // Paper executor: submits risk-passed proposals to Alpaca's paper trading API and keeps the order ledger reconciled.
@@ -115,6 +117,8 @@ async function reject(conn: DbConnection, order: PaperOrderRow, account: string,
 async function submit(conn: DbConnection, order: PaperOrderRow, account: string, issues: string[]): Promise<void> {
   const proposal = [...conn.db.myTradeProposal.iter()].find(p => p.id === order.proposalId);
   if (!proposal) { issues.push(`${order.id}: proposal ${order.proposalId} not visible`); return; }
+  const blocked = beforeSubmission(conn, order, account);
+  if (blocked) { console.log(`${order.id}: new submission blocked: ${blocked}`); return; }
   const bookkeeping = submits.get(order.id) ?? { attempts: 0, lastAt: 0 };
   submits.set(order.id, { attempts: bookkeeping.attempts + 1, lastAt: Date.now() });
   try {
@@ -127,6 +131,7 @@ async function submit(conn: DbConnection, order: PaperOrderRow, account: string,
       // A refused resubmission may be the broker rejecting a duplicate of an order that already exists.
       const existing = await getOrderByClientId(credentials!, order.clientOrderId);
       if (existing) return recordBrokerState(conn, order, existing, issues);
+      if (bookkeeping.attempts > 0) { issues.push(`${order.id}: refusal after earlier attempts remains uncertain until reconciled`); return; }
       return reject(conn, order, account, String((error as Error).message));
     }
     // duplicate: the order exists under our client order ID; the next lookup records it.
@@ -144,7 +149,8 @@ async function settle(conn: DbConnection, order: PaperOrderRow, account: string,
   const lastAt = bookkeeping?.lastAt ?? order.submittedAt.toDate().getTime();
   if (bookkeeping && Date.now() - lastAt < ABSENCE_GRACE_MS) return; // too soon to treat absence as "never placed"
   if ((bookkeeping?.attempts ?? 0) >= MAX_SUBMIT_ATTEMPTS) {
-    return reject(conn, order, account, `no broker order after ${MAX_SUBMIT_ATTEMPTS} submissions`);
+    issues.push(`${order.id}: submission remains uncertain after ${MAX_SUBMIT_ATTEMPTS} attempts; retaining exposure for reconciliation`);
+    return;
   }
   await submit(conn, order, account, issues);
 }
@@ -172,7 +178,7 @@ async function reserveNew(conn: DbConnection, account: string): Promise<void> {
 }
 
 async function cycle(conn: DbConnection): Promise<void> {
-  if (!ready || cycling || [...conn.db.myAgent.iter()].find(a => a.identity.equals(conn.identity!))?.role !== 'executor') return;
+  if (!ready || connection !== conn || !conn.isActive || cycling || [...conn.db.myAgent.iter()].find(a => a.identity.equals(conn.identity!))?.role !== 'executor') return;
   cycling = true;
   const issues: string[] = [];
   try {
@@ -190,8 +196,8 @@ async function cycle(conn: DbConnection): Promise<void> {
         // Pausing or closing a run cancels its open orders; the broker's answer arrives through the next refresh.
         const runStatus = runs.get(proposals.get(order.proposalId)?.runId ?? '');
         if (runStatus !== 'active' && !cancelRequested.has(order.id)) {
-          cancelRequested.add(order.id);
           const accepted = await cancelOrder(credentials!, order.alpacaOrderId);
+          cancelRequested.add(order.id);
           console.log(`Run ${runStatus ?? 'unknown'}: cancel ${order.id} ${accepted ? 'requested' : 'refused (no longer cancelable)'}`);
         }
         const broker = await getOrder(credentials!, order.alpacaOrderId);
@@ -213,6 +219,38 @@ async function cycle(conn: DbConnection): Promise<void> {
   } finally {
     cycling = false;
   }
+}
+
+function beforeSubmission(conn: DbConnection, order: PaperOrderRow, account: string): string | undefined {
+  try {
+    const proposal = [...conn.db.myTradeProposal.iter()].find(p => p.id === order.proposalId);
+    const reservation = [...conn.db.myRiskReservation.iter()].find(r => r.proposalId === order.proposalId);
+    if (!proposal || !reservation) return 'Proposal or reservation missing';
+    const config = [...conn.db.myRunConfig.iter()].find(c => c.runId === proposal.runId);
+    const policyRow = [...conn.db.myRiskPolicy.iter()].find(p => p.id === config?.policyId);
+    const snapshot = [...conn.db.myAccountSnapshot.iter()].filter(s => s.accountId === account)
+      .sort((a,b) => Number(b.capturedAt.microsSinceUnixEpoch - a.capturedAt.microsSinceUnixEpoch))[0];
+    const quotes = [...conn.db.myMarketObservation.iter()].filter(q => q.snapshotId === snapshot?.id);
+    const quote = quotes.find(q => q.symbol === proposal.symbol);
+    const clock = [...conn.db.myMarketClock.iter()].find(c => c.accountId === account);
+    const risk = [...conn.db.myRiskDecision.iter()].find(r => r.proposalId === proposal.id);
+    if (!policyRow || !snapshot || !quote || !clock || policyRow.accountId !== account) return 'Current risk inputs missing or account mismatch';
+    const now = new Date();
+    const proposals = new Map([...conn.db.myTradeProposal.iter()].map(p => [p.id,{...p,createdAt:p.createdAt.toDate()}]));
+    const decisions = new Map([...conn.db.myRiskDecision.iter()].map(r => [r.proposalId,{...r,expiresAt:r.expiresAt.toDate()}]));
+    const orders = new Map([...conn.db.myPaperOrder.iter()].map(o => [o.proposalId,o]));
+    const reconciliation = [...conn.db.myReconciliation.iter()].filter(r => r.accountId === account)
+      .sort((a,b) => Number(b.capturedAt.microsSinceUnixEpoch-a.capturedAt.microsSinceUnixEpoch))[0];
+    const clockAge = now.getTime()-clock.asOf.toDate().getTime();
+    return submissionBlock({ connected:ready && connection === conn && conn.isActive,
+      authorized:[...conn.db.myAgent.iter()].some(a => a.identity.equals(conn.identity!) && a.role==='executor'),
+      accountId:account,reservationAccountId:reservation.accountId,policyId:policyRow.id,snapshotId:snapshot.id,quoteId:quote.id,
+      reconciliationStatus:reconciliation?.status,risk:risk && {...risk,expiresAt:risk.expiresAt.toDate()},policy:parseRiskPolicy(policyRow.policyJson),
+      input:{ proposal:{...proposal,createdAt:proposal.createdAt.toDate()}, runStatus:[...conn.db.myRun.iter()].find(r=>r.id===proposal.runId)?.status??'',
+        now,marketOpen:clock.isOpen && clockAge>=0 && clockAge<=60000, quote:{...quote,asOf:quote.asOf.toDate()},
+        quotes:quotes.map(q=>({...q,asOf:q.asOf.toDate()})),account:{...snapshot,status:snapshot.accountStatus,capturedAt:snapshot.capturedAt.toDate()},
+        pendingIntents:pendingIntentsFor(proposal.id,account,[...conn.db.myRiskReservation.iter()],proposals,decisions,orders,now) } });
+  } catch(error) { return `Cannot validate submission: ${String(error)}`; }
 }
 
 // Record a reconciliation whenever the set of discrepancies changes, and once at startup.
@@ -272,6 +310,8 @@ function connect(): void {
         .subscribe([
           'SELECT * FROM my_agent', 'SELECT * FROM my_run', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
           'SELECT * FROM my_risk_reservation', 'SELECT * FROM my_paper_order', 'SELECT * FROM my_fill',
+          'SELECT * FROM my_run_config', 'SELECT * FROM my_risk_policy', 'SELECT * FROM my_account_snapshot',
+          'SELECT * FROM my_market_observation', 'SELECT * FROM my_market_clock', 'SELECT * FROM my_reconciliation',
         ]);
     })
     .onConnectError((_ctx, error) => scheduleReconnect(error))
