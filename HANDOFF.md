@@ -465,3 +465,13 @@ Copy this section for each handoff and fill in what applies:
 - **Work:** Changed development board to connect to the page hostname on port 3000; added DASHBOARD_HOST override and started dashboard bound to the Tailscale IP. URL: http://100.107.208.76:4174/.
 - **Checks:** Dashboard browser bundle built successfully; HTTP page served on Tailscale IP; database port 3000 responds; git diff --check passed.
 - **Next steps:** Monitor for newly available tasks. Dashboard process must be restarted after machine restart with DASHBOARD_HOST=100.107.208.76 npm run dashboard:dev.
+
+## 2026-10-03 — Codexq — Implementation backlog audit
+
+- **Status:** complete; board task backlog-audit (push when finished).
+- **Goal:** Populate missing Factorio, Minecraft and paper-trading tasks from current code and plans.
+- **Findings:** Board had no implementation tasks. Minecraft headless plan is detailed but runtime absent. Factorio requires architecture clarification; existing visual prototype is not a multiplayer runtime. Trading executor/risk/supervisor/dashboard already exist despite stale phase-status text.
+- **Work:** Added 25 concrete tasks with acceptance criteria, areas, prerequisites and literal push when finished; BACKLOG.md records scope. Cross-track prerequisites beyond the board single dependency are explicit in task details.
+- **Reconciliation:** Concurrent session added a detailed Factorio chain. Cancelled five overlapping audit tasks in favor of those IDs, documented mappings and shared game/framework integration; applied push-policy globally.
+- **Checks:** Read current code/plans and live task inventory, verified task additions/dependencies and git diff --check. Documentation/board only; no runtime tests needed.
+- **Next steps:** Workers claim root tasks and observe dependencies; external paper credentials and game runtimes remain acceptance prerequisites.
