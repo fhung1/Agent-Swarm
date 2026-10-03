@@ -59,6 +59,23 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** This runtime lacks Alpaca credentials; live connectivity/execution checks remain blocked. Other board tasks belong to remaining sessions. Dashboard/supervisor work is concurrent and unchanged by this session.
 - **Next steps:** Resume monitoring only if owner requests it. The board records both resolved tasks and the stopped monitor status. This session made no commit.
 
+## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
+
+- **Status:** implementation and checks complete; publishing under board task `dashboard-runtime-acceptance`
+- **Work completed:** Six real-Chrome acceptance groups in final source: accepted/partial/final order status, no fill on acceptance, live grants/revocation, source/fact/decision/frozen-input/risk trace, hostile text/URL handling, pause/resume DB writes, and actual DB restart preserving the browser token.
+- **Files / references:** `dashboard/config.ts`, dashboard app/dev/server/README, `scripts/check-dashboard.ts`, `docs/dashboard-acceptance.md`; board task `dashboard-runtime-acceptance`.
+- **Checks run:** Six real-Chrome groups passed in the final runner, including exact accepted/partial/final status assertions. Dashboard and strict runner TypeScript checks and source diff checks passed. All database/browser files, identities, keys and ports are isolated and cleaned up; no shared database changes or provider/broker requests.
+- **Publication:** Commit/push evidence is recorded in the board result. Other sessions' module/executor/research changes are excluded from this task's commit.
+- **Next steps:** Run `npm run check:dashboard` for regression acceptance. Per-order cancel depends on its separate board task. Dashboard files will be released for the alerts integration after publication.
+
+## 2026-10-03 — Codex (cedar) — SEC filing excerpts
+
+- **Status:** implementation and acceptance checks complete; publication commit recorded on the board after push
+- **Goal:** Complete `sec-filing-excerpts`; push when finished.
+- **Work completed:** Risk-factor/MD&A extraction with document checksums, normalized offsets, deterministic <=240-character excerpt fact chunks and richer bounded artifacts. Verified source-matched reads stay inside SEC_ARTIFACT_DIR, reject symlinks and report unavailable/truncated evidence. Legacy manifests use original verified documents. Citation/prompt budgets remain enforced; inference audit uses `research-v3-sec-excerpts`.
+- **Checks:** Trimmed real AAPL 10-K/10-Q fixtures and corruption/path/offset/budget checks pass. Isolated database replay of saved real AAPL/MSFT filings produced 4 sources/56 facts including 16 excerpts; verified all offsets, recovered an interrupted ingestion and proved duplicate-free reruns. Full typecheck/build/unit checks pass; exact publication checkout checks are recorded on the board. No new SEC download or provider/broker calls.
+- **Limitations:** Heading matching is heuristic, full excerpt cap 3,200 characters per section, hot fact cap 240 characters/two chunks per section. Fresh SEC endpoint acceptance still needs a real contact User-Agent. Shared worker artifact access is required.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:
@@ -77,6 +94,15 @@ Copy this section for each handoff and fill in what applies:
 ```
 
 ## Handoffs
+
+## 2026-10-03 — Codex (repo_reader) — Development board runtime acceptance
+
+- **Status:** in progress; push when finished
+- **Goal:** Verify development board message/task controls in a real browser, extending the previously verified live reads.
+- **Work completed:** Added shared isolated browser/database infrastructure and a two-tab development-board fixture for message routing, competing claims, dependencies, block/release/takeover/completion, locks and recovery. Trading acceptance now uses the same helper.
+- **Files / references:** `scripts/dashboard-test-env.ts`, `scripts/check-dashboard.ts`, `scripts/check-dev-dashboard.ts`, planned `docs/dev-dashboard-acceptance.md`; board task `dev-dashboard-runtime-acceptance`.
+- **Checks / findings:** Strict runner/helper TypeScript passes. Initial Chrome runs exposed background-tab animation-frame throttling in the test driver; the driver now activates the inspected tab. Trading regression against concurrently edited dashboard/backend needs diagnosis; browser failures now include rendered text and runtime exceptions.
+- **Next steps:** Finish both browser runs, document observed results, and commit/push each completed task through an independent checkout while the shared Git index is reserved. No Factorio work.
 
 ## 2026-10-03 — Codex (repo_reader) — Trading dashboard runtime acceptance
 

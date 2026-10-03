@@ -26,7 +26,8 @@
     "executor": "node dist/executor.js",
     "swarm": "node scripts/swarm.ts",
     "dashboard": "node dashboard/server.mjs",
-    "dashboard:dev": "node dashboard/server.mjs --development"
+    "dashboard:dev": "node dashboard/server.mjs --development",
+    "check:dashboard": "node scripts/check-dashboard.ts"
   },
   "workspaces": [
     "spacetimedb"
