@@ -6,6 +6,7 @@ import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { recordId } from './ids.js';
+import { SecClient } from './sec-client.js';
 
 // Records the latest 10-K and 10-Q for each symbol as sources, with reported XBRL facts for each filing's own period.
 // Each source's checksum is the SHA-256 of the filing document its URI names. Its artifact is a manifest that points to
@@ -15,7 +16,6 @@ const TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
 const SUBMISSIONS_PREFIX = 'https://data.sec.gov/submissions/';
 const COMPANY_FACTS_PREFIX = 'https://data.sec.gov/api/xbrl/companyfacts/';
 const ARCHIVES_PREFIX = 'https://www.sec.gov/Archives/edgar/data/';
-const REQUEST_GAP_MS = 200; // SEC fair access allows 10 requests per second; stay well below it.
 const FORMS = ['10-K', '10-Q'];
 
 // Metric name → us-gaap concepts in preference order. Companies tag the same line item differently.
@@ -59,23 +59,13 @@ function parseSymbols(value: string): string[] {
   return result;
 }
 
-let lastRequest = 0;
+let secClient: SecClient | undefined;
 async function getSec(url: string, userAgent: string, accept = 'application/json'): Promise<Buffer> {
-  if (url !== TICKERS_URL && !url.startsWith(SUBMISSIONS_PREFIX) && !url.startsWith(COMPANY_FACTS_PREFIX) &&
-      !url.startsWith(ARCHIVES_PREFIX)) {
-    throw new Error(`SEC route is not allow-listed: ${url}`);
-  }
-  const wait = lastRequest + REQUEST_GAP_MS - Date.now();
-  if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
-  lastRequest = Date.now();
-  const response = await fetch(url, {
-    method: 'GET',
-    redirect: 'error',
-    headers: { 'user-agent': userAgent, accept },
-    signal: AbortSignal.timeout(30_000),
+  secClient ??= new SecClient({ userAgent,
+    cacheDir: process.env.SEC_CACHE_DIR ?? path.join(os.homedir(), '.local', 'share', 'quant-swarm', 'cache', 'sec'),
+    onEvent: event => console.log(`SEC ${event.kind}: ${event.url}` + (event.delayMs === undefined ? '' : ` (retry in ${event.delayMs}ms)`)),
   });
-  if (!response.ok) throw new Error(`SEC GET ${url} failed (${response.status})`);
-  return Buffer.from(await response.arrayBuffer());
+  return secClient.get(url, accept);
 }
 
 async function getSecJson(url: string, userAgent: string): Promise<JsonObject> {
