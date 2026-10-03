@@ -48,6 +48,21 @@ The valid `ALPACA_DATA_FEED` values are `sip`, `iex`, `delayed_sip`, `boats`, `o
 
 The account snapshot includes account ID/status, cash, buying power, equity, and JSON arrays for positions and open orders. It is private and requires authorized access; scoped read views are not implemented yet. Market observations are public in the current local-development schema, so keep the database host local as described below. Grant the adapter only `market_data`; order-writing reducers still require the separate `executor` role.
 
+### SEC filings ingestor
+
+The SEC ingestor records research evidence from EDGAR, the SEC's public filings database. It does not trade or contact a broker. For each symbol it records the latest 10-K and 10-Q as sources in a run, then adds up to ten reported facts per filing: revenue, net income, operating income, operating cash flow, diluted EPS, total assets, total liabilities, stockholders' equity, cash, and long-term debt. Each fact is the value the filing reports for its own period end. Duration facts use the shortest period ending then (the quarter in a 10-Q), except cash flow, which 10-Qs report only year to date; the stored `period` shows the exact dates and XBRL concept. A source's `as_of` is the SEC acceptance time, when the filing became public. The raw company-facts JSON is saved under `~/.local/share/quant-swarm/artifacts/sec/`; each source stores its SHA-256 checksum and path.
+
+The SEC requires a contact email in the User-Agent of every request. Set it in your shell; it is sent only to SEC hosts:
+
+```sh
+npm run build
+npm run ingest:sec -- --register
+spacetime call --server local quant-swarm grant_agent <SEC_INGESTOR_IDENTITY> ingestor
+RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Quant Swarm research you@example.com' npm run ingest:sec
+```
+
+The run must exist and be active. `SYMBOLS` accepts 1–20 tickers. The ingestor makes only `GET` requests to a fixed set of SEC routes, spaced 200 ms apart to stay under the SEC's 10-requests-per-second limit. Rerunning it for the same run skips filings and facts already recorded. To use real filings in the [three-agent thesis check](#three-agent-thesis-check), ingest into the run instead of using the fixture ingestor. The skeptic then passes the evidence and the coordinator records `abstain`, because no valuation model exists yet.
+
 ### Run a worker
 
 After publishing the module and building the worker, start a worker in another terminal:

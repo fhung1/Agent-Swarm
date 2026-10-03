@@ -24,6 +24,17 @@ Copy this section for each handoff and fill in what applies:
 ## Handoffs
 
 <!-- Add each new handoff below this line, newest first. -->
+## 2026-10-03 — Claude Code — SEC EDGAR ingestor (Phase 2 start)
+
+- **Status:** complete and verified; committed
+- **Goal:** Replace fixture evidence with real SEC filings.
+- **Work completed:** Added `src/sec-ingestor.ts` (`npm run ingest:sec`). For each symbol it records the latest 10-K and 10-Q as sources (`as_of` = SEC acceptance time) and up to 10 reported XBRL facts per filing for that filing's own period end. It stores the raw company-facts JSON under `~/.local/share/quant-swarm/artifacts/sec/` with its SHA-256 as the source checksum. It makes GET requests only, to allow-listed SEC routes 200 ms apart, requires `SEC_USER_AGENT` with a contact email, and is safe to rerun. It uses the existing `add_source`/`add_fact` reducers; no module change. Added the build entry, npm script, and README section.
+- **Files / references:** `src/sec-ingestor.ts`, `package.json`, `README.md` "SEC filings ingestor".
+- **Checks run:** typecheck and build pass. Live run `sec1`: AAPL and MSFT 10-K and 10-Q recorded, 10 facts each. AAPL Q3 FY2026 revenue 109,417,000,000 matches the quarterly EDGAR value, not year-to-date. A rerun added nothing. Three workers with rules logic on `sec1`: the thesis cited both filings and 20 facts, the skeptic passed, and the coordinator recorded `abstain`.
+- **Open issues:** Only the latest original 10-K/10-Q are taken (no amendments or 8-Ks); filings older than EDGAR's "recent" list are ignored. Operating cash flow in a 10-Q is year to date. The worker still subscribes to all `fact` rows. A stray open task `thesis-aapl-sec` (objective `x`) was created by mistake in local test run `phase1`; there is no delete reducer.
+- **Next steps:** Point model-backed analysts at `sec1`-style runs. Consider an 8-K/new-filing trigger for Phase 5 reviews.
+- **Context:** The SEC contact for local runs is the owner's address, supplied only via the `SEC_USER_AGENT` env var, not stored in the repo.
+
 ## 2026-10-03 — Claude Code — Phase 1 part A: protocol and three-role worker
 
 - **Status:** part A committed and verified; part B (scoped read views) waits until the AI roles are wired into `src/worker.ts`
