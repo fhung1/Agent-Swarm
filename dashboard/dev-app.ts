@@ -256,7 +256,7 @@ function connect(): void {
   const current = ++generation;
   ready = false;
   connection = DbConnection.builder()
-    .withUri('ws://127.0.0.1:3000')
+    .withUri(`ws://${window.location.hostname}:3000`)
     .withDatabaseName('quant-swarm-coord')
     .withToken(stored(TOKEN_KEY))
     .onConnect((conn, _identity, token) => {

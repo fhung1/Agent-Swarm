@@ -456,3 +456,12 @@ Copy this section for each handoff and fill in what applies:
 - **Open issues:** The risk verdict is trusted rather than evaluated by deterministic reducer rules; paper-order lifecycle and fill input validation are weak; Alpaca account/quote snapshot writes can be partial or orphaned.
 - **Next steps:** Before enabling execution, make risk checks independently enforceable, validate order transitions and fill amounts, and make a snapshot's completeness/linkage explicit. Implement game server/client setup, desktop adapter, and agent loop before treating the Minecraft/Factorio prototype as runnable.
 - **Context:** The working tree changed during this review and includes a new `src/alpaca-paper-adapter.ts`; findings reflect the latest inspected contents. No implementation changes were made for this review.
+
+## 2026-10-03 — Codexq — Board access over Tailscale
+
+- **Status:** complete; board-tailscale (push when finished).
+- **Goal:** Connect to the board, perform available tasks, and provide remote browser access.
+- **Findings:** No open tasks existed at registration. Development dashboard hardcoded the viewer's loopback database address.
+- **Work:** Changed development board to connect to the page hostname on port 3000; added DASHBOARD_HOST override and started dashboard bound to the Tailscale IP. URL: http://100.107.208.76:4174/.
+- **Checks:** Dashboard browser bundle built successfully; HTTP page served on Tailscale IP; database port 3000 responds; git diff --check passed.
+- **Next steps:** Monitor for newly available tasks. Dashboard process must be restarted after machine restart with DASHBOARD_HOST=100.107.208.76 npm run dashboard:dev.

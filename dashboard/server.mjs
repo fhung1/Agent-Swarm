@@ -24,7 +24,7 @@ const build = await context({
   logLevel: 'info',
 });
 await build.watch();
-const server = await build.serve({ host: '127.0.0.1', port: development ? 4174 : 4173, servedir: directory });
+const server = await build.serve({ host: process.env.DASHBOARD_HOST ?? '127.0.0.1', port: development ? 4174 : 4173, servedir: directory });
 console.log(`${development ? 'Development board (quant-swarm-coord)' : 'Trading dashboard (quant-swarm)'}: http://${server.host}:${server.port}`);
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
