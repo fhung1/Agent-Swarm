@@ -15,6 +15,33 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 - **Open issues:** Procedure is offline, macOS/Linux and SpacetimeDB 2.10.2 only. Restore drill uses committed module code to avoid concurrent schema edits. Protect credential-bearing bundles; separately retain publisher credentials, deployment configuration and API keys. Absolute artifact paths must be preserved.
 - **Next steps:** None for this task. Before unattended operation, schedule a coordinated offline backup and retain it on protected recovery storage; paper account reconciliation remains required after recovery.
 
+## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
+
+- **Status:** complete; publication requested by the owner (commit/push recorded on board task `push-dev-dashboard`)
+- **Work completed:** Second dashboard at `http://127.0.0.1:4174`, started by `npm run dashboard:dev`, using generated `quant-swarm-coord` bindings and a separate browser token. Shared CSS/layout, live sessions/tasks/messages/locks, task filters/actions and message composer. Trading dashboard uses port 4173 and `quant-swarm`. No backend schema changes.
+- **Checks run:** Dashboard TypeScript pass, both browser bundles build, HTML/JS/CSS HTTP 200, headless Chrome live data/filter/draft-focus checks with no runtime exceptions, and source diff check pass. The exact staged snapshot also passes dashboard/module typechecks and builds both browser bundles in a separate temporary directory.
+- **Publication:** Commit includes both completed dashboard instances and the operator-directory view required by the trading console. Other sessions' CI, evidence selection and in-progress schema/worker edits remain unstaged. Shared Git-index access coordinated through the board.
+- **Next steps:** None. Development server remains running; restart with the startup command.
+
+## 2026-10-03 — Codex (repo_reader) — Repository orientation and dashboard diagnosis
+
+- **Status:** diagnosis complete for the existing local dashboard; specific failing URL not supplied
+- **Goal:** Understand the repository, connect to the coordination board, and explain why the message-board website is not working.
+- **Findings:** Registered `repo_reader` on `quant-swarm-coord`; registration/status work outside the sandbox (inside it, the SpacetimeDB CLI panics during macOS system-configuration access). The local database listens on port 3000 and the dashboard server on port 4173. Both the dashboard HTML and JavaScript return HTTP 200. `dashboard/app.ts` connects to `quant-swarm`, the paper-trading database; it does not connect to the separate `quant-swarm-coord` board.
+- **Checks run:** Board register/status/inbox, listening-port inspection, dashboard source inspection, and HTTP checks for `/` and `/dist/app.js`.
+- **Open issues:** Initial diagnosis is superseded by the completed development dashboard above. A first-time trading operator browser still needs a role grant before run data appears.
+- **Next steps:** Open development at port 4174 or trading at port 4173. Repository orientation remains partial after the user's dashboard question redirected this turn.
+
+## 2026-10-03 — Codex (codex-plan) — Local operator dashboard
+
+- **Status:** implementation complete
+- **Goal:** Resolve board task `operator-dashboard`, then stop at the owner's request.
+- **Work completed:** Built a localhost browser console with a saved SpacetimeDB identity, scoped `my_*` subscriptions, live run/task/message timeline, authenticated sender roles, linked SEC facts/sources, thesis and skeptic detail, decisions and frozen inputs, risk checks, orders/fills, account snapshots and reconciliations. Added pause/resume controls; cancel remains disabled pending an executor cancel-request path. Added an operator-only `my_agent_directory` view with indexed role reads, published the module locally, regenerated bindings, and documented setup.
+- **Files / references:** `dashboard/`, `spacetimedb/src/{schema,views}.ts`, `src/module_bindings/`, `package.json`, `README.md`; board task `operator-dashboard`.
+- **Checks run:** Dashboard TypeScript check and browser esbuild bundle passed; local module publish and binding generation passed. No browser fixture run or new tests were performed in this task.
+- **Open issues:** A live browser check of timeline updates and a fresh ungranted identity remains for later acceptance. The versioned pilot contract is a separate board task, so the dashboard labels it pending. Broker order cancel remains disabled until its reducer/workflow exists.
+- **Next steps:** Start with `npm run dashboard`, grant the browser identity `operator` and account access, then check it against a fixture run. Owner requested that this session stop after this issue.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:

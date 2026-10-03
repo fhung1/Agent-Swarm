@@ -36,6 +36,10 @@ export const myAgent = spacetimedb.view({ name: 'my_agent', public: true }, t.ar
   const row = ctx.db.agent.identity.find(ctx.sender);
   return row && role(ctx) ? [row] : [];
 });
+// The operator needs the authenticated sender's current role to label the audit timeline.
+// Keep other workers limited to their own my_agent row.
+export const myAgentDirectory = spacetimedb.view({ name: 'my_agent_directory', public: true }, t.array(agent.rowType), ctx =>
+  role(ctx) === 'operator' ? [...ROLES, 'revoked'].flatMap(granted => [...ctx.db.agent.role.filter(granted)]) : []);
 export const myRun = spacetimedb.view({ name: 'my_run', public: true }, t.array(run.rowType), ctx =>
   runs(ctx).flatMap(id => { const row = ctx.db.run.id.find(id); return row ? [row] : []; }));
 export const myTask = spacetimedb.view({ name: 'my_task', public: true }, t.array(task.rowType), ctx =>

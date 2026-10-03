@@ -75,6 +75,7 @@ import UpdatePaperOrderReducer from "./update_paper_order_reducer";
 // Import all table schema definitions
 import MyAccountSnapshotRow from "./my_account_snapshot_table";
 import MyAgentRow from "./my_agent_table";
+import MyAgentDirectoryRow from "./my_agent_directory_table";
 import MyApprovalRow from "./my_approval_table";
 import MyDecisionRow from "./my_decision_table";
 import MyDecisionInputRow from "./my_decision_input_table";
@@ -116,6 +117,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MyAgentRow),
+  myAgentDirectory: __table({
+    name: 'my_agent_directory',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyAgentDirectoryRow),
   myApproval: __table({
     name: 'my_approval',
     indexes: [

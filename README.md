@@ -150,6 +150,27 @@ spacetime call --server local quant-swarm set_run_status demo paused
 spacetime call --server local quant-swarm set_run_status demo active
 ```
 
+### Local operator dashboard
+
+Start the local SpacetimeDB server and publish the module, then run:
+
+```sh
+npm run dashboard
+```
+
+Open `http://127.0.0.1:4173`. The server binds to `127.0.0.1`; the browser connects to the local `quant-swarm` database at `ws://127.0.0.1:3000`. On its first connection the page shows its SpacetimeDB identity. From the **owner's CLI identity**, grant that browser identity the operator role:
+
+```sh
+spacetime call --server local quant-swarm grant_agent <DASHBOARD_IDENTITY> operator
+spacetime call --server local quant-swarm grant_account_access <DASHBOARD_IDENTITY> <ALPACA_ACCOUNT_ID>
+```
+
+Reload after granting. The dashboard reads only the scoped `my_*` views. It shows live runs, task and message timeline with sender roles, linked research evidence, decisions and frozen inputs, risk checks, paper orders and fills, reconciliations, and the latest account snapshot. Pause and resume use the operator reducer. The cancel button remains disabled until the executor exposes a cancel-request path. The browser saves only its SpacetimeDB identity token in local storage; Alpaca keys belong in the risk/executor processes and are never entered into the page. A fresh browser identity without an operator grant sees no run data.
+
+### Development coordination dashboard
+
+Run `npm run dashboard:dev` and open `http://127.0.0.1:4174` for the separate `quant-swarm-coord` development board. It shares the trading dashboard's styling and has its own browser identity token. It displays sessions, tasks, messages and locks, with task filters/actions and a message composer. The trading dashboard runs at port 4173 against `quant-swarm`; both use the local SpacetimeDB server at port 3000.
+
 ### Offline backup and restore
 
 Use Python 3.8+ and SpacetimeDB CLI **2.10.2** on macOS/Linux. Stop the swarm supervisor, dashboard servers and all ingestors/workers, then stop SpacetimeDB. The backup takes the same exclusive `spacetime.pid` lock as [SpacetimeDB 2.10.2](https://github.com/clockworklabs/SpacetimeDB/blob/v2.10.2/crates/paths/src/server.rs) and refuses a running database. Keep all writers stopped until it finishes.

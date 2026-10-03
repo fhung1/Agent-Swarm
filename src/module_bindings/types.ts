@@ -165,6 +165,9 @@ export type MyAccountSnapshot = __Infer<typeof MyAccountSnapshot>;
 export const MyAgent = __t.object("MyAgent", {});
 export type MyAgent = __Infer<typeof MyAgent>;
 
+export const MyAgentDirectory = __t.object("MyAgentDirectory", {});
+export type MyAgentDirectory = __Infer<typeof MyAgentDirectory>;
+
 export const MyApproval = __t.object("MyApproval", {});
 export type MyApproval = __Infer<typeof MyApproval>;
 

@@ -20,7 +20,9 @@
     "check:phase-one": "esbuild scripts/check-phase-one.ts --bundle --platform=node --format=esm --outfile=dist/check-phase-one.mjs && node dist/check-phase-one.mjs",
     "risk": "node dist/risk-worker.js",
     "executor": "node dist/executor.js",
-    "swarm": "node scripts/swarm.ts"
+    "swarm": "node scripts/swarm.ts",
+    "dashboard": "node dashboard/server.mjs",
+    "dashboard:dev": "node dashboard/server.mjs --development"
   },
   "workspaces": [
     "spacetimedb"

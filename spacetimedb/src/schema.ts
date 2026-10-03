@@ -4,7 +4,7 @@ export const ownerConfig = table({ name: 'owner_config' }, {
   key: t.string().primaryKey(), owner: t.identity(),
 });
 export const agent = table({ public: false }, {
-  identity: t.identity().primaryKey(), role: t.string(), status: t.string(), lastSeen: t.timestamp(),
+  identity: t.identity().primaryKey(), role: t.string().index('btree'), status: t.string(), lastSeen: t.timestamp(),
 });
 export const run = table({ public: false }, {
   id: t.string().primaryKey(), goal: t.string(), status: t.string().index('btree'), createdAt: t.timestamp(),
