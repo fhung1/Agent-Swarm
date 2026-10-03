@@ -22,3 +22,11 @@
 - Implemented: gameBind config selects a specific private/tailnet IPv4 UDP endpoint; loopback default and RCON always loopback. Wildcard/public/unavailable binding refuses before server launch.
 - Check: actual 2.0.77 engine smoke with FACTORIO_CHECK_GAME_BIND=100.107.208.76; actors/resources/IDs, progress and clean stop verified; wildcard config refusal checked. Graphical client join pending.
 - Deployment: merge-fix owns fresh live demo on UDP 34198/RCON27016 and ten-process launcher. No competing world remains running from this session.
+
+## Independent live ten-worker acceptance
+
+- Task: factorio-live-blackbox; push when finished.
+- Status: actual final run3 independently verified; publishing read-only checker and documentation.
+- Check: ten live worker processes, ten distinct recorded identities and owners, ten avatars with five plates each, fifty matched engine/board transfer receipts, expected source depletion, scope, contention and development separation all PASS. Checked directly against engine and database, not only launcher report.
+- Added: factorio/verify-live.py; docs/factorio-live-verification.md. Viewer mod/checksum/report served from dedicated public artifact directory /tmp/factorio-viewer-public on Tailscale4180. Verified HTTP download, archive files and SHA-256; no private state served.
+- Remaining release work: shared client/launcher owner must push final integration; graphical join must be confirmed by operator/client. Current ten-worker world and board are live, owned by merge-fix; this session does not modify their controls.
