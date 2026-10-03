@@ -1,5 +1,53 @@
 # VM fleet setup
 
+There are two fleet providers:
+
+| Provider | Host | Guests | Command |
+| --- | --- | --- | --- |
+| Tart | Local Apple silicon Mac | macOS or Linux | `python3 vm_fleet/tart_fleet.py` |
+| libvirt | Remote Linux host over SSH | Prepared desktop VMs | `python3 vm_fleet/fleet.py` |
+
+Both providers manage VM lifecycle. Neither installs the game, launches the agent, or starts a multiplayer server. The [macOS game agent](../src/game/README.md) can run directly on the host Mac or inside a prepared, logged-in macOS guest. A Linux guest still needs a Linux screenshot/input adapter before it can run this agent. Game rendering and agent control have not yet been checked in either guest type.
+
+## Local Tart fleet on a Mac
+
+Install [Tart](https://tart.run/quick-start/) on an Apple silicon Mac with a logged-in graphical session. Tart uses Apple's Virtualization framework and supports macOS and Linux VM images. The `plan` command works without Tart installed; VM commands require `tart` on `PATH`. The fleet starts GUI VMs with `tart run`, leaving its process in the background and a graphical window on the Mac desktop.
+
+Create **one stopped local template** for each guest OS you want to use. Tart's [quick start](https://tart.run/quick-start/) describes cloning a base image and creating Linux or macOS images. For example, clone an existing macOS image into the template name before configuring its desktop and game:
+
+```sh
+tart clone ghcr.io/cirruslabs/macos-sequoia-base:latest qs-macos-template
+tart run qs-macos-template
+# Set up the guest, then shut it down before cloning it with the fleet.
+```
+
+For a Linux guest, use a Linux ARM64 image and a separate template name, such as `qs-linux-template`. A VM image only provides the operating system: install and launch the game in its graphical desktop yourself. Give every clone its own game profile and credentials; do not save API keys or personal game credentials in a reusable template. For a macOS guest, install Node.js, Swift command-line tools, this repo's dependencies, and the game; grant the guest's terminal Screen Recording and Accessibility permissions before running the game agent. For a Linux guest, the current macOS helper will not run there.
+
+Copy one example config and leave its `count` at `1` for the first run:
+
+```sh
+cp vm_fleet/tart-macos.example.json vm_fleet/tart-macos.json
+# Or: cp vm_fleet/tart-linux.example.json vm_fleet/tart-linux.json
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json plan
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json up --wait-ip
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json status
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json stop
+```
+
+Substitute `vm_fleet/tart-linux.json` throughout for the Linux fleet. `create` clones without starting; `start` starts existing clones; `up` creates and starts them. `--wait-ip` waits up to three minutes for Tart to report an IP; omit it if you only need the GUI. Each guest gets a `*.tart.log` file beside the state file. Open the guest's Tart window for manual setup and game inspection. The fleet never starts the game or model loop automatically.
+
+To remove **stopped** clones and their disks after reviewing `status`:
+
+```sh
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json destroy --yes
+```
+
+The local state file and a marker inside each Tart VM directory bind managed names to this fleet. If a clone is missing or replaced outside the fleet, `start`, `stop`, and `destroy` refuse to act on it. The state also records the template directory identity so an interrupted `create` will not silently resume against a replaced template. Keep the state file until `destroy` finishes. Tart stores local VMs under `TART_HOME/vms` (normally `~/.tart/vms`); changing `TART_HOME` while a fleet exists causes a state mismatch. Tart's `stop` attempts graceful termination, then can force the VM process after its 90-second timeout. The fleet does not delete logs.
+
+On this 16 GB MacBook Air, measure one game's VM performance and memory use before increasing `count`. Tart's VM defaults and available guest graphics do not establish that Minecraft or Factorio will run acceptably in a VM. Guest input, screenshot capture, game authentication, and per-agent coordination still require their own checks.
+
+## Remote libvirt fleet on Linux
+
 `fleet.py` manages a named group of desktop VMs on a remote Linux host that uses libvirt. It connects to the host over SSH, clones a prepared libvirt template, and can start, stop, and report on the clones. The intended use is one isolated graphical game client per agent, as described in [the game-agent plan](../GAME_AGENT_IMPLEMENTATION_PLAN.md).
 
 This tool manages VM lifecycle only. It does not install or configure the host, create the template, install a game, expose a desktop to an agent, or run the agent workers. It does not require a GPU, but it also does not provide GPU acceleration; check graphics performance with one guest before choosing a host or scaling up.

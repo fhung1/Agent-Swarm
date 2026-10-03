@@ -169,11 +169,28 @@ The research and order reducers enforce a separate flow: ingestors add sources a
 
 This is a **local development module**. Its public agent, run, task, message, source, fact, thesis, decision, and trade-proposal tables are readable by any client that can connect to the host; reducer role checks control writes but do not scope reads. Keep the host local until identity-scoped read views and deployment authentication are implemented. Private tables hold owner configuration, task lease timers, account snapshots, risk decisions, approvals, paper orders, fills, reconciliations, and run metrics; consumers need authorized views before they can subscribe to those records. Broker credentials must stay in the future paper execution adapter, never in SpacetimeDB.
 
-## Game-agent VM fleet
+## One-client Factorio and Minecraft prototype on macOS
 
-The repository can clone and manage desktop VMs, but **it cannot run Minecraft or Factorio agents yet**. There is no game server launcher, screenshot/input adapter, model loop, or game worker. The steps below start a prepared desktop VM; you must install and launch the game and connect to a server yourself.
+The repo has a one-client Mac prototype for Factorio and Minecraft Java Edition. It captures the foreground game window, asks a vision model for a short action sequence, applies bounded mouse/keyboard input, and records before/after screenshots. Minecraft adds relative camera movement, simultaneous movement keys, and crosshair mouse-button actions. Build it with `npm run game:build`, then follow [the Mac setup and run guide](src/game/README.md). Live gameplay has not yet been verified on this Mac.
 
-### Start one prepared desktop VM
+## Game-agent VM fleets
+
+The repo has a **local Tart fleet for macOS and Linux guests on an Apple silicon Mac** and a **remote libvirt fleet on a Linux host**. Both clone and manage prepared desktop VMs for later multi-client work. They do not install Minecraft or Factorio, launch a game server, or start game agents inside the guests. The macOS game agent can be installed and run inside a macOS guest; Linux guest agent control still needs a Linux desktop adapter. See the [full VM fleet guide](vm_fleet/README.md).
+
+### Start one local Tart VM on a Mac
+
+Install Tart, prepare and stop a local macOS or Linux template, and copy the matching example config. For a macOS guest:
+
+```sh
+cp vm_fleet/tart-macos.example.json vm_fleet/tart-macos.json
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json plan
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json up --wait-ip
+python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json status
+```
+
+Use `vm_fleet/tart-linux.example.json` and `vm_fleet/tart-linux.json` for a Linux guest. Tart opens a GUI for each started VM. The guest must have its game and agent runtime configured separately. Shut down the managed guests with `python3 vm_fleet/tart_fleet.py --config vm_fleet/tart-macos.json stop` (or the Linux config).
+
+### Start one remote libvirt desktop VM
 
 This requires a remote Linux host with `qemu:///system` libvirt access over SSH and a shut-off desktop template. Prepare the template with a desktop, the game client you want to use, and QEMU Guest Agent. The manager does not install or configure any of these. See the [full VM fleet setup guide](vm_fleet/README.md) for host and template requirements.
 
@@ -197,4 +214,4 @@ Open the VM's graphical console with your libvirt/desktop access tools. Start th
 python3 vm_fleet/fleet.py --config vm_fleet/config.json stop
 ```
 
-This is infrastructure for the later game-agent application, separate from the current SpacetimeDB worker demo. Factorio is the planned first vision-control target; Minecraft is a later adapter. See the [game-agent plan](GAME_AGENT_IMPLEMENTATION_PLAN.md) for the missing implementation phases and intended architecture.
+This is infrastructure for the later multi-client game-agent application, separate from the current SpacetimeDB worker demo. The one-client macOS adapter supports both games on the host or in a macOS guest; Linux guest control and multiplayer coordination are still planned. See the [game-agent plan](GAME_AGENT_IMPLEMENTATION_PLAN.md) for the remaining phases and intended architecture.

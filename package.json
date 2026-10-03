@@ -7,6 +7,8 @@
     "build": "esbuild src/worker.ts src/alpaca-paper-adapter.ts --bundle --platform=node --outdir=dist --format=esm",
     "worker": "node dist/worker.js",
     "alpaca:read": "node dist/alpaca-paper-adapter.js",
+    "game:build": "esbuild src/game/agent.ts --bundle --platform=node --outfile=dist/game/agent.js --format=esm && swiftc src/game/macos-desktop.swift -o dist/game/macos-desktop",
+    "game:run": "node dist/game/agent.js",
     "typecheck": "tsc --noEmit && tsc --noEmit -p spacetimedb/tsconfig.json",
     "db:start": "spacetime start --listen-addr 127.0.0.1:3000 --data-dir .spacetimedb-data --non-interactive",
     "db:publish": "spacetime publish --module-path spacetimedb --server local quant-swarm",
@@ -14,7 +16,9 @@
   },
   "workspaces": ["spacetimedb"],
   "dependencies": {
-    "spacetimedb": "2.10.2"
+    "@anthropic-ai/sdk": "^0.131.0",
+    "spacetimedb": "2.10.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

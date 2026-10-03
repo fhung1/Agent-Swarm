@@ -6,7 +6,7 @@ Run ten independent AI players concurrently in one Factorio or Minecraft multipl
 
 The game server exists to host the shared world. The operator may administer it and evaluate outcomes, but its internal state is never exposed to an agent. SpacetimeDB is the coordination and audit backbone described in [AGENTS.md](AGENTS.md); it carries tasks, agent-authored messages, and action traces, not privileged game telemetry. This is a later application of the swarm core. It does not change the Alpaca paper-trading pilot in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**First target: Factorio.** Its top-down view and screen-coordinate building make the first vision-only control experiment simpler than Minecraft's three-dimensional camera and aiming. The desktop, agent, and coordination layers should be game-neutral so that Minecraft can use the same system later. This is an engineering hypothesis to test in the one-client pilot, not a claim that Factorio will perform better on every task.
+**First pilot target: Factorio.** Its top-down view and screen-coordinate building make the first vision-only control experiment simpler than Minecraft's three-dimensional camera and aiming. The one-client Mac control prototype now has profiles for both games, including bounded relative camera movement for Minecraft. This is an engineering hypothesis to test in the pilot, not a claim that Factorio will perform better on every task.
 
 ## System architecture
 
@@ -41,7 +41,9 @@ One worker owns exactly one client and one desktop for the duration of a run. Th
 3. Isolate displays and input. Prefer one Linux VM or graphical session per client for the first implementation. Containers with separate X displays are an optimization to assess only after graphics and input isolation pass the two-client test. Do not put ten clients in ten windows on one ordinary desktop: focus, mouse capture, and held keys would collide.
 4. The orchestrator can run on the current Mac while game clients run on one or more graphics-capable hosts. Benchmark CPU, RAM, graphics utilization, frame rate, and server tick performance with 1, 2, 5, then 10 clients. Choose the number of hosts from measured headroom; no fixed VM size is assumed.
 
-The first game-neutral libvirt fleet manager is in [vm_fleet/README.md](vm_fleet/README.md). It clones a prepared desktop template, starts and stops guest VMs, reports status, and can read guest IPs through QEMU Guest Agent. It does not prepare the template or provide the screenshot/input adapter.
+The [VM fleet managers](vm_fleet/README.md) support local Tart VMs on Apple silicon Macs (macOS or Linux guests) and remote libvirt VMs on Linux hosts. They clone a prepared desktop template, start and stop guest VMs, and report status and available guest IPs. They do not prepare the template or provide guest screenshot/input control.
+
+A separate [one-client Mac Factorio and Minecraft prototype](src/game/README.md) implements a local screenshot/input adapter and model loop for the Phase 1 experiment. Its local build passes, but the live gameplay exit check has not run because neither game client is available on the development Mac. Minecraft camera response remains unverified in a live client. It does not yet connect to the VM fleet or publish game actions to SpacetimeDB.
 
 ## Desktop adapter contract
 
@@ -140,7 +142,7 @@ For capacity planning, if ten agents each make one model request every `T` secon
 
 ## Decisions to lock before implementation
 
-1. First game and scenario. Factorio is the recommended vision-only pilot; Minecraft remains the second adapter.
+1. First game and scenario. Factorio is the recommended vision-only pilot; Minecraft's one-client Mac adapter is implemented but awaits live gameplay verification.
 2. Strict screen-only mode or swarm communication mode.
 3. Game client host: local machines, VMs, or a dedicated graphics host; decide after a one-client graphics test.
 4. Agent model, per-agent spend ceiling, screenshot cadence, and maximum action duration.

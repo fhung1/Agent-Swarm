@@ -1,0 +1,8 @@
+{
+  "provider": "tart",
+  "guest_os": "macos",
+  "template": "qs-macos-template",
+  "name_prefix": "qs-mac-agent",
+  "count": 1,
+  "state_file": ".tart-macos-fleet-state.json"
+}
