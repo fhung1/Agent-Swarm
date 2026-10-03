@@ -1,4 +1,4 @@
-# Quant Swarm implementation review — 2026-10-03
+# Agent Swarm implementation review — 2026-10-03
 
 The repo has a working local research swarm: separate worker identities, leased tasks, persisted evidence and messages, analyst/skeptic/coordinator model handlers, and durable decisions and bounded proposals. It also has a read-only Alpaca adapter, an initial pure risk evaluator, order-ledger reducers, a separate one-client macOS game agent, and two VM lifecycle providers.
 

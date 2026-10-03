@@ -1,4 +1,4 @@
-# Quant Swarm: Alpaca paper trading implementation plan
+# Agent Swarm: Alpaca paper trading implementation plan
 
 SpacetimeDB and Alpaca paper trading are confirmed choices. There is no human approval in the trade path: the deterministic risk gate is the only gate before paper execution. The first strategy, symbols, risk settings, and model provider are open decisions. This plan describes a research-led US equity pilot that can be narrowed or changed without replacing the swarm core.
 
