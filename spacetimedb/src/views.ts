@@ -1,6 +1,6 @@
 import { t, type ViewCtx, type InferSchema } from 'spacetimedb/server';
 import spacetimedb, { agent, run, task, message, source, fact, thesis, decision, tradeProposal,
-  marketObservation, accountSnapshot, riskDecision, approval, paperOrder, orderCancelRequest, fill, reconciliation,
+  marketObservation, accountSnapshot, riskDecision, approval, paperOrder, orderCancelRequest, tradeUpdate, fill, reconciliation,
   runMetric, runConfig, riskPolicy, marketClock, riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory,
   paperSubmission, accountLedger, accountCheck } from './schema';
 import { ROLES } from './access';
@@ -85,6 +85,8 @@ export const myOrderCancelRequest = spacetimedb.view({ name: 'my_order_cancel_re
   ['operator', 'executor'].includes(role(ctx) ?? '') ? orders(ctx).flatMap(order => {
     const row = ctx.db.orderCancelRequest.orderId.find(order.id); return row ? [row] : [];
   }) : []);
+export const myTradeUpdate = spacetimedb.view({ name: 'my_trade_update', public: true }, t.array(tradeUpdate.rowType), ctx =>
+  ['operator', 'executor'].includes(role(ctx) ?? '') ? orders(ctx).flatMap(order => [...ctx.db.tradeUpdate.orderId.filter(order.id)]) : []);
 export const myFill = spacetimedb.view({ name: 'my_fill', public: true }, t.array(fill.rowType), ctx =>
   orders(ctx).flatMap(order => [...ctx.db.fill.orderId.filter(order.id)]));
 export const myPaperSubmission = spacetimedb.view({name:'my_paper_submission',public:true},t.array(paperSubmission.rowType),ctx=>

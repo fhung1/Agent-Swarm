@@ -262,6 +262,9 @@ export type MyThesis = __Infer<typeof MyThesis>;
 export const MyTradeProposal = __t.object("MyTradeProposal", {});
 export type MyTradeProposal = __Infer<typeof MyTradeProposal>;
 
+export const MyTradeUpdate = __t.object("MyTradeUpdate", {});
+export type MyTradeUpdate = __Infer<typeof MyTradeUpdate>;
+
 export const OrderCancelRequest = __t.object("OrderCancelRequest", {
   orderId: __t.string(),
   requestedBy: __t.identity(),
@@ -463,4 +466,16 @@ export const TradeProposal = __t.object("TradeProposal", {
   createdAt: __t.timestamp(),
 });
 export type TradeProposal = __Infer<typeof TradeProposal>;
+
+export const TradeUpdate = __t.object("TradeUpdate", {
+  id: __t.string(),
+  orderId: __t.string(),
+  alpacaOrderId: __t.string(),
+  event: __t.string(),
+  brokerStatus: __t.string(),
+  executionId: __t.string(),
+  brokerTimestamp: __t.timestamp(),
+  receivedAt: __t.timestamp(),
+});
+export type TradeUpdate = __Infer<typeof TradeUpdate>;
 

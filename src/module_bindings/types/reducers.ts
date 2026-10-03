@@ -37,6 +37,7 @@ import RecordReconciliationReducer from "../record_reconciliation_reducer";
 import RecordRiskDecisionReducer from "../record_risk_decision_reducer";
 import RecordRunMetricReducer from "../record_run_metric_reducer";
 import RecordTradeDecisionReducer from "../record_trade_decision_reducer";
+import RecordTradeUpdateReducer from "../record_trade_update_reducer";
 import RenewTaskLeaseReducer from "../renew_task_lease_reducer";
 import RequestOrderCancelReducer from "../request_order_cancel_reducer";
 import ReservePaperOrderReducer from "../reserve_paper_order_reducer";
@@ -80,6 +81,7 @@ export type RecordReconciliationParams = __Infer<typeof RecordReconciliationRedu
 export type RecordRiskDecisionParams = __Infer<typeof RecordRiskDecisionReducer>;
 export type RecordRunMetricParams = __Infer<typeof RecordRunMetricReducer>;
 export type RecordTradeDecisionParams = __Infer<typeof RecordTradeDecisionReducer>;
+export type RecordTradeUpdateParams = __Infer<typeof RecordTradeUpdateReducer>;
 export type RenewTaskLeaseParams = __Infer<typeof RenewTaskLeaseReducer>;
 export type RequestOrderCancelParams = __Infer<typeof RequestOrderCancelReducer>;
 export type ReservePaperOrderParams = __Infer<typeof ReservePaperOrderReducer>;

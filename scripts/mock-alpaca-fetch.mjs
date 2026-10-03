@@ -1,5 +1,11 @@
 // Loaded only by check-executor.ts. Every HTTP request is intercepted; no broker network access is possible.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { MockAgent, setGlobalDispatcher } from 'undici';
+// The executor stream now uses undici; prevent its fixture credentials from leaving this process.
+const dispatcher = new MockAgent();
+dispatcher.disableNetConnect();
+dispatcher.enableNetConnect(host => /^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host));
+setGlobalDispatcher(dispatcher);
 const file=process.env.MOCK_ALPACA_STATE;
 if(!file)throw new Error('Mock broker state path required');
 const localFetch=globalThis.fetch;

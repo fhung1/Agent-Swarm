@@ -3,11 +3,13 @@
 // Agent counts per role, model brains, and the run come from the config (copy config/swarm.example.json to the
 // ignored config/swarm.json). Secrets are read from your shell environment and never written anywhere.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, scopedProcessEnv, runPolicy, type Command, type ProcessSpec, type SwarmConfig } from '../src/swarm-plan.ts';
+import { deliverResearchCycle, planResearchCycle, type ScheduleSnapshot } from '../src/research-schedule.ts';
 
 // fileURLToPath decodes the URL, so paths with spaces ("Quant Swarm") resolve correctly.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -53,7 +55,7 @@ function identityOf(name: string): string | undefined {
 
 function spacetime(argv: string[]): string {
   try {
-    return execFileSync(CLI, argv, { env: ENV, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+    return execFileSync(CLI, argv, { env: ENV, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', timeout: 30_000 });
   } catch (error) {
     const stderr = String((error as { stderr?: string }).stderr ?? error);
     throw new Error(/Response text: (.*)/.exec(stderr)?.[1] ?? stderr.split('\n').filter(l => l.trim() && !l.includes('UNSTABLE')).slice(0, 2).join(' '));
@@ -108,11 +110,12 @@ function plan(): void {
   const processes = planProcesses(config);
   console.log(`Run ${config.runId} on ${config.server}/${config.database}`);
   for (const p of processes) {
-    const mode = p.periodicSeconds ? `every ${p.periodicSeconds}s` : p.oneShot ? 'once per research symbol' : 'continuous';
+    const mode = p.periodicSeconds ? `every ${p.periodicSeconds}s` : p.oneShot ? (config.research?.schedule ? 'each research cycle' : 'once per research symbol') : 'continuous';
     const brain = p.env.AGENT_BRAIN ? `, brain ${p.env.AGENT_BRAIN}` : '';
     console.log(`  ${p.name.padEnd(28)} ${p.role.padEnd(12)} ${mode}${brain}${identityOf(p.name) ? '' : '  (no identity yet)'}`);
   }
   const needed = [...new Set(processes.flatMap(p => p.secrets))];
+  if (config.research?.schedule) console.log(`Research schedule: every ${config.research.schedule.everySeconds}s; ${config.research.schedule.maxCycles} cadence windows; at most ${config.research.schedule.maxPendingCycles} pending cycles; Linux single-supervisor lock required.`);
   console.log(`Environment needed: ${needed.length ? needed.join(', ') : 'none'}${missingSecrets(processes).length ? `; missing now: ${missingSecrets(processes).join(', ')}` : ''}`);
   if (processes.some(p => p.env.AGENT_BRAIN === 'claude') && !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
     console.log('Note: Claude brains need ANTHROPIC_API_KEY (or an `ant auth login` profile).');
@@ -214,11 +217,31 @@ function launch(spec: ProcessSpec, extra: Record<string, string> = {}): ChildPro
     });
   }
   child.on('exit', () => stream.end());
+  child.on('error', () => stream.end());
   return child;
 }
 
 function runOnce(spec: ProcessSpec, extra: Record<string, string> = {}): Promise<number> {
-  return new Promise(resolve => launch(spec, extra).on('exit', code => resolve(code ?? 1)));
+  return new Promise(resolve => {
+    const entry = managed.get(spec.name) ?? { spec, restarts: 0, startedAt: Date.now() };
+    managed.set(spec.name, entry);
+    const child = launch(spec, extra);
+    entry.child = child;
+    entry.startedAt = Date.now();
+    writeState();
+    const timeout = setTimeout(() => {
+      console.error(`[swarm] ${spec.name} exceeded five minutes; terminating this ingestion/snapshot attempt`);
+      child.kill('SIGKILL');
+    }, 300_000);
+    const finish = (code: number) => {
+      clearTimeout(timeout);
+      if (entry.child === child) entry.child = undefined;
+      writeState();
+      resolve(code);
+    };
+    child.once('exit', code => finish(code ?? 1));
+    child.once('error', error => { console.error(`[swarm] ${spec.name}: ${error.message}`); finish(1); });
+  });
 }
 
 // Continuous processes restart with exponential backoff; the delay resets after a minute of healthy running.
@@ -270,8 +293,46 @@ async function seedResearch(config: SwarmConfig, ingestor: ProcessSpec | undefin
   }
 }
 
+function scheduleSnapshot(config: SwarmConfig): ScheduleSnapshot {
+  const tables = query(config, `SELECT * FROM run WHERE id = ${sql(config.runId)}`,
+    `SELECT * FROM task WHERE run_id = ${sql(config.runId)}`,
+    `SELECT * FROM run_config WHERE run_id = ${sql(config.runId)}`, 'SELECT * FROM decision');
+  const run = tables.run?.[0];
+  if (!run) throw new Error('Scheduled run does not exist; apply grants first');
+  const budget = tables.run_config?.[0];
+  return {
+    nowMs: Date.now(), run: { status: String(run.status), createdAtMs: micros(run.created_at) / 1000 },
+    tasks: (tables.task ?? []).map(t => ({ id: String(t.id), status: String(t.status), kind: String(t.kind),
+      objective: String(t.objective), symbol: String(t.symbol), result: String(t.result) })),
+    decisions: (tables.decision ?? []).map(d => ({ thesisId: String(d.thesis_id) })),
+    budget: budget ? { usedInferences: Number(budget.used_inferences), maxInferences: Number(budget.max_inferences),
+      usedTokens: Number(budget.used_tokens), maxTokens: Number(budget.max_tokens) } : undefined,
+  };
+}
+
+// flock releases automatically on crash; no PID files or stale-lock deletion race. This is a single-host service.
+async function lockedScheduledUp(config: SwarmConfig): Promise<void> {
+  if (process.platform !== 'linux') throw new Error('Scheduled supervisor currently requires Linux and util-linux flock');
+  fs.mkdirSync(LOG_DIR, { recursive: true, mode: 0o700 });
+  const key = createHash('sha256').update(JSON.stringify([config.server, config.database, config.runId])).digest('hex');
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('flock', ['-n', '-E', '75', path.join(LOG_DIR, `research-${key}.lock`), process.execPath,
+      fileURLToPath(import.meta.url), ...process.argv.slice(2), '--schedule-lock-held'], { cwd: ROOT, env: ENV, stdio: 'inherit', detached: true });
+    const forward = () => { try { process.kill(-child.pid!, 'SIGINT'); } catch { /* already stopped */ } };
+    process.on('SIGINT', forward); process.on('SIGTERM', forward);
+    const cleanup = () => { process.off('SIGINT', forward); process.off('SIGTERM', forward); };
+    child.once('error', error => { cleanup(); reject(new Error(`Cannot acquire scheduler lock: ${error.message}`)); });
+    child.once('exit', (code, signal) => {
+      cleanup();
+      if (code === 0 || signal === 'SIGINT') resolve();
+      else reject(new Error(code === 75 ? 'Another supervisor already owns this scheduled run' : `Scheduled supervisor exited (${signal ?? code})`));
+    });
+  });
+}
+
 async function up(): Promise<void> {
   const config = loadConfig();
+  if (config.research?.schedule && !flag('schedule-lock-held')) return lockedScheduledUp(config);
   const processes = planProcesses(config);
   const missing = missingSecrets(processes);
   if (missing.length) fail(`Missing environment variables: ${missing.join(', ')}. Export them in this shell (values are never stored).`);
@@ -294,20 +355,11 @@ async function up(): Promise<void> {
   });
   if (problems.length) fail(`Not ready:\n  ${problems.join('\n  ')}`);
 
-  const marketData = processes.find(p => p.periodicSeconds);
-  if (marketData) await runOnce(marketData); // fresh quotes before the first research cycle
-  await seedResearch(config, processes.find(p => p.oneShot));
-
-  for (const p of processes) {
-    if (p.oneShot) continue;
-    if (p.periodicSeconds) schedulePeriodic(p); else startContinuous(p);
-  }
-  writeState();
-  console.log(`[swarm] ${processes.filter(p => !p.oneShot).length} processes running for run ${config.runId}. Logs in logs/. Ctrl+C stops all.`);
-
+  let researchTimer: ReturnType<typeof setTimeout> | undefined;
   const stop = () => {
     if (stopping) return;
     stopping = true;
+    clearTimeout(researchTimer);
     console.log('[swarm] Stopping…');
     for (const m of managed.values()) m.child?.kill('SIGINT');
     const deadline = setTimeout(() => {
@@ -320,6 +372,38 @@ async function up(): Promise<void> {
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+
+  const ingestor = processes.find(p => p.oneShot);
+  const scheduled = config.research?.schedule;
+  if (scheduled) planResearchCycle(config, scheduleSnapshot(config)); // reject config drift before launching workers
+  const marketData = processes.find(p => p.periodicSeconds);
+  if (marketData && !stopping) await runOnce(marketData); // fresh quotes before the first research cycle
+  if (!scheduled && !stopping) await seedResearch(config, ingestor);
+  if (stopping) return;
+  for (const p of processes) {
+    if (p.oneShot) continue;
+    if (p.periodicSeconds) schedulePeriodic(p); else startContinuous(p);
+  }
+  if (scheduled && ingestor) {
+    const tick = async () => {
+      if (stopping) return;
+      try {
+        const snapshot = () => scheduleSnapshot(config);
+        const plan = planResearchCycle(config, snapshot());
+        console.log(`[swarm] Research: ${plan.reason}`);
+        const queued = await deliverResearchCycle(config, {
+          snapshot, stopped: () => stopping,
+          ingest: async symbol => await runOnce(ingestor, researchSymbolEnv(ingestor, symbol)) === 0,
+          create: t => call(config, 'create_task', [t.id, t.runId, t.symbol, t.kind, t.objective, t.role, t.dependsOn]),
+        });
+        for (const id of queued) console.log(`[swarm] Queued scheduled research ${id}`);
+      } catch (error) { console.error(`[swarm] Research cycle deferred: ${String(error)}`); }
+      if (!stopping) researchTimer = setTimeout(tick, Math.min(10_000, scheduled.everySeconds * 1000));
+    };
+    void tick();
+  }
+  writeState();
+  console.log(`[swarm] ${processes.filter(p => !p.oneShot).length} processes running for run ${config.runId}. Logs in logs/. Ctrl+C stops all.`);
 }
 
 // ── status ──────────────────────────────────────────────────────────────────
