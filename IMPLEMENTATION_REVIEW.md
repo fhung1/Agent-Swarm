@@ -1,4 +1,4 @@
-# Quant Swarm implementation review — 2026-10-03
+# Agent Swarm implementation review — 2026-10-03
 
 > **Historical snapshot.** Findings and line references below describe the repository at the time of this review. The follow-up table records fixes known when the review was updated, but later implementation should be read from [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [README.md](README.md), and the live `quant-swarm-coord` board. [docs/markdown-task-coverage.md](docs/markdown-task-coverage.md) maps every remaining release gate to a board task. Do not use an unresolved statement in the original findings as current architecture guidance.
 

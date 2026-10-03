@@ -6,11 +6,31 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 
 ## 2026-10-03 — Codex queue — Resolve and merge PR #2
 
-- **Status:** conflicts resolved and checks passed; publishing merge to main.
+- **Status:** merge conflicts resolved; final integration checks passed; publishing to main and then stopping at owner request.
 - **Work:** Combined cancellation tables/views/controls with paper submission and account reconciliation safety; retained both handoff histories, configurable dashboard connections plus Tailscale defaults and token recovery. Removed unfinished alert-view UI wiring because no backend alert view exists; retained alert evaluator/tests. Fixed Minecraft launcher environment typing and development browser task-ID selector; updated browser coverage for cancellation.
-- **Checks:** Full isolated check:all passed: 112 unit tests, generated bindings, typechecks/builds, structured fixtures, worker recovery/risk and executor crash/fill/reconciliation. Minecraft typecheck, 2 unit tests, worker/dashboard build and module typecheck passed. Both trading and development real-Chromium acceptance passed against isolated fixtures. Diff/conflict-marker checks passed. No real broker/provider/gameplay calls.
+- **Checks:** Initial isolated check:all passed: 112 unit tests, generated bindings, typechecks/builds, structured fixtures, worker recovery/risk and executor crash/fill/reconciliation. Minecraft typecheck, 2 unit tests, worker/dashboard build and module typecheck passed. Both trading and development real-Chromium acceptance passed against isolated fixtures. Diff/conflict-marker checks passed. No real broker/provider/gameplay calls.
 - **Policy:** Owner explicitly resumed all three applications; merged branch stop-all notes are historical. AGENTS.md now requires direct commits/pushes to main and no new PRs. This existing PR is the authorized exception.
+- **Latest-main integration:** Preserved research scheduler, trade-update stream, shared board and branding. Combined SEC narrative facts with verified excerpt artifacts; at most two narrative chunks per section keep both formats within the 40-fact paired-filing limit, with omitted characters retained in the artifact/manifest. Fixed native TypeScript test import and kept undici external to avoid ESM executor crash; mock broker now denies external stream connections. Final check:all passed with 133 unit tests, generated-binding/type/build checks, structured fixtures, process recovery/risk and mock-broker executor timeout/restart/fill/reconciliation acceptance. undici is an external runtime dependency.
+- **Stop request:** Owner requested stopping after this merge; no further tasks will be started. The session’s earlier board watcher has been stopped.
 - **Publication:** PR branch head d4ca6a3 is retained as merge parent; published merge hash and GitHub merged status will be recorded on board resolve-pr-conflicts. Concurrent shared edits were preserved using /tmp/quant-pr2-resolve.
+
+## 2026-10-03 — Codex — SEC narrative evidence
+
+- **Status:** complete; board task `trading-qualitative-evidence` (push when finished).
+- **Work completed:** The SEC ingestor now extracts bounded, deterministic excerpts from substantive filing sections: Item 1, 1A, and 7 for 10-Ks; Item 1A and 2 for 10-Qs. It saves a content-addressed narrative artifact, records source-linked excerpt facts with SEC accession and acceptance time, and lists the artifact and fact IDs in the existing filing manifest. Evidence selection fails permanently for a fresh SEC archive filing that lacks required excerpts or is older than 400 days. Analysts must cite the selected risk-factor and management-discussion excerpts, plus the business excerpt when available; the coordinator rechecks this before a trade decision.
+- **Files / references:** `src/sec-ingestor.ts`, `src/sec-narrative.ts`, `src/agents/evidence.ts`, `src/agents/model-handlers.ts`, `src/agents/roles.ts` and their tests.
+- **Checks run:** `npm run typecheck`, `npm run build`, `git diff --check`, and bundled Node tests for narrative extraction and evidence selection: 10 passing tests. `npm test` is unavailable with the current Node 20 runner because its literal `src/**/*.test.ts` glob is not expanded; the targeted bundled test command avoids that runner limitation.
+- **Open issues:** Existing SEC sources can gain narrative facts on a rerun, but their manifests retain the prior artifact reference because sources are immutable. The operator docs sentence was sent to the session holding the README branding lock. No provider, SEC network, or broker request was made for this task.
+- **Next steps:** Rerun `npm run ingest:sec` in an active SEC run after publishing to attach fresh narrative facts; `trading-sec-updates` covers amendments and event-driven filings.
+
+## 2026-10-03 — merge-fix — Visible Factorio demo
+
+- Status: in progress; task `factorio-live-launch` (push when finished).
+- User goal: launch ten agents in actual Factorio, using a separate gameplay board on the shared message-board feature; provide a local-agent setup prompt afterward.
+- Scope: demo launcher/workers, remote join and operator guide. Coordinating with codexq (runtime/bridge) and codex-factorio (shared board); isolated worktree `/tmp/quant-factorio-live`.
+- Checks: pending live production; matching client OS/version requested asynchronously.
+- Next: integrate owners' tested branches, launch ten workers, verify resource production and publish join instructions.
+- Other session handoff: [codex-factor](docs/handoffs/codex-factor.md) records completed policy/Factorio contract and active research scheduler work.
 
 ## 2026-10-03 — Codex (merge-fix) — Resolve interrupted rebase
 

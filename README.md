@@ -1,4 +1,4 @@
-# Quant Swarm backend
+# Agent Swarm backend
 
 The private headless Minecraft implementation is in [games/README.md](games/README.md), with Java/server setup, ten-worker launch, SpacetimeDB permissions and runtime checks. The graphical prototype below is a separate deferred track. Factorio headless tasks are scoped on the development board; its live setup is deferred at the owner's request.
 
@@ -55,7 +55,7 @@ The account snapshot includes account ID/status, cash, buying power, equity, and
 
 ### SEC filings ingestor
 
-The SEC ingestor records research evidence from EDGAR, the SEC's public filings database. It does not trade or contact a broker. For each symbol it records the latest 10-K and 10-Q as sources in a run, then adds up to ten reported facts per filing: revenue, net income, operating income, operating cash flow, diluted EPS, total assets, total liabilities, stockholders' equity, cash, and long-term debt. Each fact is the value the filing reports for its own period end. Duration facts use the shortest period ending then (the quarter in a 10-Q), except cash flow, which 10-Qs report only year to date; the stored `period` shows the exact dates and XBRL concept. A source's `as_of` is the SEC acceptance time, when the filing became public. Each source's checksum is the SHA-256 of the primary filing document its URI names. Its `artifact_ref` is a manifest under `~/.local/share/quant-swarm/artifacts/sec/` pointing to the saved document and that filing's XBRL facts (only entries with its accession), each with its own SHA-256.
+The SEC ingestor records research evidence from EDGAR, the SEC's public filings database. It does not trade or contact a broker. For each symbol it records the latest 10-K and 10-Q as sources in a run, then adds up to ten reported facts per filing: revenue, net income, operating income, operating cash flow, diluted EPS, total assets, total liabilities, stockholders' equity, cash, and long-term debt. It also records bounded Item 1/1A/7 excerpts from 10-K filings and Item 1A/2 excerpts from 10-Q filings as source-linked text facts. Each fact is the value the filing reports for its own period end. Duration facts use the shortest period ending then (the quarter in a 10-Q), except cash flow, which 10-Qs report only year to date; the stored `period` shows the exact dates and XBRL concept. A source's `as_of` is the SEC acceptance time, when the filing became public. Each source's checksum is the SHA-256 of the primary filing document its URI names. Its `artifact_ref` is a manifest under `~/.local/share/quant-swarm/artifacts/sec/` pointing to the saved document, its XBRL facts, and its narrative artifact (only entries with its accession), each with its own SHA-256. Fresh archive research requires risk/MD&A citations, and 10-K business citations, before a thesis or trade.
 
 The SEC requires a contact email in the User-Agent of every request. Set it in your shell; it is sent only to SEC hosts:
 
@@ -64,7 +64,7 @@ npm run build
 npm run ingest:sec -- --register
 spacetime call --server local quant-swarm grant_agent <SEC_INGESTOR_IDENTITY> ingestor
 spacetime call --server local quant-swarm grant_run_access <SEC_INGESTOR_IDENTITY> sec1
-RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Quant Swarm research you@example.com' npm run ingest:sec
+RUN_ID=sec1 SYMBOLS=AAPL,MSFT SEC_USER_AGENT='Agent Swarm research you@example.com' npm run ingest:sec
 ```
 
 The run must exist and be active. `SYMBOLS` accepts 1–20 tickers. The ingestor makes only `GET` requests to a fixed set of SEC routes, spaced 200 ms apart to stay under the SEC's 10-requests-per-second limit. Rerunning it for the same run skips filings and facts already recorded. To use real filings in the [three-agent thesis check](#three-agent-thesis-check), ingest into the run instead of using the fixture ingestor. The skeptic then passes the evidence and the coordinator records `abstain`, because no valuation model exists yet.
