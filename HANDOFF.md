@@ -4,6 +4,17 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 — Codex (cedar) — Board tasks and backup/restore
+
+- **Status:** complete; pushing at owner's request
+- **Goal:** Understand the repo, pick up available coordination-board tasks, and complete `backup-restore-drill`.
+- **Findings:** Authoritative state lives in SpacetimeDB; external workers handle inference/SEC/Alpaca with separate risk/executor authority. The local board is a separate database. Shared working tree contains concurrent work; this commit includes only cedar's recovery implementation/docs.
+- **Work completed:** Registered/claimed on the board. Added offline recovery bundles covering standalone data, artifacts, JWT signing keys and optional worker tokens. Same server lock prevents live backup; SHA-256 inventory detects corruption and source changes; restore requires fresh destinations. Documented original artifact paths, version/key preservation and pause/reconciliation before resuming trading. Added a reproducible isolated restore drill.
+- **Files / references:** `scripts/backup.sh`, `scripts/restore.sh`, `scripts/backup-store.py`, `scripts/check-backup.ts`, README offline backup/restore section.
+- **Checks run:** `node scripts/check-backup.ts` passed: seven table schemas/row sets, owner identity/authenticated pause writes, worker token and referenced artifact checksum survived recovery after originals were hidden. Live-server backup, corrupted bundle and existing-destination restore were refused. Backup-runner TypeScript, shell syntax, Python 3.8 CLI, and diff checks passed. No shared server interruption or broker/model calls.
+- **Open issues:** Procedure is offline, macOS/Linux and SpacetimeDB 2.10.2 only. Restore drill uses committed module code to avoid concurrent schema edits. Protect credential-bearing bundles; separately retain publisher credentials, deployment configuration and API keys. Absolute artifact paths must be preserved.
+- **Next steps:** None for this task. Before unattended operation, schedule a coordinated offline backup and retain it on protected recovery storage; paper account reconciliation remains required after recovery.
+
 ## Handoff template
 
 Copy this section for each handoff and fill in what applies:

@@ -150,6 +150,42 @@ spacetime call --server local quant-swarm set_run_status demo paused
 spacetime call --server local quant-swarm set_run_status demo active
 ```
 
+### Offline backup and restore
+
+Use Python 3.8+ and SpacetimeDB CLI **2.10.2** on macOS/Linux. Stop the swarm supervisor, dashboard servers and all ingestors/workers, then stop SpacetimeDB. The backup takes the same exclusive `spacetime.pid` lock as [SpacetimeDB 2.10.2](https://github.com/clockworklabs/SpacetimeDB/blob/v2.10.2/crates/paths/src/server.rs) and refuses a running database. Keep all writers stopped until it finishes.
+
+Save the entire standalone data directory (including the trading and coordination databases), research artifacts, worker tokens, and the server's JWT signing key pair to a fresh destination outside those directories:
+
+```sh
+sh scripts/backup.sh /Volumes/Recovery/quant-swarm-2026-10-03 \
+  --data-dir .spacetimedb-data \
+  --artifacts-dir "$HOME/.local/share/quant-swarm/artifacts" \
+  --tokens-dir "$HOME/.local/share/quant-swarm/tokens" \
+  --jwt-private-key "$HOME/.config/spacetime/id_ecdsa" \
+  --jwt-public-key "$HOME/.config/spacetime/id_ecdsa.pub"
+```
+
+Use the actual artifact/token directories and JWT key paths from your deployment; `SEC_ARTIFACT_DIR`, custom token paths, and `[certificate-authority]` in the standalone configuration can override the examples. Source directories must exist. Omit `--tokens-dir` if tokens are recovered separately. Backups contain credentials and private account data: keep the private bundle off the repository on protected recovery storage. The script records original paths, SHA-256 checksums, lengths, creation time, and CLI version in `manifest.json`, verifies the copy, and publishes the completed bundle by rename. Bundle directories are mode 0700 and files are mode 0600. Checksums detect corruption; they are not signatures or encryption. Retain the matching code/configuration revision and custom worker/publisher credentials separately; environment API keys and CLI login configuration are not captured.
+
+Restore with the server and workers stopped. All destination directories must be absent; preserve existing directories separately before choosing the recovery paths. The script verifies the complete bundle before installing files and refuses existing destinations:
+
+```sh
+sh scripts/restore.sh /Volumes/Recovery/quant-swarm-2026-10-03 \
+  --data-dir .spacetimedb-data \
+  --artifacts-dir "$HOME/.local/share/quant-swarm/artifacts" \
+  --tokens-dir "$HOME/.local/share/quant-swarm/tokens" \
+  --identity-dir "$HOME/.local/share/quant-swarm/recovered-server-keys"
+
+spacetime start --listen-addr 127.0.0.1:3000 --non-interactive \
+  --data-dir .spacetimedb-data \
+  --jwt-priv-key-path "$HOME/.local/share/quant-swarm/recovered-server-keys/id_ecdsa" \
+  --jwt-pub-key-path "$HOME/.local/share/quant-swarm/recovered-server-keys/id_ecdsa.pub"
+```
+
+Supply `--tokens-dir` on restore exactly when the bundle included it. Restore artifacts to the original absolute path recorded in the manifest: source `file://` references and SEC manifest paths retain that location. When moving hosts, provide the same path using a mount or restore the original layout. Start the server with the saved key pair so saved tokens retain their identity; use CLI 2.10.2 for the first recovery start. Inspect paused run state, sources and order history before starting workers. An offline backup does not pause runs for you; explicitly pause trading runs before shutdown and reconcile the paper account before resuming submission. Broker activity after the backup must be reconciled rather than replayed.
+
+Run `node scripts/check-backup.ts` for the isolated recovery drill. It builds the committed module revision, creates synthetic rows and a referenced artifact, refuses a live-server backup, hides original files, restores to fresh paths, and compares seven authoritative tables plus owner authentication and artifact checksums. It also verifies corruption and overwrite rejection. The drill uses temporary JWT keys, CLI configuration and localhost ports; it makes no broker/model calls and leaves the shared database untouched.
+
 ### Updating or resetting local state
 
 After editing module code, publish again. After changing its schema or reducers, regenerate bindings and rebuild the worker:
