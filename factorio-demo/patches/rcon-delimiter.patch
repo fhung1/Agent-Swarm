@@ -1,0 +1,11 @@
+--- a/src/factorio/rcon.ts
++++ b/src/factorio/rcon.ts
+@@ -23,7 +23,7 @@
+         const text = buffer.subarray(12,size+2).toString(); buffer = buffer.subarray(size+4);
+         if (id === -1) { finish(new Error('RCON authentication failed')); return; }
+         if (!authenticated && id === 1 && type === 2) {
+-          authenticated = true; socket.write(packet(2,2,command)); socket.write(packet(3,0,''));
++          authenticated = true; socket.write(packet(2,2,command)); socket.write(packet(3,2,'/silent-command rcon.print("agent-swarm-end")'));
+         } else if (authenticated && id === 2) output += text;
+         else if (authenticated && id === 3) finish();
+       }
