@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "check:all": "node scripts/check-all.ts",
+    "check:executor": "esbuild scripts/check-executor.ts --bundle --platform=node --format=esm --outfile=dist/check-executor.mjs && node dist/check-executor.mjs",
+    "pilot:prepare": "node scripts/prepare-paper-pilot.ts",
+    "pilot:preflight": "node scripts/pilot-preflight.ts",
     "build": "esbuild src/worker.ts src/risk-worker.ts src/executor.ts src/alpaca-paper-adapter.ts src/fixture-ingestor.ts src/sec-ingestor.ts --bundle --platform=node --outdir=dist --format=esm",
     "check:research-fixture": "esbuild scripts/check-research-fixture.ts --bundle --platform=node --format=esm --outfile=dist/check-research-fixture.mjs && node dist/check-research-fixture.mjs",
     "worker": "node dist/worker.js",

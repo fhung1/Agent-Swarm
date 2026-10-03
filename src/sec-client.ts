@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 const TICKERS = 'https://www.sec.gov/files/company_tickers.json';
 const ARCHIVES = 'https://www.sec.gov/Archives/edgar/data/';
@@ -10,6 +11,7 @@ const sha256 = (data: Buffer | string) => createHash('sha256').update(data).dige
 export interface SecClientOptions {
   userAgent: string;
   cacheDir: string;
+  rateDir?: string;
   fetch?: typeof fetch;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -28,6 +30,13 @@ interface CacheEntry {
   bytes: number;
   body: string;
 }
+
+interface RateDatabase {
+  exec(sql: string): void;
+  prepare(sql: string): { get(): { version: number; gap_ms: number } | undefined; run(): unknown };
+  close(): void;
+}
+class SecRateGateError extends Error {}
 
 export function requireSecUrl(url: string): void {
   const parsed = new URL(url);
@@ -62,8 +71,8 @@ export class SecClient {
   private readonly fetcher: typeof fetch;
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly rateDir: string;
   private tail: Promise<unknown> = Promise.resolve();
-  private lastRequest = -Infinity;
   private readonly pending = new Map<string, Promise<Buffer>>();
 
   constructor(options: SecClientOptions) {
@@ -72,6 +81,7 @@ export class SecClient {
     this.fetcher = options.fetch ?? fetch;
     this.now = options.now ?? Date.now;
     this.sleep = options.sleep ?? (ms => new Promise(done => setTimeout(done, ms)));
+    this.rateDir = options.rateDir ?? process.env.SEC_RATE_DIR ?? join(homedir(), '.local/share/quant-swarm/rate/sec');
   }
 
   get(url: string, accept = 'application/json'): Promise<Buffer> {
@@ -117,6 +127,47 @@ export class SecClient {
     } finally { await rm(temporary, { force: true }); }
   }
 
+  private async withRateGate<T>(request: () => Promise<T>): Promise<T> {
+    let database: RateDatabase | undefined;
+    try {
+      if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('SEC shared rate gate requires Node.js 24+');
+      await mkdir(this.rateDir, { recursive: true, mode: 0o700 });
+      // Use the built-in API lazily; the repo's older Node typings lack this module.
+      // SQLite supplies OS-released process locks; this is transport metadata, not swarm state.
+      const moduleName: string = 'node:sqlite';
+      const sqlite = await import(moduleName) as { DatabaseSync: new (path: string) => RateDatabase };
+      const file = join(this.rateDir, 'gate.sqlite');
+      database = new sqlite.DatabaseSync(file);
+      await chmod(file, 0o600);
+      database.exec('PRAGMA busy_timeout=0');
+      const deadline = Date.now() + 35_000;
+      for (;;) {
+        try { database.exec('BEGIN IMMEDIATE'); break; }
+        catch (error) {
+          const code = Number((error as { errcode?: number }).errcode) & 255;
+          if (![5, 6].includes(code) || Date.now() >= deadline) throw error;
+          await new Promise(done => setTimeout(done, 50));
+        }
+      }
+      database.exec('CREATE TABLE IF NOT EXISTS gate_policy (version INTEGER PRIMARY KEY, gap_ms INTEGER NOT NULL) STRICT');
+      database.exec('INSERT OR IGNORE INTO gate_policy VALUES (1,200)');
+      const policy = database.prepare('SELECT version,gap_ms FROM gate_policy').get();
+      if (policy?.version !== 1 || policy.gap_ms !== 200) throw new Error('Unsupported SEC rate gate policy');
+      // Always wait after acquisition. Even a killed previous owner cannot release a
+      // just-started request into an immediate next request. Hold through body completion.
+      await this.sleep(200);
+    } catch (error) {
+      database?.close();
+      throw new SecRateGateError(`SEC shared rate gate unavailable: ${String(error)}`);
+    }
+    try { return await request(); }
+    finally {
+      try { database.exec('COMMIT'); }
+      catch (error) { throw new SecRateGateError(`SEC shared rate gate commit failed: ${String(error)}`); }
+      finally { database.close(); }
+    }
+  }
+
   private async load(url: string, accept: string, key: string): Promise<Buffer> {
     const file = join(this.options.cacheDir, `${key}.json`);
     const cached = await this.cached(file, url, accept);
@@ -129,17 +180,18 @@ export class SecClient {
     if (cached?.entry.etag) headers['if-none-match'] = cached.entry.etag;
     if (cached?.entry.lastModified) headers['if-modified-since'] = cached.entry.lastModified;
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const wait = this.lastRequest + 200 - this.now();
-      if (wait > 0) await this.sleep(wait);
-      this.lastRequest = this.now();
       let response: Response | undefined;
       let body: Buffer | undefined;
       let failure: unknown;
       try {
-        response = await this.fetcher(url, { method: 'GET', redirect: 'error', headers, signal: AbortSignal.timeout(30_000) });
-        if (response.ok) body = Buffer.from(await response.arrayBuffer());
-        else await response.body?.cancel();
-      } catch (error) { failure = error; }
+        const downloaded = await this.withRateGate(async () => {
+          const response = await this.fetcher(url, { method: 'GET', redirect: 'error', headers, signal: AbortSignal.timeout(30_000) });
+          const body = response.ok ? Buffer.from(await response.arrayBuffer()) : undefined;
+          if (!response.ok) await response.body?.cancel();
+          return { response, body };
+        });
+        response = downloaded.response; body = downloaded.body;
+      } catch (error) { if (error instanceof SecRateGateError) throw error; failure = error; }
       if (failure || (response && RETRY_STATUSES.has(response.status))) {
         if (attempt === 3) throw new Error(`SEC GET ${url} failed after 3 attempts (${failure ? String(failure) : response?.status})`);
         const delayMs = retryDelay(response?.headers.get('retry-after') ?? null, attempt, this.now());

@@ -1,5 +1,7 @@
 # Quant Swarm implementation review — 2026-10-03
 
+The current paper safety integration adds authoritative pre-submit risk/reconciliation checks, durable submission attempts and cash/position/open-order ledger reconciliation. An actual executor process passes mock-broker accepted-before-timeout/restart, partial/final fills and external-activity interlocks without broker requests. Live Alpaca acceptance still requires paper credentials. Minecraft server, game module, ten-worker launcher and dashboard are implemented in `games/`, with ten-minute connectivity, crafting, cross-agent citations, restart/output-reuse and one approved model smoke check; sustained gameplay and sharing experiments remain separate acceptance tasks. Factorio live setup is deferred by the owner.
+
 The repo has a working local research swarm: separate worker identities, leased tasks, persisted evidence and messages, analyst/skeptic/coordinator model handlers, and durable decisions and bounded proposals. It also has a read-only Alpaca adapter, an initial pure risk evaluator, order-ledger reducers, a separate one-client macOS game agent, and two VM lifecycle providers.
 
 The follow-up completed **Phase 1 for the local prototype**, including its scoped reads and process recovery acceptance. Phase 0 is implemented but lacks its real Alpaca exit check. Pieces of Phases 2–4 have been built ahead of their acceptance checks. The complete Alpaca paper-trading demo has not happened; later local reducer checks use synthetic order/fill records.

@@ -31,7 +31,9 @@ else if(command==='up'){
   const children=new Set<ChildProcess>();let stopping=false;
   const start=(name:string,attempt=0)=>{
     if(stopping)return;
-    const child=spawn(process.execPath,[resolve('dist/src/worker.js')],{env:{...process.env,GAME_RUN_ID:runId,GAME_AGENT_NAME:name,AGENT_MODEL:process.env.AGENT_MODEL??'gpt-6-astra'},stdio:['ignore','pipe','pipe']});children.add(child);
+    const env={...process.env,GAME_RUN_ID:runId,GAME_AGENT_NAME:name,AGENT_MODEL:process.env.AGENT_MODEL??'gpt-6-astra'};
+    for(const key of ['ALPACA_API_KEY','ALPACA_API_SECRET','SEC_USER_AGENT'])delete env[key];
+    const child=spawn(process.execPath,[resolve('dist/src/worker.js')],{env,stdio:['ignore','pipe','pipe']});children.add(child);
     for(const stream of [child.stdout!,child.stderr!])stream.on('data',bytes=>process.stdout.write(`[${name}] ${String(bytes)}`));
     child.on('error',error=>{console.error(`${name}: ${error.message}`);process.exitCode=1;});
     child.on('exit',code=>{children.delete(child);if(!stopping&&code!==0&&attempt<3)setTimeout(()=>start(name,attempt+1),Math.min(30000,1000*2**attempt));else if(!stopping&&code!==0)process.exitCode=code??1;});

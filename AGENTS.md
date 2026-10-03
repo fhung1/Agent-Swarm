@@ -1,5 +1,11 @@
 # Quant Swarm: project brief
 
+## Current owner priority
+
+**All development tasks are stopped at owner request (2026-10-03).** Unfinished task contracts are archived in [UNFINISHED_TASKS.md](UNFINISHED_TASKS.md). Do not resume implementation, checks, background task monitoring, or board work without a new owner instruction. The Minecraft/trading priority below applies only after work is explicitly resumed.
+
+Focus development on Minecraft and Alpaca paper trading. Factorio is owned by the owner’s friend: stop Factorio implementation, setup, testing, and new board tasks unless the owner explicitly reauthorizes them. Preserve existing Factorio work. The Factorio backlog was cancelled on 2026-10-03; historical references below do not authorize resuming it.
+
 ## Purpose
 
 Build a system in which multiple specialized agents share a live view of a changing environment, communicate through structured messages, divide work, and coordinate actions. SpacetimeDB is the shared state and communication backbone. The system should make every decision traceable: what an agent observed, what it proposed, who accepted it, what action ran, and what happened next.

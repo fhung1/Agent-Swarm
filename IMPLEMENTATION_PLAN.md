@@ -151,7 +151,7 @@ Risk is recomputed in the module against an immutable operator policy and stored
 | 1 | Local swarm core complete and acceptance passed. Production service/OIDC provisioning remains deployment work. |
 | 2 | SEC primary-filing artifacts/manifests and accession-filtered facts, evidence/thesis pipeline, immutable decision inputs and model audit implemented. Qualitative excerpts, richer research/exit semantics and a real model-backed sourced decision acceptance remain. |
 | 3 | Authoritative policy/risk gate and regression checks passed. Risk-worker implementation and build integration are complete; live broker inputs remain unverified. |
-| 4 | Paper-only polling executor, stable client IDs, order/fill recording and basic order reconciliation implemented. Live broker acceptance, durable attempt recovery, immediate pre-submit revalidation, full account reconciliation/interlock, per-order cancellation and trade-update stream remain. |
+| 4 | Paper-only polling executor, stable client IDs, durable bounded attempts, authoritative pre-submit revalidation and full cash/position/open-order reconciliation interlock implemented. Local real-process mock-broker timeout/restart/partial/final fill and mismatch drills pass. Live broker acceptance, per-order operator cancellation and trade-update stream remain. |
 | 5 | Position monitoring not implemented. |
 | 6 | Trading/development dashboards, supervisor, isolated CI checks and verified offline backup/restore implemented. Currency-cost reporting, evaluation/benchmark, alerts and production deployment remain. |
 

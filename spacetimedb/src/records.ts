@@ -139,7 +139,9 @@ export const recordRiskDecision = spacetimedb.reducer(
   (ctx, value) => {
     requireRole(ctx, ['risk']); requireId(value.id);
     const proposal = ctx.db.tradeProposal.id.find(value.proposalId);
-    if (!proposal || !['proposed', 'risk_passed', 'approved'].includes(proposal.status) || ctx.db.paperOrder.proposalId.find(value.proposalId)) throw new SenderError('Proposal is not awaiting risk review');
+    const intent=ctx.db.paperOrder.proposalId.find(value.proposalId);
+    const unsubmitted=!!intent&&!intent.alpacaOrderId&&intent.status==='submitting';
+    if (!proposal || !['proposed', 'risk_passed', 'approved',...(unsubmitted?['submitting']:[])].includes(proposal.status) || (intent&&!unsubmitted)) throw new SenderError('Proposal is not awaiting risk review');
     requireRun(ctx, proposal.runId);
     if (!['pass', 'reject'].includes(value.outcome)) throw new SenderError('Invalid risk outcome');
     const computed = evaluateProposal(ctx, value.proposalId);
@@ -151,20 +153,24 @@ export const recordRiskDecision = spacetimedb.reducer(
       ? value.expiresAt : new Timestamp(BigInt(computed.result.expiresAt.getTime()) * 1000n);
     if (expiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) throw new SenderError('Risk decision already expired');
     const existing = ctx.db.riskDecision.proposalId.find(value.proposalId);
+    const priorReservation=ctx.db.riskReservation.proposalId.find(proposal.id);
     if (ctx.db.riskDecision.id.find(value.id) || ctx.db.riskDecisionHistory.id.find(value.id)) throw new SenderError('Risk decision ID already used');
     if (existing) {
       ctx.db.riskDecisionHistory.insert(existing);
       ctx.db.riskDecision.id.delete(existing.id);
       ctx.db.approval.proposalId.delete(proposal.id);
-      ctx.db.riskReservation.proposalId.delete(proposal.id);
+      if(!intent)ctx.db.riskReservation.proposalId.delete(proposal.id);
     }
     const { clockAsOf: _clockAsOf, ...record } = value;
     ctx.db.riskDecision.insert({ ...record, checks: JSON.stringify(computed.result.checks), expiresAt,
       policyId: computed.policyRow.id, snapshotId: computed.snapshot.id, quoteId: computed.quote.id,
       reviewer: ctx.sender, decidedAt: ctx.timestamp });
-    if (value.outcome === 'pass') ctx.db.riskReservation.insert({ proposalId: proposal.id, accountId: computed.policyRow.accountId,
+    if(intent){
+      if(!priorReservation||priorReservation.accountId!==computed.policyRow.accountId)throw new SenderError('Cannot move a submitted reservation between accounts');
+      if(value.outcome==='pass')ctx.db.riskReservation.proposalId.update({...priorReservation,notional:computed.notional});
+    }else if (value.outcome === 'pass') ctx.db.riskReservation.insert({ proposalId: proposal.id, accountId: computed.policyRow.accountId,
       quantity: proposal.quantity, notional: computed.notional, clientOrderId: '' });
-    ctx.db.tradeProposal.id.update({ ...proposal, status: value.outcome === 'pass' ? 'risk_passed' : 'rejected' });
+    ctx.db.tradeProposal.id.update({ ...proposal, status: intent?'submitting':value.outcome === 'pass' ? 'risk_passed' : 'rejected' });
   }
 );
 
@@ -216,6 +222,7 @@ export const updatePaperOrder = spacetimedb.reducer(
     if (!validOrderTransition(existing.status, status)) throw new SenderError('Invalid order transition');
     // A broker refusal before it creates an order (for example, insufficient buying power) has no Alpaca order ID.
     const refusedBeforeCreation = status === 'rejected' && alpacaOrderId === '' && !existing.alpacaOrderId;
+    if(refusedBeforeCreation&&[...ctx.db.paperSubmission.orderId.filter(id)].some(a=>!['refused','retry'].includes(a.status)))throw new SenderError('Uncertain submission cannot release exposure without operator reconciliation');
     if (!refusedBeforeCreation) requireText(alpacaOrderId, 'Alpaca order ID', 128);
     if (existing.alpacaOrderId && existing.alpacaOrderId !== alpacaOrderId) throw new SenderError('Alpaca order identity cannot change');
     const linked = ctx.db.tradeProposal.id.find(existing.proposalId)!;
@@ -315,6 +322,10 @@ export const recordReconciliation = spacetimedb.reducer(
     if (!['matched', 'mismatch', 'resolved'].includes(value.status)) throw new SenderError('Invalid reconciliation status');
     requireText(value.details, 'Reconciliation details');
     ctx.db.reconciliation.insert({ ...value, capturedAt: ctx.timestamp });
+    if(value.status==='mismatch'){
+      const check={accountId:value.accountId,status:'mismatch',details:value.details,checkedAt:ctx.timestamp};
+      if(ctx.db.accountCheck.accountId.find(value.accountId))ctx.db.accountCheck.accountId.update(check);else ctx.db.accountCheck.insert(check);
+    }
   }
 );
 

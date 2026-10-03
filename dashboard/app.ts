@@ -1,9 +1,9 @@
 import { DbConnection } from '../src/module_bindings/index.js';
 import type { AccountSnapshot, Decision, Fact, Message, PaperOrder, Run, Source, Thesis } from '../src/module_bindings/types.js';
+import { dashboardConfig, dashboardTokenKey } from './config.js';
 
-const HOST = 'ws://127.0.0.1:3000';
-const DATABASE = 'quant-swarm';
-const TOKEN_KEY = 'quant-swarm:dashboard:token';
+const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm');
+const TOKEN_KEY = dashboardTokenKey('dashboard', HOST, DATABASE);
 const root = document.querySelector<HTMLElement>('#app');
 if (!root) throw new Error('Dashboard root is missing');
 
@@ -110,7 +110,7 @@ function connectionScreen(): void {
     put(box, node('h2', '', 'Grant this browser identity'),
       node('p', 'muted', 'The owner grants the operator role from the local SpacetimeDB CLI. Account access is granted separately.'),
       field('Identity', identity));
-    const command = node('code', 'command', `spacetime call --server local quant-swarm grant_agent ${identity} operator`);
+    const command = node('code', 'command', `spacetime call --server ${HOST.replace(/^ws/, 'http')} ${DATABASE} grant_agent ${identity} operator`);
     put(box, command, node('p', 'muted small', 'After granting, reload this page. Grant account access with grant_account_access to show balances and orders. The token stays in this browser’s local storage.'));
     put(shell, box);
   }
@@ -325,6 +325,26 @@ function accountPanel(conn: DbConnection, account?: AccountSnapshot): HTMLElemen
   return section;
 }
 
+function alertPanel(conn: DbConnection): HTMLElement {
+  const priority = new Map([['critical', 0], ['warning', 1]]);
+  const alerts = all(conn.db.myAlert.iter()).filter(alert => !stamp(alert.resolvedAt))
+    .sort((a, b) => (priority.get(a.severity) ?? 2) - (priority.get(b.severity) ?? 2) ||
+      millis(b.lastSeen) - millis(a.lastSeen) || a.subject.localeCompare(b.subject));
+  const section = panel('Open operational alerts', alerts.length ? `${alerts.length} need attention` : 'All monitored conditions are clear');
+  section.classList.add('alerts-panel');
+  if (alerts.some(alert => alert.severity === 'critical')) section.classList.add('has-critical');
+  if (!alerts.length) { put(section, empty('No active account, market-data, order, stream, reconciliation or exposure alerts.')); return section; }
+  for (const alert of alerts) {
+    const card = node('article', `alert-card ${alert.severity}`);
+    const head = node('div', 'alert-head');
+    put(head, node('strong', '', alert.rule.replaceAll('_', ' ')), pill(alert.severity, alert.severity));
+    put(card, head, node('p', 'alert-message', alert.message),
+      node('p', 'alert-meta', `${alert.subject} · first seen ${when(alert.firstSeen)} · last seen ${when(alert.lastSeen)}`));
+    put(section, card);
+  }
+  return section;
+}
+
 function render(): void {
   if (!connection || !ready) { connectionScreen(); return; }
   const conn = connection;
@@ -371,7 +391,8 @@ function render(): void {
   cancel.title = 'Order cancellation becomes available when the executor exposes a cancel-request path.';
   put(controls, statusButton, cancel);
   put(header, title, controls);
-  put(main, header, summary(conn, run, account));
+  put(main, header, alertPanel(conn));
+  put(main, summary(conn, run, account));
   if (state.startsWith('Could not')) put(main, node('p', 'error', state));
   const columns = node('div', 'columns');
   const primary = node('div', 'column');
@@ -415,7 +436,7 @@ function connect(): void {
         conn.db.myRiskPolicy, conn.db.myTask, conn.db.myMessage, conn.db.mySource, conn.db.myFact,
         conn.db.myMarketObservation, conn.db.myThesis, conn.db.myDecision, conn.db.myDecisionInput,
         conn.db.myTradeProposal, conn.db.myRiskDecision, conn.db.myPaperOrder, conn.db.myFill,
-        conn.db.myAccountSnapshot, conn.db.myReconciliation]) {
+        conn.db.myAccountSnapshot, conn.db.myReconciliation, conn.db.myAlert]) {
         view.onInsert(queueRender); view.onUpdate(queueRender); view.onDelete(queueRender);
       }
       conn.subscriptionBuilder()
@@ -428,7 +449,7 @@ function connect(): void {
           'SELECT * FROM my_market_observation', 'SELECT * FROM my_thesis', 'SELECT * FROM my_decision',
           'SELECT * FROM my_decision_input', 'SELECT * FROM my_trade_proposal', 'SELECT * FROM my_risk_decision',
           'SELECT * FROM my_paper_order', 'SELECT * FROM my_fill', 'SELECT * FROM my_account_snapshot',
-          'SELECT * FROM my_reconciliation',
+          'SELECT * FROM my_reconciliation', 'SELECT * FROM my_alert',
         ]);
     })
     .onConnectError((_ctx, error) => reconnect(error, current))

@@ -19,6 +19,10 @@ export function evidenceText(sources: SourceView[], facts: FactView[], observati
   omitted: EvidenceOmissions = {sources:[],facts:[],observations:[]}): string {
   const rows = [
     ...sources.map(s => `source ${s.id}: ${s.symbol} ${s.kind} ${s.uri}, as of ${s.asOf}`),
+    ...sources.flatMap(s => s.qualitative ? [
+      ...s.qualitative.sections.map(row => `filing excerpt from source ${s.id}, ${row.section}, normalized lines ${row.startLine}-${row.endLine}, omitted ${row.charactersOmitted} characters: ${JSON.stringify(row.text)}`),
+      ...s.qualitative.missing.map(reason => `source ${s.id} qualitative evidence unavailable: ${reason}`),
+    ] : []),
     ...facts.map(f => `fact ${f.id} (from ${f.sourceId}): ${f.symbol} ${f.metric} = ${f.value} ${f.unit}, period ${f.period}, quality ${f.quality}`),
     ...observations.map(o => `market observation ${o.id}: ${o.symbol} bid ${o.bidPrice} ask ${o.askPrice} (${o.feed}), as of ${o.asOf}`),
   ];

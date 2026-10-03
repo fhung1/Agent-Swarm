@@ -36,7 +36,7 @@ export interface ProposalView {
 }
 export interface ReservationView { proposalId: string; accountId: string; quantity: string; notional: string; clientOrderId: string }
 export interface RiskDecisionView { id: string; proposalId: string; outcome: string; expiresAt: Date; policyId: string; snapshotId: string }
-export interface PaperOrderView { proposalId: string; status: string }
+export interface PaperOrderView { proposalId: string; status: string; alpacaOrderId?:string }
 
 const TERMINAL_ORDER = new Set(['filled', 'canceled', 'expired', 'rejected', 'replaced']);
 
@@ -80,7 +80,7 @@ export function needsRefresh(
   decision: RiskDecisionView | undefined, order: PaperOrderView | undefined,
   latestSnapshotId: string | undefined, currentPolicyId: string, now: Date,
 ): boolean {
-  if (!decision || order) return false;
+  if (!decision || (order && (order.status!=='submitting'||!!order.alpacaOrderId))) return false;
   return decision.expiresAt.getTime() <= now.getTime() || decision.snapshotId !== latestSnapshotId || decision.policyId !== currentPolicyId;
 }
 

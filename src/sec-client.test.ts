@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { test, type TestContext } from 'node:test';
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,13 +13,14 @@ const contact = 'Quant Swarm test@example.com';
 const json = '{"company":"fixture","value":"é"}\n';
 
 function fixture(t: TestContext, fetcher: typeof fetch) {
-  const cacheDir = mkdtempSync(join(tmpdir(), 'sec-cache-test-'));
-  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const directory = mkdtempSync(join(tmpdir(), 'sec-cache-test-'));
+  const cacheDir = join(directory,'cache'); mkdirSync(cacheDir);
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
   let time = 1_800_000_000_000;
   const sleeps: number[] = [];
   const starts: number[] = [];
   const events: string[] = [];
-  const options = { userAgent: contact, cacheDir, now: () => time,
+  const options = { userAgent: contact, cacheDir, rateDir:join(directory,'rate'), now: () => time,
     sleep: async (ms: number) => { sleeps.push(ms); time += ms; },
     fetch: (async (input, init) => { starts.push(time); return fetcher(input, init); }) as typeof fetch,
     onEvent: (event: { kind: string }) => { events.push(event.kind); },
@@ -96,7 +98,7 @@ test('transient responses retry at most three times and honor Retry-After', asyn
   });
   assert.deepEqual(await f.client.get(url), Buffer.from(json));
   assert.equal(count, 3);
-  assert.deepEqual(f.sleeps, [2000, 1000]);
+  assert.deepEqual(f.sleeps.filter(ms=>ms>200), [2000, 1000]);
 });
 
 test('date Retry-After is respected and a delay beyond the retry budget fails immediately', async t => {
@@ -108,11 +110,12 @@ test('date Retry-After is respected and a delay beyond the retry budget fails im
     } }) : new Response(json);
   });
   await f.client.get(url);
-  assert.deepEqual(f.sleeps, [3000]);
+  // HTTP-date precision is one second; the first gate's 200ms have already elapsed.
+  assert.deepEqual(f.sleeps.filter(ms=>ms>200), [2800]);
   const long = fixture(t, async () => new Response('busy', { status: 429, headers: { 'retry-after': '120' } }));
   await assert.rejects(long.client.get(url), /exceeds 30-second/);
   assert.equal(long.starts.length, 1);
-  assert.deepEqual(long.sleeps, []);
+  assert.deepEqual(long.sleeps, [200]);
 });
 
 test('network and body failures are bounded; expired cache is never an outage fallback', async t => {
@@ -126,7 +129,7 @@ test('network and body failures are bounded; expired cache is never an outage fa
   f.advance(300_000);
   await assert.rejects(f.client.get(url), /after 3 attempts/);
   assert.equal(f.starts.length, 4);
-  assert.deepEqual(f.sleeps, [500, 1000]);
+  assert.deepEqual(f.sleeps.filter(ms=>ms>200), [500, 1000]);
   const body = fixture(t, async () => new Response(new ReadableStream({ start(controller) { controller.error(new Error('body reset')); } })));
   await assert.rejects(body.client.get(url), /after 3 attempts/);
   assert.equal(body.starts.length, 3);
@@ -185,4 +188,52 @@ test('real local HTTP fixture recovers from 503 then revalidates saved bytes aft
   f.advance(300_000);
   assert.deepEqual(await new SecClient(f.options).get(url), Buffer.from(json));
   assert.equal(count, 3);
+});
+
+test('two independent processes with different caches share one request gate', {timeout:10000},async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'sec-rate-process-'));
+  t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const moduleUrl=new URL('./sec-client.ts',import.meta.url).href;
+  const starts=await Promise.all([0,1].map(index=>new Promise<number>((done,reject)=>{
+    const script=`import {SecClient} from ${JSON.stringify(moduleUrl)};
+      const client=new SecClient({userAgent:${JSON.stringify(contact)},cacheDir:${JSON.stringify(join(directory,`cache-${index}`))},
+        rateDir:${JSON.stringify(join(directory,'rate'))},fetch:async()=>{console.log(Date.now());return new Response('{"ok":true}')}});
+      await client.get(${JSON.stringify(url)});`;
+    const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});
+    t.after(()=>child.kill('SIGKILL'));
+    let output='',errors=''; child.stdout.on('data',chunk=>output+=String(chunk));child.stderr.on('data',chunk=>errors+=String(chunk));
+    child.once('error',reject);child.once('close',code=>code===0?done(Number(output.trim())):reject(new Error(errors)));
+  })));
+  starts.sort((a,b)=>a-b);
+  assert(starts.every(Number.isFinite));
+  assert(starts[1]-starts[0]>=200,`request spacing was ${starts[1]-starts[0]}ms`);
+});
+
+test('a killed process releases the gate without deleting locks or using stale data', {timeout:10000},async t=>{
+  const f=fixture(t,async()=>new Response(json));
+  const moduleUrl=new URL('./sec-client.ts',import.meta.url).href;
+  const script=`import {SecClient} from ${JSON.stringify(moduleUrl)};
+    setInterval(()=>{},1000);
+    const client=new SecClient({userAgent:${JSON.stringify(contact)},cacheDir:${JSON.stringify(join(f.cacheDir,'killed'))},
+      rateDir:${JSON.stringify(f.options.rateDir)},fetch:async()=>{console.log('in-flight');await new Promise(()=>{});}});
+    await client.get(${JSON.stringify(url)});`;
+  const child=spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});
+  t.after(()=>child.kill('SIGKILL'));
+  await new Promise<void>((done,reject)=>{
+    child.once('error',reject);
+    child.once('exit',()=>reject(new Error('Child exited before request')));
+    child.stdout.on('data',chunk=>{if(String(chunk).includes('in-flight'))done();});
+  });
+  const closed=new Promise<void>(done=>child.once('close',()=>done()));
+  child.kill('SIGKILL');await closed;
+  assert.deepEqual(await f.client.get(url),Buffer.from(json));
+  assert.equal(f.starts.length,1);
+});
+
+test('an unavailable or corrupt shared gate fails before any HTTP request',async t=>{
+  const f=fixture(t,async()=>new Response(json));
+  mkdirSync(f.options.rateDir);
+  writeFileSync(join(f.options.rateDir,'gate.sqlite'),'invalid database');
+  await assert.rejects(f.client.get(url),/shared rate gate unavailable/);
+  assert.equal(f.starts.length,0);
 });

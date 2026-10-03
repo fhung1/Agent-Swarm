@@ -143,6 +143,7 @@ async function main(): Promise<void> {
     SPACETIMEDB_HOST: `ws://127.0.0.1:${port}`, SPACETIMEDB_DB_NAME: database });
   await run('npm', ['run', 'check:research-fixture'], 'Structured research reducer fixtures');
   await run('npm', ['run', 'check:phase-one'], 'Worker recovery and authoritative risk acceptance', 240_000);
+  await run('npm', ['run', 'check:executor'], 'Mock broker executor crash, fill and reconciliation acceptance', 120_000);
   console.log('\n[check:all] All checks passed.');
 }
 

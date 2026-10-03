@@ -77,7 +77,8 @@ function pendingWork(conn: DbConnection, now: Date): Map<string, { policyId: str
     if (!current || s.capturedAt.microsSinceUnixEpoch > current.at) latestSnapshot.set(s.accountId, { id: s.id, at: s.capturedAt.microsSinceUnixEpoch });
   }
   for (const row of conn.db.myTradeProposal.iter()) {
-    if (!['proposed', 'risk_passed', 'approved'].includes(row.status)) continue;
+    const intent=orders.get(row.id);
+    if (!['proposed', 'risk_passed', 'approved',...(intent?.status==='submitting'&&!intent.alpacaOrderId?['submitting']:[])].includes(row.status)) continue;
     const policyId = [...conn.db.myRunConfig.iter()].find(c => c.runId === row.runId)?.policyId;
     const policyRow = policyId ? [...conn.db.myRiskPolicy.iter()].find(p => p.id === policyId) : undefined;
     if (!policyRow) { console.log(`No risk policy configured for run ${row.runId}; ${row.id} waits`); continue; }

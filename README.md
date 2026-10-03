@@ -2,7 +2,7 @@
 
 The private headless Minecraft implementation is in [games/README.md](games/README.md), with Java/server setup, ten-worker launch, SpacetimeDB permissions and runtime checks. The graphical prototype below is a separate deferred track. Factorio headless tasks are scoped on the development board; its live setup is deferred at the owner's request.
 
-This repository contains a SpacetimeDB 2.10.2 module, a Node.js coordination worker, and the read-only phase of the Alpaca paper adapter. The module stores runs, agents, leased tasks, messages, research evidence, theses, decisions, trade proposals, risk decisions, operator approvals, paper-account snapshots, and market observations. The adapter reads the paper account and selected market quotes; this slice has no order submission or cancellation path.
+This repository contains a SpacetimeDB 2.10.2 module, independent research workers, SEC/market ingestors, a deterministic risk gate and a paper-only Alpaca executor. Private scoped tables retain evidence, decisions, risk reservations, submission attempts, orders, fills and account reconciliation. The read adapter uses GET requests; the separate executor submits and cancels paper orders after database risk and reconciliation checks.
 
 Agents should record task progress and next steps in the shared [handoff log](HANDOFF.md) when finishing or pausing work.
 
@@ -73,6 +73,8 @@ The run must exist and be active. `SYMBOLS` accepts 1–20 tickers. The ingestor
 
 The supervisor starts every process for one run from a config file, so you don't need a terminal per agent or hand-typed grants. Copy `config/swarm.example.json` to `config/swarm.json` (ignored by git) and set how many agents of each type to run:
 
+For the first paper test, export `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `SEC_USER_AGENT` and the selected model key in your local shell. `npm run pilot:prepare` makes one GET to the fixed paper endpoint, discovers the account ID and writes ignored `config/swarm.json`; a new config uses Codex research roles. Existing config choices are preserved, and a different account is refused. `npm run pilot:preflight` reports missing variable names, builds and local listeners without broker/model calls. Then use the registration/grant/start commands below. The private Minecraft path is documented in [games/README.md](games/README.md).
+
 ```json
 "agents": {
   "coordinator": { "count": 1, "brain": "claude" },
@@ -98,6 +100,12 @@ npm run swarm -- status            # process state, heartbeats, and run progress
 `grants --apply` runs as the owner CLI identity: it makes the owner an operator, creates the run if it doesn't exist, applies model limits, grants each process its role and run access (plus account access for the risk broker, executor, and market data), and adds a run-specific copy of the risk policy. Every step is safe to repeat. `up` refuses to start if a secret it needs is missing from your shell (for example `OPENAI_API_KEY` for a Codex brain, the Alpaca paper keys for risk, executor, and market data, or `SEC_USER_AGENT` for SEC evidence); values are read from the environment and never stored. Before starting the long-running processes, it takes one quote snapshot and, for each research symbol without a thesis task, loads evidence and queues one. Output goes to the console with a `[name]` prefix and to `logs/<name>.log`. Pass `--start-db` to have the supervisor start the database server too, and `--config <file>` to use another config.
 
 ### Run a worker
+
+The paper executor first recovers broker orders/fills, then reconciles cash, position quantities and all open orders against a persistent account baseline plus recorded fills. External trades, unexplained cash changes and unknown orders block new submissions. A fresh match is required before each POST; the module records an atomic submission attempt, recomputes risk, checks the run/grants and invalidates that match until another reconciliation. At most three attempts per intent survive process restarts, with a 60-second lookup grace and one stable broker client ID. A broker response with fills binds its order identity before recording activities. Uncertain submissions retain exposure; acceptance is never treated as a fill.
+
+The first reconciliation establishes a baseline only before broker activity and without open orders. Use a dedicated paper account. Fees, transfers or external activity require inspection. To reset a baseline, pause all affected runs, resolve outstanding intents, obtain a fresh snapshot with no open orders, then call `set_paper_account_baseline ACCOUNT_ID SNAPSHOT_ID "observed evidence"` as an account-authorized operator. The reset is audited and still requires a new executor reconciliation. It is account recovery, with no per-order human approval.
+
+For an uncertain intent that the broker confirms does not exist, pause its run, wait at least 60 seconds after its latest attempt, and call `resolve_uncertain_paper_intent ORDER_ID CLIENT_ORDER_ID "broker absence evidence"` as an account-authorized operator. This audited recovery releases the intent's exposure; a fresh full account check must still clear the interlock before resuming. A normal executor rejection cannot release an uncertain request.
 
 After publishing the module and building the worker, start a worker in another terminal:
 
@@ -360,6 +368,8 @@ SPACETIME_CLI="$HOME/.local/bin/spacetime" npm run check:research-fixture
 The Phase 1 check starts actual worker processes and exercises scoped reads, grant revocation, a claim race, same-identity restart, three-role sourced decisions, pause/resume, lease takeover and renewal, long IDs, inference budgets, authoritative risk and local order-ledger validation. It uses synthetic evidence and local ledger records; it makes no provider or Alpaca calls. Allow roughly two minutes for real lease timers. Runs are closed, temporary roles revoked, and worker token files removed afterward. The separate research fixture checks structured model handlers, output replay, atomic rollback and coordinator restart.
 
 This remains a local deployment. Keep the host on loopback until deployment service identities, secret provisioning and supervision are configured. Real broker submission/reconciliation and live gameplay have separate acceptance checks.
+
+`check:all` also runs `check:executor`: an actual executor process with intercepted broker HTTP and fake keys exercises acceptance-before-timeout, abrupt restart, one submission request, partial/final fill recovery, and cash/external-order mismatches. Only the configured localhost database is reached; no Alpaca requests are sent. This adds about a minute. `npm run check:executor` can also run against an already-published local module with the CLI owner granted operator access.
 
 ## One-client Factorio and Minecraft prototype on macOS
 
