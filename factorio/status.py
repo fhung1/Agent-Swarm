@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read bridge status through private RCON; never accepts arbitrary RCON text."""
-import argparse,json,pathlib,socket,struct
+import argparse,json,pathlib,socket,struct,time
 
 def read_exact(sock,n):
     data=b''
@@ -20,7 +20,7 @@ def send(sock,ident,kind,body):
     data=struct.pack('<ii',ident,kind)+body.encode()+b'\0\0'
     sock.sendall(struct.pack('<i',len(data))+data)
 
-def call(world,method,args=()):
+def call_once(world,method,args=()):
     if method not in ['status','observe','submit','receipt','control']: raise ValueError('Unsupported bridge method')
     manifest=json.loads((world/'manifest.json').read_text())
     with socket.create_connection(('127.0.0.1',manifest['rconPort']),timeout=5) as s:
@@ -34,14 +34,28 @@ def call(world,method,args=()):
         command='/silent-command local ok,result=pcall(remote.call,"agent_swarm",'+json.dumps(method)+suffix+'); rcon.print(helpers.table_to_json({ok=ok,result=result}))'
         send(s,2,2,command)
         send(s,3,2,'/silent-command rcon.print("qs-response-end")')
-        output=[]
+        output=[];ended=False
         while True:
             ident,kind,body=packet(s)
-            if ident==3: break
+            if ident==3: ended=True
             if ident==2: output.append(body)
+            if ended and output: break
+        if not output or not ''.join(output).strip(): raise ValueError('Empty RCON response')
         response=json.loads(''.join(output))
         if not response['ok']: raise ValueError(str(response['result']))
         return response.get('result')
+
+def call(world,method,args=()):
+    # Repeating the exact submit payload is safe because the bridge records its
+    # operation ID before mutation and returns the same game receipt.
+    for attempt in range(4):
+        try: return call_once(world,method,args)
+        except (json.JSONDecodeError, socket.timeout, OSError) as e:
+            if attempt==3: raise
+            time.sleep(.15*(attempt+1))
+        except ValueError as e:
+            if 'Empty RCON response' not in str(e) or attempt==3: raise
+            time.sleep(.15*(attempt+1))
 
 def status(world): return call(world,'status')
 
