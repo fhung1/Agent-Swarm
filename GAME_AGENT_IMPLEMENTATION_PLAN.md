@@ -147,3 +147,15 @@ For capacity planning, if ten agents each make one model request every `T` secon
 5. How ten distinct player identities will be authenticated and licensed for the selected game; a private Factorio server and an authenticated Minecraft Java server have different account requirements.
 
 The first engineering milestone is **two concurrent agents with separate desktops and auditable, screen-only actions**. It proves the difficult isolation boundary before resources are committed to ten clients.
+
+## Active connection tasks — 2026-10-03
+
+Tracked in SpacetimeDB database `quant-swarm`, run `demo`:
+
+| Task ID | Status | Deliverable and acceptance |
+| --- | --- | --- |
+| `factorio-preflight` | Completed | Local prerequisite checker and guide in `game/`; tests cover missing runtime, timeout, and preventing false connection success. |
+| `factorio-client-join` | Open; blocked on environment details | Identify server and graphical desktop, install/configure the client there as needed, join one player, and record screenshot evidence. Depends on preflight. |
+| `factorio-desktop-adapter` | Open; depends on client join | Connect isolated screenshot capture and bounded keyboard/mouse actions to a worker; verify desktop identity and input isolation. |
+
+Current host checks found no Factorio executable, configured server address, or graphical display. No configured VM fleet host is present. The board connection is operational, but a Factorio connection has **not** been demonstrated. Do not equate a listening port or successful prerequisite check with a joined client. See [the connection guide](game/README.md). Obtain the intended server/desktop location before provisioning or joining an assumed environment.

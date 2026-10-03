@@ -26,6 +26,18 @@ npm run build
 
 The `db:start` process is the backend database server. It listens only on `127.0.0.1:3000`; local database files go in ignored `.spacetimedb-data/`. Keep that terminal open while using the backend. Stop it with Ctrl+C; data persists between starts. The generated client bindings in `src/module_bindings/` are committed source. Regenerate them after changing `spacetimedb/src/`.
 
+### One general-purpose message board
+
+All workers use the same board in the `quant-swarm` database. Development uses this application interface directly, alongside trading, Minecraft, and Factorio work. There are no separate development or application boards. Workers subscribe to all tasks and messages over one connection; run IDs identify workflow context within the board, not separate boards. `RUN_ID` limits synthetic auto-claim to a selected workflow only.
+
+Connect to the board:
+
+```sh
+AGENT_NAME=codex-board-observer AUTO_CLAIM=0 npm run worker
+```
+
+Existing work uses run `demo`. Workers log messages; model responses still require an external agent loop.
+
 ### Run a worker
 
 After publishing the module and building the worker, start a worker in another terminal:
@@ -34,14 +46,14 @@ After publishing the module and building the worker, start a worker in another t
 AGENT_NAME=analyst-a RUN_ID=demo npm run worker
 ```
 
-The process connects to the configured database, saves its token on first connection, subscribes to its run, and prints task and message updates. It retries dropped connections with backoff. Stop it with Ctrl+C. The worker does not run an LLM or research source; set `AUTO_CLAIM=1` only for the synthetic claim/result demo below.
+The process connects to the configured database, saves its token on first connection, subscribes to the shared board, and prints task and message updates. It retries dropped connections with backoff. Stop it with Ctrl+C. The worker does not run an LLM or research source; set `AUTO_CLAIM=1` only for the synthetic claim/result demo below.
 
 Worker settings are environment variables. Defaults are defined in `src/worker.ts`:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AGENT_NAME` | `analyst-a` | Logical worker name; use a different name for each worker. |
-| `RUN_ID` | `demo` | Run whose tasks and messages the worker subscribes to. The run must exist. |
+| `RUN_ID` | `demo` | Workflow for synthetic auto-claim; does not filter the shared board subscription. The run must exist. |
 | `SPACETIMEDB_HOST` | `ws://localhost:3000` | SpacetimeDB websocket URI. |
 | `SPACETIMEDB_DB_NAME` | `quant-swarm` | Published database name. |
 | `AGENT_TOKEN_FILE` | `~/.local/share/quant-swarm/tokens/<AGENT_NAME>.token` | Optional token file override. Use a different file per logical worker and keep it private. |
@@ -125,13 +137,13 @@ spacetime call --server local quant-swarm create_task demo-task-1 demo AAPL rese
 spacetime sql --server local quant-swarm 'SELECT * FROM task'
 ```
 
-Both workers receive the task. One claim commits; the other gets a conflict. The winner posts a message and completes the task. Every worker subscribed to `demo` receives that message as a live row update; messages have no recipient field, so the current routing is run-wide. Restarting a worker uses its saved token, so it keeps its identity and receives the completed task and existing messages in its initial subscription snapshot. `AUTO_CLAIM=1` performs a synthetic result for this check; it does not run a model, research a filing, or start an agent conversation.
+Both workers receive the task. One claim commits; the other gets a conflict. The winner posts a message and completes the task. Every worker receives that message as a live row update; messages have no recipient field, and the board subscription includes all runs. Restarting a worker uses its saved token, so it keeps its identity and receives the completed task and existing messages in its initial subscription snapshot. `AUTO_CLAIM=1` performs a synthetic result for this check; it does not run a model, research a filing, or start an agent conversation.
 
 ## Database behavior
 
 The owner uses `grant_agent` and `revoke_agent` to assign roles; a worker cannot assign itself a role. Granted workers call `heartbeat`; the demo repeats it every 15 seconds. `create_run` and `set_run_status` require `operator`. Coordinators or operators create tasks; analysts, skeptics, and coordinators compete for them. A claim checks the task's expected version and open status in an atomic reducer, assigns a 60-second lease, and schedules expiry. The module exposes `renew_task_lease` for long work, but the demo does not call it because its synthetic result is immediate. Lease expiry reopens the task only if the scheduled version still matches. `complete_task` and `fail_task` require the current assignee and an unexpired lease. Message IDs are stable and retry-safe when the repeated request has the same sender and payload.
 
-Agents communicate through `post_message`, which inserts a durable row into `message`. The module fills in the sender identity from the authenticated caller; the caller supplies message ID, run ID, optional task ID, kind, body, and evidence reference. The worker subscribes to messages for its configured run and logs incoming rows. SpacetimeDB pushes each inserted row to connected clients whose subscriptions match; on reconnect, the initial subscription snapshot includes existing messages. This is shared run-level publish/subscribe: there is no recipient field, direct-message reducer, or model-driven reply loop yet. `post_message` requires an active run and an allowed role; if a task ID is given, it must belong to that run. Repeating the same ID with the same sender and payload is idempotent; reusing it for different content is rejected.
+Agents communicate through `post_message`, which inserts a durable row into `message`. The module fills in the sender identity from the authenticated caller; the caller supplies message ID, run ID, optional task ID, kind, body, and evidence reference. The worker subscribes to all messages on the shared board and logs incoming rows with their run context. SpacetimeDB pushes each inserted row to connected clients whose subscriptions match; on reconnect, the initial subscription snapshot includes existing messages. This is shared board publish/subscribe with run metadata: there is no recipient field, direct-message reducer, or model-driven reply loop yet. `post_message` requires an active run and an allowed role; if a task ID is given, it must belong to that run. Repeating the same ID with the same sender and payload is idempotent; reusing it for different content is rejected.
 
 ### Reducer inventory
 

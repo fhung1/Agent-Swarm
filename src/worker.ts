@@ -95,13 +95,13 @@ function connect(): void {
       console.log(`Agent ${name} identity: ${identity.toHexString()}`);
       conn.db.task.onInsert((_ctx, row) => { console.log(`Task ${row.id}: ${row.status}`); scanTasks(conn); });
       conn.db.task.onUpdate((_ctx, _old, row) => { console.log(`Task ${row.id}: ${row.status}`); scanTasks(conn); });
-      conn.db.message.onInsert((_ctx, row) => console.log(`Message ${row.id}: ${row.body}`));
+      conn.db.message.onInsert((_ctx, row) => console.log(`[${row.runId}] Message ${row.id}: ${row.body}`));
       conn.db.agent.onInsert(() => scanTasks(conn));
       conn.db.agent.onUpdate(() => scanTasks(conn));
       conn.subscriptionBuilder()
         .onApplied(() => {
           ready = true;
-          console.log(`Subscription ready for run ${runId}`);
+          console.log(`General-purpose message board ready (task run: ${runId})`);
           void conn.reducers.heartbeat({}).catch(error => console.log(`Heartbeat awaits grant: ${String(error)}`));
           heartbeatTimer = setInterval(() => {
             void conn.reducers.heartbeat({}).catch(error => console.error('Heartbeat failed:', error));
@@ -116,8 +116,8 @@ function connect(): void {
         .subscribe([
           'SELECT * FROM agent',
           'SELECT * FROM run',
-          `SELECT * FROM task WHERE run_id = '${runId}'`,
-          `SELECT * FROM message WHERE run_id = '${runId}'`,
+          'SELECT * FROM task',
+          'SELECT * FROM message',
         ]);
     })
     .onConnectError((_ctx, error) => scheduleReconnect(error))
