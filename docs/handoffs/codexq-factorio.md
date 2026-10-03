@@ -15,3 +15,10 @@
 - Work: validated TypeScript and Python operation encoding; Lua local observation, bounded walking/transfers, persistent exact-request receipts, actor serialization and pause admission. Real single-actor furnace test consumes fixture ore/fuel and collects five plates.
 - Checks: three TypeScript contract tests and strict file typecheck PASS; runtime engine smoke PASS; production/replay/pause/save/restart engine check PASS. No provider, gameplay-board or graphical-client acceptance claimed.
 - Next: integrate generic board and the pushed operation journal, implement durable independent rules workers and ten-agent reservation coordination. Full command vocabulary remains incomplete (mining, crafting, construction/pathfinding).
+
+## Tailscale game binding
+
+- Task: factorio-tailnet-bind; push when finished.
+- Implemented: gameBind config selects a specific private/tailnet IPv4 UDP endpoint; loopback default and RCON always loopback. Wildcard/public/unavailable binding refuses before server launch.
+- Check: actual 2.0.77 engine smoke with FACTORIO_CHECK_GAME_BIND=100.107.208.76; actors/resources/IDs, progress and clean stop verified; wildcard config refusal checked. Graphical client join pending.
+- Deployment: merge-fix owns fresh live demo on UDP 34198/RCON27016 and ten-process launcher. No competing world remains running from this session.

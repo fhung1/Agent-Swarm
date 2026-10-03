@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pinned, isolated Factorio runtime. Run start in a terminal; Ctrl+C saves/stops."""
-import argparse, hashlib, json, os, pathlib, shutil, socket, subprocess, sys, uuid
+import argparse, hashlib, ipaddress, json, os, pathlib, shutil, socket, subprocess, sys, uuid
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VERSION = '2.0.77'
 
@@ -18,13 +18,21 @@ def binary():
     if not version.startswith(f'Version: {VERSION} '): raise ValueError(f'Expected {VERSION}, got {version}')
     return p, version
 
+def game_bind(config):
+    value=config.get('gameBind','127.0.0.1')
+    try: address=ipaddress.ip_address(value)
+    except ValueError: raise ValueError('gameBind must be a specific private IPv4 address')
+    if address.version!=4 or address.is_unspecified or address.is_multicast or not (any(address in ipaddress.ip_network(network) for network in ['127.0.0.0/8','10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','100.64.0.0/10'])):
+        raise ValueError('gameBind must be loopback, private LAN or Tailscale IPv4; public/wildcard binding refused')
+    return str(address)
+
 def ports(config):
     for key, kind in [('gamePort',socket.SOCK_DGRAM),('rconPort',socket.SOCK_STREAM)]:
         value=config[key]
         if type(value) is not int or not 1024 <= value <= 65535: raise ValueError(f'Invalid {key}')
         with socket.socket(socket.AF_INET,kind) as s:
-            try: s.bind(('127.0.0.1',value))
-            except OSError as e: raise ValueError(f'{key} 127.0.0.1:{value} unavailable: {e}')
+            try: s.bind((game_bind(config) if key=='gamePort' else '127.0.0.1',value))
+            except OSError as e: raise ValueError(f'{key} {game_bind(config) if key=="gamePort" else "127.0.0.1"}:{value} unavailable: {e}')
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
@@ -70,7 +78,7 @@ def main():
     if args.command=='inspect': print(json.dumps(manifest,indent=2)); return
     exe,version=binary(); ports(manifest)
     if args.command=='preflight': print('PASS: pinned binary, manifest, bridge, save and ports'); return
-    cmd=[str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(world/'mods'),'--start-server',str(world/'world.zip'),'--server-settings',str(world/'server-settings.json'),'--bind','127.0.0.1','--port',str(manifest['gamePort']),'--rcon-bind','127.0.0.1:'+str(manifest['rconPort']),'--rcon-password', (world/'rcon.password').read_text().strip()]
+    cmd=[str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(world/'mods'),'--start-server',str(world/'world.zip'),'--server-settings',str(world/'server-settings.json'),'--bind',game_bind(manifest),'--port',str(manifest['gamePort']),'--rcon-bind','127.0.0.1:'+str(manifest['rconPort']),'--rcon-password', (world/'rcon.password').read_text().strip()]
     print('Private server starting; Ctrl+C saves and stops. Manifest:',world/'manifest.json',flush=True)
     # foreground ownership: never search for or kill an unrelated Factorio process
     child=subprocess.Popen(cmd)

@@ -9,16 +9,20 @@ def run(*args,ok=True):
     return p
 with tempfile.TemporaryDirectory(prefix='qs-factorio-check-') as directory:
     parent=pathlib.Path(directory);world=parent/'world';config=json.loads((ROOT/'config/factorio-pilot.json').read_text())
+    config['gameBind']=os.environ.get('FACTORIO_CHECK_GAME_BIND','127.0.0.1')
     # Select available ports for this isolated test only; runtime rechecks before startup.
     for key,kind in [('gamePort',socket.SOCK_DGRAM),('rconPort',socket.SOCK_STREAM)]:
         with socket.socket(socket.AF_INET,kind) as s:
-            s.bind(('127.0.0.1',0));config[key]=s.getsockname()[1]
+            s.bind((config['gameBind'] if key=='gamePort' else '127.0.0.1',0));config[key]=s.getsockname()[1]
     config_path=parent/'config.json';config_path.write_text(json.dumps(config))
     run('init','--world',str(world),'--config',str(config_path))
     before=(world/'world.zip').read_bytes()
     run('init','--world',str(world),'--config',str(config_path),ok=False)
     assert before==(world/'world.zip').read_bytes(),'existing save overwritten'
     run('preflight','--world',str(world))
+    invalid=json.loads((world/'manifest.json').read_text());invalid['gameBind']='0.0.0.0'
+    original=(world/'manifest.json').read_text();(world/'manifest.json').write_text(json.dumps(invalid))
+    run('preflight','--world',str(world),ok=False);(world/'manifest.json').write_text(original)
     with (parent/'server.log').open('w') as log:
         child=subprocess.Popen([sys.executable,str(ROOT/'factorio/runtime.py'),'start','--world',str(world)],stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
         try:
