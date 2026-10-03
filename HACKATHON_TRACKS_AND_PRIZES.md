@@ -227,7 +227,7 @@ A desktop microphone and a free .Tech domain name for up to 10 years.
 
 These are proposed targets based on the project ideas discussed so far. The VM fleet manager is supporting infrastructure for the game-agent swarm, rather than a separate user-facing project.
 
-### Quant Swarm: collaborative paper-trading agents
+### Agent Swarm: collaborative paper-trading agents
 
 The project combines specialized research agents, evidence-linked debate, a deterministic risk gate, paper execution, and a live shared dashboard.
 
