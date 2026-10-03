@@ -6,10 +6,12 @@ Do not include credentials, access tokens, private keys, or other secrets. Link 
 
 ## 2026-10-03 — Codex (merge-fix) — Resolve interrupted rebase
 
-- **Status:** in progress; board task `resolve-rebase` (push when finished).
-- **Work completed:** Inspected five conflicted files. Preserving the current private views, run-scoped model workers, and separate development coordination board; retaining incoming Factorio preflight tools and historical handoffs. Graphical Factorio tasks remain part of the deferred vision track.
-- **Checks:** Pending. Node 20 cannot run the TypeScript coordination CLI directly; transpiled it to a temporary file. Created the missing local coordination database, registered, claimed the task, and locked affected files and the index.
-- **Next steps:** Complete rebase, validate, commit final handoff and push main.
+- **Status:** complete; board task `resolve-rebase` (push when finished).
+- **Work completed:** Resolved five conflicted files and completed all four rebase steps. Preserved current private views, run-scoped model workers, and separate development coordination; retained Factorio preflight tools and both handoff histories. Graphical Factorio tasks are documented under the deferred vision track.
+- **Checks:** Full `npm run check:all` under Node 24 passed: generated bindings, typechecks, worker/dashboard builds, 61 unit tests, structured research fixtures, and isolated Phase 1 recovery/risk acceptance (including lease renewal/takeover). Three Python preflight tests and `git diff --check` passed. No model or broker API calls.
+- **Publication:** Rebased commits through `0c57aaf` pushed to upstream `main` using the configured SSH key; HTTPS credentials returned 403. This final handoff follows in a separate commit, whose hash is recorded on the board.
+- **Context:** Installed locked dependencies and used Node 24 because the default Node 20 cannot run native TypeScript. Created the missing local coordination database and registered/claimed/locked this task.
+- **Next steps:** None.
 
 
 ## 2026-10-03 — Codex (repo_reader) — Development coordination dashboard
