@@ -1,0 +1,26 @@
+{
+  "name": "quant-swarm-games",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/worker.ts scripts/swarm.ts scripts/check.ts scripts/check-db.ts scripts/check-workers.ts scripts/inspect.ts --bundle --platform=node --format=esm --packages=external --outdir=dist && esbuild dashboard/app.ts --bundle --platform=browser --format=esm --outfile=dist/dashboard.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test src/*.test.ts",
+    "setup": "node scripts/server.ts setup",
+    "server": "node scripts/server.ts start",
+    "swarm": "node dist/scripts/swarm.js",
+    "check": "node dist/scripts/check.js",
+    "check:db": "node dist/scripts/check-db.js",
+    "check:workers": "node dist/scripts/check-workers.js",
+    "dashboard": "node dashboard/server.mjs"
+  },
+  "dependencies": {
+    "mineflayer": "^4.36.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "mineflayer-collectblock": "^1.6.0",
+    "spacetimedb": "2.10.2",
+    "vec3": "^0.1.10",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": { "@types/node": "^24.0.0", "typescript": "~5.6.2", "esbuild": "^0.24.0" }
+}

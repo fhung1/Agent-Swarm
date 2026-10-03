@@ -1,5 +1,7 @@
 # Quant Swarm backend
 
+The private headless Minecraft implementation is in [games/README.md](games/README.md), with Java/server setup, ten-worker launch, SpacetimeDB permissions and runtime checks. The graphical prototype below is a separate deferred track. Factorio headless tasks are scoped on the development board; its live setup is deferred at the owner's request.
+
 This repository contains a SpacetimeDB 2.10.2 module, a Node.js coordination worker, and the read-only phase of the Alpaca paper adapter. The module stores runs, agents, leased tasks, messages, research evidence, theses, decisions, trade proposals, risk decisions, operator approvals, paper-account snapshots, and market observations. The adapter reads the paper account and selected market quotes; this slice has no order submission or cancellation path.
 
 Agents should record task progress and next steps in the shared [handoff log](HANDOFF.md) when finishing or pausing work.
@@ -304,6 +306,12 @@ SPACETIME_CLI="$HOME/.local/bin/spacetime" npm run check:research-fixture
 
 This check requires the local database publisher's CLI login. It creates distinct client identities, injects schema-validated synthetic responses, and checks thesis/critique/decision flow, bounded proposals, abstention, rejected sizing, identical retries, atomic rollback, and coordinator reconnection. It closes its run and revokes its temporary roles afterward. Synthetic `QFIX` evidence remains as an audit record. It checks handlers and database reducers; live provider responses and the long-lived worker loop require a separate check.
 
+### Evidence selection
+
+Research workers select the latest 10-K and 10-Q plus recent non-SEC sources, up to 6 sources and 40 facts. Each selected source includes all its recorded facts; selection never drops half a filing. Quotes use the latest observation per feed, with deterministic timestamp ties. Model and rules workers share the same selection.
+
+Model prompts list omitted counts and IDs separately; omitted IDs cannot be cited. Evidence is limited to 30,000 characters, and system plus prompt to 48,000 characters. The selection also leaves room for a skeptic thesis reference within the module's 50-reference and 4096-character limits. If minimum required evidence cannot fit, the task fails with a clear permanent error before a model call.
+
 ## Database behavior
 
 The owner uses `grant_agent` and `revoke_agent` to assign roles; a worker cannot assign itself a role. Granted workers call `heartbeat`; the demo repeats it every 15 seconds. `create_run` and `set_run_status` require `operator`. Coordinators or operators create tasks; analysts, skeptics, and coordinators compete for them. A claim checks the task's expected version and open status in an atomic reducer, assigns a 60-second lease, and schedules expiry. A worker renews its lease every 20 seconds while working; a 70-second simulated call has been verified to complete without losing the lease. A task can name a required `role` and a `depends_on` task for the same run and symbol; `claim_task` rejects other roles and waits for the dependency to complete. When a worker hits a permanent error on a task it holds, it records `fail_task` instead of retrying. Lease expiry reopens the task only if the scheduled version still matches. `complete_task` and `fail_task` require the current assignee and an unexpired lease. Message IDs are stable and retry-safe when the repeated request has the same sender and payload.
@@ -331,6 +339,15 @@ Workers wait for a complete subscription snapshot, preserve their token across r
 `configure_run_limits` sets per-run call, token, concurrency and attempt limits. Defaults are 50 calls, 1,000,000 reserved tokens, 2 concurrent calls, and 3 attempts per work item. Before each model call, `begin_inference` reserves budget; `finish_inference` stores usage, actual model and structured output. Uncertain failures retain their token reservation. Completed outputs can be replayed without another model call. Coordinator `decision_input` rows freeze the thesis, critiques, quote, model, prompt version, policy and sizing cap. Monetary API cost reporting and production service/OIDC provisioning remain later operating work.
 
 ### Repeatable local acceptance
+
+For a complete credential-free check on Node.js 24 or newer with SpacetimeDB CLI 2.10.2 installed:
+
+```sh
+npm ci
+npm run check:all
+```
+
+This command builds the module, compares freshly generated bindings with `src/module_bindings/`, typechecks the runner, workers, module and dashboard, builds the workers and dashboard, and runs unit and reducer/process acceptance checks. It starts its own server on a temporary localhost port with a temporary data directory, publisher identity and CLI config, then stops the server and removes that state. It leaves the shared development database and CLI login untouched. No external provider or broker credentials are needed. Allow roughly two minutes for the lease checks. Set `SPACETIME_CLI` if the executable is outside `PATH` and `~/.local/bin`. Stale bindings fail with instructions to run `npm run db:generate`. The GitHub Actions workflow runs the same command on pushes and pull requests.
 
 With the local server and published module running:
 

@@ -8,6 +8,8 @@ This review inspected the current working tree, including uncommitted work, rath
 
 ## Fixes and acceptance follow-up
 
+**Current status (2026-10-03, later implementation):** The polling paper executor, risk worker, supervisor, trading/development dashboards, isolated CI runner and verified backup/restore now exist. The original phase table and findings below are historical; use the current matrix in IMPLEMENTATION_PLAN.md and the coordination board for remaining work. Real Alpaca credentials/feed acceptance is pending. Concrete execution gaps are tracked as `executor-submit-revalidation`, `executor-durable-attempts`, `account-reconciliation-interlock`, `alpaca-trade-update-stream`, `operator-order-cancel` and `executor-failure-drills`. SEC supervisor symbol routing is fixed in `fad241a`; excerpts, amendment/freshness semantics, valuation and real-model research acceptance remain scoped. No per-order human approval is part of the current path.
+
 The findings below describe the original review. The subsequent bug-fix task implemented these changes:
 
 | Finding | Resolution |

@@ -97,6 +97,8 @@ Reuse `run`, `agent` and `message` where they fit; add game tables (all private,
 
 ## Delivery sequence and exit checks
 
+Current implementation is in [games/README.md](games/README.md): an isolated `games` package, private `quant-swarm-games` module on the shared localhost server, generated SDK bindings, Mineflayer adapter, bounded commands, rules/model workers, ten-process launcher and live database checks. The owner accepted the Minecraft EULA for this private server. Token/call budgets are implemented; monetary ceilings and automatic uncertain-action recovery still need their listed acceptance work. Factorio was newly scoped as a headless structured-state track, then its live installation/testing was deferred by the owner because it is not installed.
+
 | Phase | Build | Exit check |
 | --- | --- | --- |
 | M0. Server and connectivity | Java 21; pinned server version and config (offline mode, whitelist, localhost, peaceful, fixed seed); start/stop/backup scripts; a connectivity script that joins ten idle Mineflayer bots. | Ten bots join, stay connected for 10 minutes, and leave cleanly; the operator's own client can observe. |
