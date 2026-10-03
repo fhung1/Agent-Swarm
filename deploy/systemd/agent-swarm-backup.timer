@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Agent Swarm state backup
+
+[Timer]
+OnCalendar=Mon *-*-* 02:30:00
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

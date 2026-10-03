@@ -14,6 +14,8 @@ let retry = 0;
 let timer: number | undefined;
 let queued = false;
 let sessionName = stored(NAME_KEY) ?? '';
+let sessionToken = stored(TOKEN_KEY);
+let recoveredToken = false;
 let draftBody = '';
 let draftRecipient = '';
 let draftTask = '';
@@ -123,7 +125,7 @@ function render(): void {
   const layout = node('div', 'layout');
   const sidebar = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
-  put(brand, node('div', 'brand-mark', 'QS'), 'QUANT SWARM');
+  put(brand, node('div', 'brand-mark', 'AS'), 'AGENT SWARM');
   put(sidebar, brand, node('div', 'side-label', 'DEVELOPMENT BOARD'));
   const navigation = node('div', 'run-list');
   for (const [value, label] of [['active', 'Active tasks'], ['open', 'Open'], ['claimed', 'In progress'], ['blocked', 'Blocked'], ['done', 'Completed'], ['all', 'All tasks']]) {
@@ -245,7 +247,15 @@ function render(): void {
   root.replaceChildren(layout);
 }
 function reconnect(reason: unknown, current: number): void {
-  if (current !== generation || timer !== undefined) return;
+  if (current !== generation) return;
+  // Only recover an explicitly rejected login, never a reducer/access denial.
+  // Keep the fallback in memory even when browser storage is unavailable.
+  if (sessionToken && !recoveredToken && /failed to verify token/i.test(String(reason))) {
+    recoveredToken = true;
+    sessionToken = undefined;
+    try { localStorage.removeItem(TOKEN_KEY); } catch { /* In-memory reset still works. */ }
+  }
+  if (timer !== undefined) return;
   ready = false;
   connection = undefined;
   state = `Development connection interrupted: ${String(reason)}. Reconnecting…`;
@@ -258,11 +268,12 @@ function connect(): void {
   connection = DbConnection.builder()
     .withUri(`ws://${window.location.hostname}:3000`)
     .withDatabaseName('quant-swarm-coord')
-    .withToken(stored(TOKEN_KEY))
+    .withToken(sessionToken)
     .onConnect((conn, _identity, token) => {
       if (current !== generation) { conn.disconnect(); return; }
       connection = conn;
       retry = 0;
+      sessionToken = token;
       save(TOKEN_KEY, token);
       for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock]) {
         table.onInsert(queueRender); table.onUpdate(queueRender); table.onDelete(queueRender);

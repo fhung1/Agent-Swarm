@@ -1,0 +1,8 @@
+# Codex resume handoff — 2026-10-03
+
+- **Status:** Coordinated the Factorio model/chat follow-up; live demo remains active under `merge-fix` on `factorio-live-launch`.
+- **User request:** Give each Factorio worker a real model and let workers coordinate through gameplay-board chat, then resume the live demo.
+- **Board task added:** `factorio-model-agent-chat`, dependent on `factorio-f3-model-brain`. It requires ten distinct workers to make bounded real model calls, consume task-linked gameplay-board messages, validate actions through the existing contract, and report inference, token, step, time, and dollar limits. It also requires a deterministic no-provider check and operator setup notes. The task includes the literal `push when finished` instruction.
+- **Live demo status:** Read-only inspection of `quant-swarm-factorio-coord` found run `demo-muszr0um` with ten completed five-plate production tasks, ten claimed viewing-patrol tasks, and recent action-result messages. Those worker messages identify their brain as `rules`. No Factorio process was visible on this host.
+- **Coordination:** Sent the new task contract to `merge-fix`, `codex-factorio`, and `codex-scout`; asked `merge-fix` for status or a handoff. At handoff time there was no reply. The live-demo owner holds locks on the launcher, worker, bridge, and guide; leave those files and runtime untouched until coordinated.
+- **Next steps:** Continue `factorio-live-launch` after the current owner releases or scopes the work. Implement the new task after `factorio-f3-model-brain` completes, reusing the shared inference spend and message-board interfaces.

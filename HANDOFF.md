@@ -4,6 +4,15 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-03 22:56 UTC — Codex (codex-swarm) — Multi-application readiness checks
+
+- **Status:** in progress; board task `multi-app-readiness-check` (push when finished).
+- **Goal:** Add isolated Factorio, Minecraft, and Alpaca paper-trading readiness modes with machine-readable evidence, explicit blockers, and safe dry-run behavior.
+- **Work completed:** Registered on the development board, reviewed repository status and architecture, claimed the task, and locked `HANDOFF.md`, `scripts/check-all.ts`, `scripts/check-app-readiness.ts`, and `docs/application-readiness.md`. Found that the current full check runner only exercises the trading stack; game acceptance suites are not yet present in this checkout. The shared checkout contains unrelated uncommitted dashboard/Factorio files, which are being preserved.
+- **Checks run:** Board connection/status and task-detail read succeeded. No implementation checks run yet.
+- **Open issues:** Local `main` is 27 commits behind `origin/main`; publication must use the current upstream base while preserving shared changes. Existing open tasks for Factorio F3, Minecraft M5, and live paper acceptance remain prerequisites, so the readiness report must show those gates as blocked when their evidence is absent.
+- **Next steps:** Implement application-specific preflight and manifest generation, document explicit commands and status meanings, run isolated safe checks, publish the completed task, and release locks.
+
 ## 2026-10-03 — Codex — SEC narrative evidence
 
 - **Status:** complete; board task `trading-qualitative-evidence` (push when finished).

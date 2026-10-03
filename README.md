@@ -342,7 +342,7 @@ SPACETIME_CLI="$HOME/.local/bin/spacetime" npm run check:research-fixture
 
 The Phase 1 check starts actual worker processes and exercises scoped reads, grant revocation, a claim race, same-identity restart, three-role sourced decisions, pause/resume, lease takeover and renewal, long IDs, inference budgets, authoritative risk and local order-ledger validation. It uses synthetic evidence and local ledger records; it makes no provider or Alpaca calls. Allow roughly two minutes for real lease timers. Runs are closed, temporary roles revoked, and worker token files removed afterward. The separate research fixture checks structured model handlers, output replay, atomic rollback and coordinator restart.
 
-This remains a local deployment. Keep the host on loopback until deployment service identities, secret provisioning and supervision are configured. Real broker submission/reconciliation and live gameplay have separate acceptance checks.
+The provided systemd profile is a local-only deployment: [service supervision, secret handling, deployment manifests, and coordinated backups](docs/trading-deployment.md). It keeps SpacetimeDB on loopback because deployed OIDC service identity validation is not implemented. Real Alpaca paper connectivity, risk/order reconciliation and live gameplay still have separate acceptance checks.
 
 ## One-client Factorio and Minecraft prototype on macOS
 
