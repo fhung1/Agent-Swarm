@@ -11,3 +11,7 @@
 - User added graphical observation: ten visible identifiable characters, normal graphical client joins the same headless world. Sent requirement to core implementation owner and added acceptance criterion.
 
 - Added graphical viewer helper, isolated mod preparation and exact version checks; three unit tests pass. Full GUI observation is pending a graphical client. Core game bridge is still being implemented by codex-factorio.
+
+- Real-engine fixture passed on Factorio 2.0.77: ten distinct character entities; exactly-once mining effect; conflicting ID/foreign receipt refusal; pause/resume; save/restart preserves actor IDs, inventory and receipts. Report: `/tmp/factorio-engine-acceptance.json`. The fixture does not call models or shared boards.
+- Fixed viewer mod list to explicitly disable bundled expansion mods after real Factorio testing showed omitted DLC defaults to enabled. Both viewer (3) and Python RCON framing (3) tests pass.
+- Still pending: core worker/board integration, visible character labels/colors/walking, graphical-client join, autonomous full-game progress. Reported these separately on Development; no victory claim.

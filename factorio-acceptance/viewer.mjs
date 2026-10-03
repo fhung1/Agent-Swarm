@@ -87,7 +87,7 @@ export function prepareViewer(options) {
   if (existsSync(target)) {
     if (directoryHash(target) !== hash) throw new Error('Installed viewer mod differs from the server mod. Choose a new --state-dir.');
   } else cpSync(source, target, { recursive: true, errorOnExist: true, force: false });
-  const modList = { mods: [{ name: 'base', enabled: true }, { name: metadata.name, enabled: true }] };
+  const modList = { mods: [{ name: 'base', enabled: true }, { name: metadata.name, enabled: true }, ...['space-age', 'quality', 'elevated-rails'].map(name => ({ name, enabled: false }))] };
   writeFileSync(join(mods, 'mod-list.json'), JSON.stringify(modList, null, 2) + '\n');
   return { mods, manifest, args: ['--mod-directory', mods, '--mp-connect', options.address] };
 }

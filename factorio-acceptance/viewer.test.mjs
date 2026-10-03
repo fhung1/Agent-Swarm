@@ -29,7 +29,7 @@ test('prepares only isolated mods, reuses exact content, refuses changed or unow
     const options = { mod: source, stateDir: join(root, 'viewer'), version: '2.0.77', address: '127.0.0.1:34197' };
     const first = prepareViewer(options);
     assert.deepEqual(prepareViewer(options), first);
-    assert.deepEqual(JSON.parse(readFileSync(join(first.mods, 'mod-list.json'))).mods, [{ name: 'base', enabled: true }, { name: 'swarm-bridge', enabled: true }]);
+    assert.deepEqual(JSON.parse(readFileSync(join(first.mods, 'mod-list.json'))).mods, [{ name: 'base', enabled: true }, { name: 'swarm-bridge', enabled: true }, ...['space-age', 'quality', 'elevated-rails'].map(name => ({ name, enabled: false }))]);
     assert.equal(first.args.at(-1), '127.0.0.1:34197');
     const unowned = join(root, 'existing'); mkdirSync(unowned);
     writeFileSync(join(unowned, 'keep.txt'), 'keep');

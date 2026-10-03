@@ -45,3 +45,23 @@ The helper cannot install a purchased graphical game client, prove a successful 
 ```sh
 node --test factorio-acceptance/viewer.test.mjs
 ```
+
+## Independent real-engine checks
+
+This fixture creates its own temporary world, private server, ports and credentials. It does not touch the shared boards or existing saves. It creates ten character entities via the bridge, checks actual inventory changes and same-ID retry behavior, rejects foreign receipts/out-of-range movement, pauses/resumes actions, then saves and restarts the game to verify durable characters and receipts:
+
+```sh
+python3 factorio-acceptance/engine-smoke.py \
+  --binary /path/to/factorio/bin/x64/factorio \
+  --mod factorio/mod/agent-swarm_0.1.0 \
+  --report /tmp/factorio-engine-acceptance.json
+```
+
+For a running world, a read-only character census is also available. Set `FACTORIO_RCON_PASSWORD` in the local environment, then:
+
+```sh
+python3 factorio-acceptance/inspect-world.py --port 27015 --expected 10
+python3 -m unittest discover -s factorio-acceptance -p 'test_*.py' -v
+```
+
+The census records positions, colors, unit IDs and movement between snapshots. It proves real character entities, not graphical rendering, model reasoning or victory. Reports intentionally distinguish these limits. The fixture pins base Factorio 2.0.77 and explicitly disables the three bundled expansion mods; omission from `mod-list.json` alone does not disable them.
