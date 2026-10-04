@@ -23,3 +23,8 @@ Review follow-up: All 15 findings are tracked on Development with evidence, acce
 ## Current: factorio-rejection-receipts
 
 Implemented durable terminal failure receipts for valid scoped rejected operations; malformed envelopes/foreign histories still fail admission, and rejecting a second request preserves the actor’s current busy operation. Worker tests prove next-turn feedback and restart without replay. Passed 18 inference tests, root typecheck, real-engine rejection/replay/restart/conservation checks and the existing production/graceful-restart fixture. `factorio/check-rejections.py` is documented in the runtime guide. Canonicalization owner’s files were preserved; board result records the pushed commit.
+
+
+## Current: factorio-inference-lease-renewal
+
+Implemented independent 15-second resource renewal during model calls/pause, serialized refreshes, five-second renewal timeout, and cancellation on lost/expired/uncertain leases without reacquiring peer resources. Expired peer reservations are omitted from model context and do not prevent atomic acquisition. Rules/inference workers share the entity namespace; old-version workers must be stopped before mixing versions. Passed all 46 Factorio unit tests, root typecheck and bundled worker build; the board result records the pushed commit. Next independent work: crash/save recovery, inference supervision and current-path verification.

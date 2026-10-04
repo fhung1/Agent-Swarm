@@ -66,7 +66,7 @@ async function main(){
  await post('observation',{actorId:actor,goal:'five iron plates',source:'live game'});
  const status=game({kind:'status'});const chest=status.chests[0];
  if(!chest)throw Error('Fixture chest missing');
- const chestPath=`world/${manifest.worldId}/chest/${chest.unit}`;
+ const chestPath=`world/${manifest.worldId}/entity/${chest.unit}`;
  await reserve(chestPath);
  await approach('move-chest',chest.x+1,chest.y);
  await action('take-ore',{kind:'take',targetId:chest.unit,item:'iron-ore',quantity:5});
@@ -76,7 +76,7 @@ async function main(){
  const observed=game({kind:'observe',actor});const furnaces=observed.nearby.filter((e:any)=>e.type==='furnace');
  if(!furnaces.length)throw Error('No furnace in observation radius');
  let furnace:any, furnacePath='';
- while(!furnace){for(const candidate of furnaces){const path=`world/${manifest.worldId}/furnace/${candidate.unit}`;
+ while(!furnace){for(const candidate of furnaces){const path=`world/${manifest.worldId}/entity/${candidate.unit}`;
   if(board.snapshot().reservations.some(r=>r.path===path&&r.holder===name)){furnace=candidate;furnacePath=path;break}
   if(!board.snapshot().reservations.some(r=>r.path===path)){try{await board.reserve(name,path,taskId,'smelting five plates',5)}catch{}
    await sleep(250);if(board.snapshot().reservations.some(r=>r.path===path&&r.holder===name)){furnace=candidate;furnacePath=path;break}}

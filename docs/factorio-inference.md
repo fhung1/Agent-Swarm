@@ -22,7 +22,7 @@ node dist/factorio-inference-swarm.mjs /absolute/path/to/world prompted-demo --s
 
 The default dry run reads game status and checks actor/world configuration without model calls or board writes. `--start` seeds ten run-scoped tasks and launches workers. Ctrl+C stops the launcher and children; stop/save the separately started world afterward.
 
-The immutable plan/logs are under `WORLD/inference/RUN/`; actor tokens, state and deadlines are under `WORLD/inference/RUN-agent-N/`. Restart retains original call counts/deadlines. Unknown actions without valid engine receipts are quarantined, not replayed.
+The immutable plan/logs are under `WORLD/inference/RUN/`; actor tokens, state and deadlines are under `WORLD/inference/RUN-agent-N/`. Restart retains original call counts/deadlines. Unknown actions without valid engine receipts are quarantined, not replayed. Resource leases renew every 15 seconds independently of model calls and pause. Lost, expired or uncertain renewal cancels inference and stops new actions for reconciliation. Rules and inference workers use `world/WORLD_ID/entity/UNIT_ID` reservations; stop old workers using legacy chest/furnace paths before mixing versions.
 
 ## Prompts and inspection
 

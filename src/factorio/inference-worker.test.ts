@@ -132,3 +132,89 @@ test('restart reconciles a rejected operation without resubmitting it', async ()
   await runInferenceWorker(f.options);
   assert.equal(f.options.state.pending, null); assert.equal(f.task.status, 'done');
 });
+test('retained furnace lease renews throughout a long model call and stops after completion', async () => {
+  const f = fixture(); let renewals = 0;
+  const path = 'world/world/entity/42';
+  const reservation = { path, holder: scope.sender, taskId: 'task',
+    expiresAt: { microsSinceUnixEpoch: BigInt(Date.now() + 120) * 1000n } };
+  const snapshot = f.options.board.snapshot;
+  f.options.board.snapshot = () => ({ ...snapshot(), reservations: [reservation] }) as unknown as BoardSnapshot;
+  f.options.board.reserve = async () => {
+    assert.ok(reservation.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n);
+    renewals++; reservation.expiresAt.microsSinceUnixEpoch = BigInt(Date.now() + 120) * 1000n;
+  };
+  f.options.leaseRenewalMs = 10;
+  f.options.ask = (async () => {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.ok(renewals >= 3, 'resource renewed independently of the pending model call');
+    return { kind: 'complete', command: null, message: 'Done', recipient: '', waitMs: 0 };
+  }) as Ask;
+  await runInferenceWorker(f.options);
+  const count = renewals; await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(renewals, count); assert.equal(f.task.status, 'done');
+});
+test('peer takeover during inference cancels the model and never renews the peer resource', async () => {
+  const f = fixture(); let renewals = 0;
+  const reservation = { path: 'world/world/entity/42', holder: scope.sender, taskId: 'task',
+    expiresAt: { microsSinceUnixEpoch: BigInt(Date.now() + 1000) * 1000n } };
+  const snapshot = f.options.board.snapshot;
+  f.options.board.snapshot = () => ({ ...snapshot(), reservations: [reservation] }) as unknown as BoardSnapshot;
+  f.options.board.reserve = async () => { assert.equal(reservation.holder, scope.sender); renewals++; };
+  f.options.leaseRenewalMs = 10;
+  f.options.ask = (async () => {
+    reservation.holder = 'peer';
+    return await new Promise(() => {});
+  }) as Ask;
+  await assert.rejects(runInferenceWorker(f.options), /Resource lease lost/);
+  assert.equal(renewals, 1); assert.equal(f.mutations(), 0); assert.equal(f.options.state.pending, null);
+});
+test('expired peer reservations are omitted from context and do not prevent atomic acquisition', async () => {
+  const f = fixture(); let calls = 0; let acquisitions = 0;
+  const command = { kind: 'take' as const, targetId: 42, item: 'iron-ore' as const, quantity: 5 };
+  let reservations = [{ path: 'world/world/entity/42', holder: 'peer', taskId: 'peer-task',
+    expiresAt: { microsSinceUnixEpoch: 0n } }];
+  const snapshot = f.options.board.snapshot;
+  f.options.board.snapshot = () => ({ ...snapshot(), reservations }) as unknown as BoardSnapshot;
+  f.options.board.reserve = async () => {
+    acquisitions++;
+    reservations = [{ ...reservations[0], holder: scope.sender, taskId: 'task',
+      expiresAt: { microsSinceUnixEpoch: BigInt(Date.now() + 60_000) * 1000n } }];
+  };
+  f.options.board.releaseReservation = async () => { reservations = []; };
+  f.options.ask = (async (_schema, _system, prompt) => {
+    if (++calls === 1) {
+      assert.deepEqual(JSON.parse(prompt).reservations, []);
+      return { kind: 'action', command, message: 'Acquire the expired resource', recipient: '', waitMs: 0 };
+    }
+    return { kind: 'complete', command: null, message: 'Done', recipient: '', waitMs: 0 };
+  }) as Ask;
+  f.options.game = request => {
+    if (request.kind !== 'execute') return { ...f.observation, nearby: [{ unit: 42, type: 'container', x: 1, y: 0 }] };
+    const pending = f.options.state.pending!;
+    return { version: 1, operationId: pending.id, digest: pending.digest,
+      worldId: scope.worldId, historyId: scope.historyId, actorId: scope.actorId,
+      status: 'completed', startTick: 100, endTick: 100, quantity: 5 };
+  };
+  await runInferenceWorker(f.options);
+  assert.equal(acquisitions, 1); assert.equal(f.task.status, 'done');
+});
+test('paused workers retain resource leases without dispatching model calls', async () => {
+  const f = fixture(); let renewals = 0; let calls = 0;
+  f.observation.paused = true;
+  const reservation = { path: 'world/world/entity/42', holder: scope.sender, taskId: 'task',
+    expiresAt: { microsSinceUnixEpoch: BigInt(Date.now() + 1000) * 1000n } };
+  const snapshot = f.options.board.snapshot;
+  f.options.board.snapshot = () => ({ ...snapshot(), reservations: [reservation] }) as unknown as BoardSnapshot;
+  f.options.board.reserve = async () => { assert.equal(calls, 0); renewals++; };
+  f.options.leaseRenewalMs = 10;
+  f.options.sleep = async () => {
+    await new Promise(resolve => setTimeout(resolve, 15));
+    if (renewals >= 3) f.observation.paused = false;
+  };
+  f.options.ask = (async () => {
+    assert.equal(f.observation.paused, false); calls++;
+    return { kind: 'complete', command: null, message: 'Done', recipient: '', waitMs: 0 };
+  }) as Ask;
+  await runInferenceWorker(f.options);
+  assert.ok(renewals >= 3); assert.equal(calls, 1); assert.equal(f.task.status, 'done');
+});
