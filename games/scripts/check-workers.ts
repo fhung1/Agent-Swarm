@@ -5,9 +5,10 @@ import { connectDatabase, DATABASE } from '../src/database.ts';
 import { recordId } from '../../src/ids.ts';
 
 const runId=`worker-check-${Date.now()}`;
-const env={...process.env,GAME_RUN_ID:runId,GAME_BRAIN:'fixture',GAME_MAX_STEPS:'2',GAME_STEP_MS:'1000',GAME_FIXTURE_DELAY_MS:'500',GAME_AGENT_COUNT:'10',GAME_MAX_CALLS:'50',GAME_MAX_TOKENS:'1000000',GAME_MAX_CONCURRENT:'2'};
+const env={...process.env,GAME_RUN_ID:runId,GAME_BRAIN:'fixture',GAME_MAX_STEPS:'2',GAME_STEP_MS:'1000',GAME_FIXTURE_DELAY_MS:'500',GAME_AGENT_COUNT:'10',GAME_MAX_CALLS:'50',GAME_MAX_TOKENS:'3000000',GAME_MAX_CONCURRENT:'2',GAME_PRICING_VERSION:'fixture-v1',GAME_INPUT_MICROS_USD_PER_MILLION:'1000000',GAME_CACHE_READ_MICROS_USD_PER_MILLION:'1000000',GAME_CACHE_WRITE_MICROS_USD_PER_MILLION:'1000000',GAME_OUTPUT_MICROS_USD_PER_MILLION:'1000000',GAME_MAX_SPEND_MICROS:'50000000',GAME_MAX_WORKER_SPEND_MICROS:'5000000'};
 const cli=process.env.SPACETIME_CLI??'spacetime';
-function owner(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server','local',DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
+const server=process.env.SPACETIME_SERVER??'local';
+function owner(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server',server,DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
 async function launch(command:string,override:Record<string,string>={}){
   const child=spawn(process.execPath,['dist/scripts/swarm.js',command],{env:{...env,...override},stdio:['ignore','pipe','pipe']});
   const timer=setTimeout(()=>child.kill('SIGTERM'),120000);let log='';
@@ -33,11 +34,13 @@ try{
   // Reproduce a crash between durable model output and action creation.
   const workId=recordId('game-action.',`${runId}.qs-agent-1.2`);
   const inferenceId=`recovery.${randomUUID()}`;
-  await conn.reducers.beginInference({id:inferenceId,runId,reservedTokens:32000,model:'local-fixture',workId,inputHash:'a'.repeat(64)});
-  await conn.reducers.finishInference({id:inferenceId,tokensUsed:100,outputJson:JSON.stringify({action:{kind:'wait',seconds:0},reason:'Recorded before worker restart',citations:[]})});
+  await conn.reducers.beginInference({id:inferenceId,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'local-fixture',workId,inputHash:'a'.repeat(64)});
+  await conn.reducers.finishInference({id:inferenceId,inputTokens:80,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:20,usageKnown:true,succeeded:true,model:'local-fixture',outputJson:JSON.stringify({action:{kind:'wait',seconds:0},reason:'Recorded before worker restart',citations:[]})});
   const recoveryCalls=run().usedCalls;
   await launch('up',{GAME_AGENT_COUNT:'1',GAME_MAX_STEPS:'3'});await new Promise(r=>setTimeout(r,100));
   assert.equal(actions().find(a=>a.id===workId)?.status,'completed');
   assert.equal(run().usedCalls,recoveryCalls,'Recorded inference must be reused without a second call');
+  assert.ok(inferences().every(i=>i.spendMicros===100n&&i.reservedSpendMicros>i.spendMicros),'Successful calls settle to measured usage');
+  assert.equal(run().usedSpendMicros,2100n,'Only settled spend is charged after successful usage is known');
   console.log(`PASS ${runId}: ten independent workers, 20 completed actions/inferences, cross-agent citations, bounded concurrency, restart limits and recorded-output reuse`);
 }finally{owner('set_run_status',[runId,'closed']);conn.disconnect();}

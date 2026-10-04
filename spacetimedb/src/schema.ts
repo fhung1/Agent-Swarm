@@ -121,6 +121,8 @@ export const riskPolicy = table({ name: 'risk_policy' }, {
 export const runConfig = table({ name: 'run_config' }, {
   runId: t.string().primaryKey(), policyId: t.string(), maxInferences: t.u32(), maxTokens: t.u32(),
   maxConcurrent: t.u32(), maxAttempts: t.u32(), usedInferences: t.u32(), usedTokens: t.u32(),
+  pricingVersion: t.string().default(''), maxSpendMicros: t.u64().default(0n),
+  maxWorkerSpendMicros: t.u64().default(0n), usedSpendMicros: t.u64().default(0n),
 });
 export const marketClock = table({ name: 'market_clock' }, {
   accountId: t.string().primaryKey(), isOpen: t.bool(), asOf: t.timestamp(), capturedAt: t.timestamp(),
@@ -139,12 +141,21 @@ export const inferenceAttempt = table({ name: 'inference_attempt' }, {
   model: t.string(), promptVersion: t.string(), inputRefs: t.string(), status: t.string(),
   reservedTokens: t.u32(), tokensUsed: t.u32(), startedAt: t.timestamp(), expiresAt: t.timestamp(),
   actualModel: t.string().default(''), outputJson: t.string().default(''),
+  pricingVersion: t.string().default(''), reservedInputTokens: t.u32().default(0), reservedOutputTokens: t.u32().default(0),
+  inputTokens: t.u32().default(0), cacheReadTokens: t.u32().default(0), cacheWriteTokens: t.u32().default(0), outputTokens: t.u32().default(0),
+  reservedSpendMicros: t.u64().default(0n), spendMicros: t.u64().default(0n),
+  failureReason: t.string().default(''),
+});
+export const modelPrice = table({ name: 'model_price' }, {
+  id: t.string().primaryKey(), version: t.string().index('btree'), model: t.string(),
+  inputMicrosPerMillion: t.u64(), cacheReadMicrosPerMillion: t.u64(), cacheWriteMicrosPerMillion: t.u64(),
+  outputMicrosPerMillion: t.u64(), createdAt: t.timestamp(),
 });
 
 const spacetimedb = schema({
   ownerConfig, agent, run, task, taskLease, message, source, fact, thesis,
   decision, tradeProposal, riskDecision, approval, paperOrder, orderCancelRequest, tradeUpdate, fill, accountSnapshot,
   marketObservation, reconciliation, runMetric, runAccess, accountAccess, riskPolicy, runConfig, marketClock,
-  riskReservation, decisionInput, inferenceAttempt, riskDecisionHistory, paperSubmission, accountLedger, accountCheck,
+  riskReservation, decisionInput, inferenceAttempt, modelPrice, riskDecisionHistory, paperSubmission, accountLedger, accountCheck,
 });
 export default spacetimedb;

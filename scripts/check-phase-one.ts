@@ -4,8 +4,10 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Timestamp } from 'spacetimedb';
+import { z } from 'zod';
 import { DbConnection } from '../src/module_bindings/index.ts';
 import { recordId } from '../src/ids.ts';
+import { accountedAsk } from '../src/agents/accounted-ask.ts';
 
 // Real local reducers and worker processes; synthetic evidence, no provider or broker calls.
 const cli = process.env.SPACETIME_CLI ?? 'spacetime';
@@ -19,9 +21,10 @@ const accountId = `${runId}.paper`;
 const dir = mkdtempSync(join(tmpdir(), 'quant-phase-one-'));
 const clients: any[] = [];
 const workers: ChildProcess[] = [];
+let operatorConn: any;
 const logs = new Map<ChildProcess, string>();
 const call = (...args: string[]) => execFileSync(cli, [...cliConfig, 'call', '--server', server, database, ...args], { encoding: 'utf8', stdio: ['ignore','pipe','pipe'] });
-const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','order_cancel_request','trade_update','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt','paper_submission','account_ledger','account_check'];
+const tables = ['agent','run','task','message','source','fact','thesis','decision','trade_proposal','account_snapshot','market_observation','risk_decision','risk_decision_history','paper_order','order_cancel_request','trade_update','fill','run_config','risk_policy','market_clock','risk_reservation','decision_input','inference_attempt','paper_submission','account_ledger','account_check','model_price'];
 const now = () => Timestamp.fromDate(new Date());
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(fn: () => unknown, label: string, timeout = 20000) {
@@ -58,6 +61,7 @@ async function stop(child: ChildProcess) {
 let created = false;
 try {
   const op = await connect('operator');
+  operatorConn = op.conn;
   await op.conn.reducers.createRun({id:runId,goal:'Phase 1 synthetic acceptance; no brokerage calls'});
   created = true;
   await op.conn.reducers.createRun({id:otherRun,goal:'Isolation sentinel'});
@@ -133,23 +137,77 @@ try {
   await waitFor(()=>op.conn.db.myTask.id.find(longId)?.status==='completed','maximum-length task IDs');
   console.log('PASS 128-character task ID produces valid stable derived records');
   // Exercise durable accounting while the abandoned lease is expiring.
-  await op.conn.reducers.configureRunLimits({runId,maxInferences:2,maxTokens:40000,maxConcurrent:1,maxAttempts:2});
+  await op.conn.reducers.configureRunLimits({runId,maxInferences:10,maxTokens:100000,maxConcurrent:1,maxAttempts:2});
+  const pricingVersion = 'phase-one-fixture-v1';
+  const rates = { version:pricingVersion,model:'fixture',inputMicrosPerMillion:'1000000',
+    cacheReadMicrosPerMillion:'1000000',cacheWriteMicrosPerMillion:'1000000',outputMicrosPerMillion:'1000000' };
+  await op.conn.reducers.configureModelPrice(rates);
+  await op.conn.reducers.configureModelPrice({...rates,model:'fixture-actual'});
+  await op.conn.reducers.configureRunSpend({runId,pricingVersion,maxSpendMicros:'100000',maxWorkerSpendMicros:'50000'});
+  await assert.rejects(op.conn.reducers.configureModelPrice({...rates,inputMicrosPerMillion:'2000000'}),/immutable/);
   const budgetTask = `${runId}.budget`;
   // A different kind avoids worker auto-claim while reducers still exercise task ownership.
   await op.conn.reducers.createTask({id:budgetTask,runId,symbol:'QPHASE',kind:'research',objective:'Durable budget checks',role:'analyst',dependsOn:''});
   await waitFor(()=>winner.conn.db.myTask.id.find(budgetTask),'budget task');
   await winner.conn.reducers.claimTask({id:budgetTask,expectedVersion:0n});
-  const inference = {id:`${runId}.inference`,runId,workId:budgetTask,model:'fixture',promptVersion:'test-v1',inputRefs:sourceId,reservedTokens:20000};
+  let paidCalls = 0;
+  const unknownPriceAsk: any = async (_schema: unknown, _system: string, _prompt: string, options: any) => {
+    paidCalls++;
+    options?.onUsage?.({inputTokens:1,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:1},'unpriced-model');
+    return {ok:true};
+  };
+  unknownPriceAsk.model = 'unpriced-model';
+  await assert.rejects(accountedAsk(unknownPriceAsk,winner.conn,runId,budgetTask,sourceId)(z.object({ok:z.boolean()}),'sys','prompt'),/No model price/);
+  assert.equal(paidCalls,0);
+  const inference = {id:`${runId}.inference`,runId,workId:budgetTask,model:'fixture',promptVersion:'test-v1',inputRefs:sourceId,reservedInputTokens:10000,reservedOutputTokens:10000};
   await winner.conn.reducers.beginInference(inference);
   await assert.rejects(winner.conn.reducers.beginInference({...inference,id:`${runId}.busy`}),/capacity busy/);
-  await winner.conn.reducers.finishInference({id:inference.id,tokensUsed:100,succeeded:true,model:'fixture-actual',outputJson:'{"saved":true}'});
+  await winner.conn.reducers.finishInference({id:inference.id,inputTokens:100,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:0,usageKnown:true,succeeded:true,model:'fixture-actual',outputJson:'{"saved":true}'});
   await winner.conn.reducers.beginInference({...inference,id:`${runId}.retry`});
-  await winner.conn.reducers.finishInference({id:`${runId}.retry`,tokensUsed:0,succeeded:false,model:'fixture',outputJson:''});
+  await winner.conn.reducers.finishInference({id:`${runId}.retry`,inputTokens:0,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:0,usageKnown:false,succeeded:false,model:'fixture',outputJson:''});
   await assert.rejects(winner.conn.reducers.beginInference({...inference,id:`${runId}.exhausted`}),/attempts exhausted/);
+  const observedFailureTask=`${runId}.observed-failure`;
+  await op.conn.reducers.createTask({id:observedFailureTask,runId,symbol:'QPHASE',kind:'research',objective:'Settle usage from an invalid response',role:'analyst',dependsOn:''});
+  await waitFor(()=>winner.conn.db.myTask.id.find(observedFailureTask),'known-usage failure task');
+  await winner.conn.reducers.claimTask({id:observedFailureTask,expectedVersion:0n});
+  const observedFailureId=`${runId}.observed-failure-call`;
+  await winner.conn.reducers.beginInference({...inference,id:observedFailureId,workId:observedFailureTask});
+  await winner.conn.reducers.finishInference({id:observedFailureId,inputTokens:100,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:0,usageKnown:true,succeeded:false,model:'fixture',outputJson:''});
+  assert.equal(winner.conn.db.myInferenceAttempt.id.find(observedFailureId)?.spendMicros,100n,'Known usage is charged even when output is rejected');
+  await op.conn.reducers.configureRunSpend({runId,pricingVersion,maxSpendMicros:'100000',maxWorkerSpendMicros:'30000'});
   await waitFor(()=>winner.conn.db.myInferenceAttempt.id.find(inference.id)?.status==='completed','durable inference audit');
   assert.equal(winner.conn.db.myInferenceAttempt.id.find(inference.id)?.actualModel,'fixture-actual');
-  assert.equal(winner.conn.db.myRunConfig.runId.find(runId)?.usedTokens,20100);
-  console.log('PASS inference concurrency, attempts, conservative failed-call accounting and output audit');
+  assert.equal(winner.conn.db.myRunConfig.runId.find(runId)?.usedTokens,20200);
+  assert.equal(winner.conn.db.myRunConfig.runId.find(runId)?.usedSpendMicros,20200n);
+  const workerLimitTask = `${runId}.worker-limit`;
+  await op.conn.reducers.createTask({id:workerLimitTask,runId,symbol:'QPHASE',kind:'research',objective:'Worker monetary limit',role:'analyst',dependsOn:''});
+  await waitFor(()=>winner.conn.db.myTask.id.find(workerLimitTask),'worker budget task');
+  await winner.conn.reducers.claimTask({id:workerLimitTask,expectedVersion:0n});
+  await assert.rejects(winner.conn.reducers.beginInference({...inference,id:`${runId}.worker-limit-call`,workId:workerLimitTask}),/Worker monetary budget exhausted/);
+  await assert.rejects(op.conn.reducers.configureRunSpend({runId,pricingVersion,maxSpendMicros:'20000',maxWorkerSpendMicros:'30000'}),/below reserved or spent amount/);
+
+  // Two distinct workers race for a run cap that can fund exactly one request.
+  grant(ingestor,otherRun); grant(a,otherRun); grant(b,otherRun);
+  const raceSourceId = `${otherRun}.source`;
+  await ingestor.conn.reducers.addSource({id:raceSourceId,runId:otherRun,symbol:'QPHASE',kind:'fixture',uri:'fixture://spend-race',asOf:now(),checksum:'synthetic',artifactRef:''});
+  await op.conn.reducers.configureRunSpend({runId:otherRun,pricingVersion,maxSpendMicros:'30000',maxWorkerSpendMicros:'30000'});
+  const raceTasks = [`${otherRun}.budget-a`,`${otherRun}.budget-b`];
+  for (const [index,id] of raceTasks.entries()) {
+    await op.conn.reducers.createTask({id,runId:otherRun,symbol:'QPHASE',kind:'research',objective:'Concurrent spend reservation',role:'analyst',dependsOn:''});
+    const owner = index ? b : a;
+    await waitFor(()=>owner.conn.db.myTask.id.find(id),`worker sees ${id}`);
+    await owner.conn.reducers.claimTask({id,expectedVersion:0n});
+  }
+  const beginFor = (owner:any,id:string) => owner.conn.reducers.beginInference({id:`${id}.call`,runId:otherRun,workId:id,
+    model:'fixture',promptVersion:'test-v1',inputRefs:raceSourceId,reservedInputTokens:10000,reservedOutputTokens:10000});
+  const race = await Promise.allSettled([beginFor(a,raceTasks[0]!),beginFor(b,raceTasks[1]!)]);
+  assert.equal(race.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(race.filter(result=>result.status==='rejected').length,1);
+  const rejectedRace = race.find(result=>result.status==='rejected') as PromiseRejectedResult;
+  assert.match(String(rejectedRace.reason),/Run monetary budget exhausted/);
+  assert.equal([...op.conn.db.myInferenceAttempt.iter()].filter((row:any)=>row.runId===otherRun).length,1);
+  assert.equal(op.conn.db.myRunConfig.runId.find(otherRun)?.usedSpendMicros,20000n);
+  console.log('PASS versioned prices, unknown-price refusal before calls, atomic run/worker ceilings, uncertain-call reservations and output audit');
   // Risk/ledger check uses only the local simulated ledger, never sends a paper order.
   const policyId = `${runId}.policy`;
   const policy = {version:policyId,allowedSymbols:['QPHASE','QSECOND'],longOnly:true,maxOrderNotional:1000,maxPositionNotional:5000,maxQuoteAgeMs:120000,maxAccountAgeMs:120000,maxLimitDeviation:0.05,approvalTtlMs:120000,maxProposalAgeMs:900000,requireMarketOpen:true,maxPortfolioNotional:10000,maxOpenOrders:5};
@@ -261,7 +319,7 @@ try {
   console.log('PASS pending reservation rejection and live account access revocation');
   const renewalClient = await connect('analyst'); grant(renewalClient,otherRun);
   grant(ingestor,otherRun);
-  await ingestor.conn.reducers.addSource({id:`${otherRun}.source`,runId:otherRun,symbol:'QPHASE',kind:'fixture',uri:'fixture://lease-renewal',asOf:now(),checksum:'synthetic',artifactRef:''});
+  await ingestor.conn.reducers.addSource({id:`${otherRun}.renewal-source`,runId:otherRun,symbol:'QPHASE',kind:'fixture',uri:'fixture://lease-renewal',asOf:now(),checksum:'synthetic',artifactRef:''});
   const renewalId = `${runId}.renewal`;
   await stop(takeoverWorker);
   await op.conn.reducers.createTask({id:renewalId,runId:otherRun,symbol:'QPHASE',kind:'thesis',objective:'Slow lease renewal',role:'analyst',dependsOn:''});
@@ -287,7 +345,10 @@ try {
   throw error;
 } finally {
   await Promise.all(workers.map(stop));
-  if (created) { call('set_run_status',runId,'closed'); call('set_run_status',otherRun,'closed'); }
+  if (created && operatorConn?.isActive) {
+    await operatorConn.reducers.setRunStatus({id:runId,status:'closed'});
+    await operatorConn.reducers.setRunStatus({id:otherRun,status:'closed'});
+  }
   for (const conn of clients) conn.disconnect();
   for (const identity of new Set(clients.map(c=>c.identity.toHexString()))) call('revoke_agent',identity);
   rmSync(dir,{recursive:true,force:true});

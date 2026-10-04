@@ -6,8 +6,39 @@ import { validatePolicy, type RiskPolicy } from './risk';
 
 export function configFor(ctx: Ctx, runId: string) {
   return ctx.db.runConfig.runId.find(runId) ?? ctx.db.runConfig.insert({ runId, policyId: '',
-    maxInferences: 50, maxTokens: 1_000_000, maxConcurrent: 2, maxAttempts: 3, usedInferences: 0, usedTokens: 0 });
+    maxInferences: 50, maxTokens: 1_000_000, maxConcurrent: 2, maxAttempts: 3, usedInferences: 0, usedTokens: 0,
+    pricingVersion: '', maxSpendMicros: 0n, maxWorkerSpendMicros: 0n, usedSpendMicros: 0n });
 }
+
+const TOKEN_SCALE = 1_000_000n;
+const U64_MAX = 18_446_744_073_709_551_615n;
+
+function parseMicros(value: string, label: string): bigint {
+  if (!/^(0|[1-9]\d{0,19})$/.test(value)) throw new SenderError(`${label} must be an unsigned micro-USD integer`);
+  const parsed = BigInt(value);
+  if (parsed > U64_MAX) throw new SenderError(`${label} is outside the supported range`);
+  return parsed;
+}
+
+function costMicros(input: number, cacheRead: number, cacheWrite: number, output: number,
+  price: { inputMicrosPerMillion: bigint; cacheReadMicrosPerMillion: bigint;
+    cacheWriteMicrosPerMillion: bigint; outputMicrosPerMillion: bigint }): bigint {
+  const numerator = BigInt(input) * price.inputMicrosPerMillion + BigInt(cacheRead) * price.cacheReadMicrosPerMillion +
+    BigInt(cacheWrite) * price.cacheWriteMicrosPerMillion + BigInt(output) * price.outputMicrosPerMillion;
+  const result = (numerator + TOKEN_SCALE - 1n) / TOKEN_SCALE;
+  if (result > U64_MAX) throw new SenderError('Inference spend exceeds the supported range');
+  return result;
+}
+
+function reserveMicros(input: number, output: number,
+  price: { inputMicrosPerMillion: bigint; cacheReadMicrosPerMillion: bigint;
+    cacheWriteMicrosPerMillion: bigint; outputMicrosPerMillion: bigint }): bigint {
+  const inputRate = [price.inputMicrosPerMillion, price.cacheReadMicrosPerMillion, price.cacheWriteMicrosPerMillion]
+    .reduce((max, rate) => rate > max ? rate : max, 0n);
+  return costMicros(input, 0, 0, output, { ...price, inputMicrosPerMillion: inputRate });
+}
+
+function priceId(version: string, model: string): string { return `${version}:${model}`; }
 
 export const grantRunAccess = spacetimedb.reducer({ identity: t.identity(), runId: t.string() }, (ctx, value) => {
   requireOwner(ctx); requireId(value.runId);
@@ -36,6 +67,48 @@ export const configureRunLimits = spacetimedb.reducer({ runId: t.string(), maxIn
   const current = configFor(ctx, value.runId);
   if (value.maxInferences < current.usedInferences || value.maxTokens < current.usedTokens) throw new SenderError('Limits below consumed budget');
   ctx.db.runConfig.runId.update({ ...current, ...value });
+});
+
+// Price records are immutable snapshots supplied by the operator. A provider's
+// published rates can change, so a new rate card must use a new version string.
+export const configureModelPrice = spacetimedb.reducer({ version: t.string(), model: t.string(),
+  inputMicrosPerMillion: t.string(), cacheReadMicrosPerMillion: t.string(),
+  cacheWriteMicrosPerMillion: t.string(), outputMicrosPerMillion: t.string() }, (ctx, value) => {
+  requireRole(ctx, ['operator']); requireText(value.version, 'Pricing version', 64); requireText(value.model, 'Model', 128);
+  const row = { id: priceId(value.version, value.model), version: value.version, model: value.model,
+    inputMicrosPerMillion: parseMicros(value.inputMicrosPerMillion, 'Input price'),
+    cacheReadMicrosPerMillion: parseMicros(value.cacheReadMicrosPerMillion, 'Cache-read price'),
+    cacheWriteMicrosPerMillion: parseMicros(value.cacheWriteMicrosPerMillion, 'Cache-write price'),
+    outputMicrosPerMillion: parseMicros(value.outputMicrosPerMillion, 'Output price'), createdAt: ctx.timestamp };
+  const previous = ctx.db.modelPrice.id.find(row.id);
+  if (previous) {
+    if (previous.version !== row.version || previous.model !== row.model ||
+        previous.inputMicrosPerMillion !== row.inputMicrosPerMillion ||
+        previous.cacheReadMicrosPerMillion !== row.cacheReadMicrosPerMillion ||
+        previous.cacheWriteMicrosPerMillion !== row.cacheWriteMicrosPerMillion ||
+        previous.outputMicrosPerMillion !== row.outputMicrosPerMillion) throw new SenderError('Pricing version is immutable');
+    return;
+  }
+  ctx.db.modelPrice.insert(row);
+});
+
+export const configureRunSpend = spacetimedb.reducer({ runId: t.string(), pricingVersion: t.string(),
+  maxSpendMicros: t.string(), maxWorkerSpendMicros: t.string() }, (ctx, value) => {
+  requireRole(ctx, ['operator']); requireRun(ctx, value.runId); requireText(value.pricingVersion, 'Pricing version', 64);
+  if (![...ctx.db.modelPrice.version.filter(value.pricingVersion)].length) throw new SenderError('Pricing version has no model prices');
+  const maxSpendMicros = parseMicros(value.maxSpendMicros, 'Run spend ceiling');
+  const maxWorkerSpendMicros = parseMicros(value.maxWorkerSpendMicros, 'Worker spend ceiling');
+  const current = configFor(ctx, value.runId);
+  if (maxSpendMicros && maxSpendMicros < current.usedSpendMicros) throw new SenderError('Run spend ceiling is below reserved or spent amount');
+  const workerSpend = new Map<string, bigint>();
+  for (const attempt of ctx.db.inferenceAttempt.runId.filter(value.runId)) {
+    const id = attempt.actor.toHexString();
+    workerSpend.set(id, (workerSpend.get(id) ?? 0n) + attempt.spendMicros);
+  }
+  if (maxWorkerSpendMicros && [...workerSpend.values()].some(used => used > maxWorkerSpendMicros)) {
+    throw new SenderError('Worker spend ceiling is below reserved or spent amount');
+  }
+  ctx.db.runConfig.runId.update({ ...current, pricingVersion: value.pricingVersion, maxSpendMicros, maxWorkerSpendMicros });
 });
 
 export const addRiskPolicy = spacetimedb.reducer({ id: t.string(), runId: t.string(), accountId: t.string(), policyJson: t.string() }, (ctx, value) => {
@@ -93,10 +166,12 @@ export const recordDecisionInput = spacetimedb.reducer({ id: t.string(), runId: 
 });
 
 export const beginInference = spacetimedb.reducer({ id: t.string(), runId: t.string(), workId: t.string(), model: t.string(),
-  promptVersion: t.string(), inputRefs: t.string(), reservedTokens: t.u32() }, (ctx, value) => {
+  promptVersion: t.string(), inputRefs: t.string(), reservedInputTokens: t.u32(), reservedOutputTokens: t.u32() }, (ctx, value) => {
   requireRole(ctx, ['analyst', 'valuation', 'portfolio', 'skeptic', 'coordinator']); requireRun(ctx, value.runId); requireId(value.id); requireId(value.workId);
   requireText(value.model, 'Model', 128); requireText(value.promptVersion, 'Prompt version', 64);
-  if (value.inputRefs.length > 4096 || value.reservedTokens < 16_000) throw new SenderError('Invalid inference reservation');
+  const reservedTokens = value.reservedInputTokens + value.reservedOutputTokens;
+  if (value.inputRefs.length > 4096 || !value.reservedInputTokens || !value.reservedOutputTokens ||
+      !Number.isSafeInteger(reservedTokens) || reservedTokens > 0xffff_ffff) throw new SenderError('Invalid inference reservation');
   if (ctx.db.inferenceAttempt.id.find(value.id)) throw new SenderError('Inference attempt exists');
   const task = ctx.db.task.id.find(value.workId);
   const input = ctx.db.decisionInput.id.find(value.workId);
@@ -109,26 +184,62 @@ export const beginInference = spacetimedb.reducer({ id: t.string(), runId: t.str
     if (input.model !== value.model || input.promptVersion !== value.promptVersion) throw new SenderError('Inference differs from frozen decision configuration');
   }
   const config = configFor(ctx, value.runId);
+  if (!config.pricingVersion) throw new SenderError('Model price version is not configured');
+  const price = ctx.db.modelPrice.id.find(priceId(config.pricingVersion, value.model));
+  if (!price) throw new SenderError(`No model price for ${value.model} in version ${config.pricingVersion}`);
+  const reservedSpendMicros = reserveMicros(value.reservedInputTokens, value.reservedOutputTokens, price);
   const attempts = [...ctx.db.inferenceAttempt.runId.filter(value.runId)];
   if (attempts.filter(a => a.workId === value.workId).length >= config.maxAttempts) throw new SenderError('Inference attempts exhausted');
   if (attempts.filter(a => a.status === 'running' && a.expiresAt.microsSinceUnixEpoch > ctx.timestamp.microsSinceUnixEpoch).length >= config.maxConcurrent) throw new SenderError('Inference capacity busy');
-  if (config.usedInferences + 1 > config.maxInferences || config.usedTokens + value.reservedTokens > config.maxTokens) throw new SenderError('Inference budget exhausted');
-  ctx.db.runConfig.runId.update({ ...config, usedInferences: config.usedInferences + 1, usedTokens: config.usedTokens + value.reservedTokens });
-  ctx.db.inferenceAttempt.insert({ ...value, actor: ctx.sender, status: 'running', tokensUsed: value.reservedTokens,
-    actualModel: '', outputJson: '', startedAt: ctx.timestamp, expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + 180_000_000n) });
+  if (config.usedInferences + 1 > config.maxInferences || config.usedTokens + reservedTokens > config.maxTokens) throw new SenderError('Inference budget exhausted');
+  const workerSpend = attempts.filter(a => a.actor.equals(ctx.sender)).reduce((sum, a) => sum + a.spendMicros, 0n);
+  if (config.maxSpendMicros && config.usedSpendMicros + reservedSpendMicros > config.maxSpendMicros) throw new SenderError('Run monetary budget exhausted');
+  if (config.maxWorkerSpendMicros && workerSpend + reservedSpendMicros > config.maxWorkerSpendMicros) throw new SenderError('Worker monetary budget exhausted');
+  if (config.usedSpendMicros + reservedSpendMicros > U64_MAX) throw new SenderError('Run spend counter overflow');
+  ctx.db.runConfig.runId.update({ ...config, usedInferences: config.usedInferences + 1,
+    usedTokens: config.usedTokens + reservedTokens, usedSpendMicros: config.usedSpendMicros + reservedSpendMicros });
+  ctx.db.inferenceAttempt.insert({ ...value, reservedTokens, actor: ctx.sender, status: 'running', tokensUsed: reservedTokens,
+    actualModel: '', outputJson: '', pricingVersion: config.pricingVersion, inputTokens: 0, cacheReadTokens: 0,
+    cacheWriteTokens: 0, outputTokens: 0, reservedSpendMicros, spendMicros: reservedSpendMicros, failureReason: '',
+    startedAt: ctx.timestamp, expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + 180_000_000n) });
 });
-export const finishInference = spacetimedb.reducer({ id: t.string(), tokensUsed: t.u32(), succeeded: t.bool(), model: t.string(), outputJson: t.string() }, (ctx, value) => {
+export const finishInference = spacetimedb.reducer({ id: t.string(), inputTokens: t.u32(), cacheReadTokens: t.u32(),
+  cacheWriteTokens: t.u32(), outputTokens: t.u32(), usageKnown: t.bool(), succeeded: t.bool(), model: t.string(), outputJson: t.string() }, (ctx, value) => {
   requireRole(ctx, ['analyst', 'valuation', 'portfolio', 'skeptic', 'coordinator']);
   requireText(value.model, 'Actual model', 128);
   if (value.outputJson.length > 32768 || (value.succeeded && !value.outputJson)) throw new SenderError('Invalid inference output size');
   const attempt = ctx.db.inferenceAttempt.id.find(value.id);
   if (!attempt || !attempt.actor.equals(ctx.sender)) throw new SenderError('Inference not owned');
   if (attempt.status !== 'running') return;
-  // On an uncertain provider failure retain the whole reservation, avoiding unaccounted spend.
-  const tokensUsed = value.succeeded ? value.tokensUsed : attempt.reservedTokens;
+  const actualTokens = value.inputTokens + value.cacheReadTokens + value.cacheWriteTokens + value.outputTokens;
+  if (!Number.isSafeInteger(actualTokens) || actualTokens > 0xffff_ffff) throw new SenderError('Inference token count overflow');
   const config = configFor(ctx, attempt.runId);
-  const total = config.usedTokens - attempt.reservedTokens + tokensUsed;
-  if (total > 0xffffffff) throw new SenderError('Token count overflow');
-  ctx.db.runConfig.runId.update({ ...config, usedTokens: total });
-  ctx.db.inferenceAttempt.id.update({ ...attempt, status: value.succeeded ? 'completed' : 'failed', tokensUsed, actualModel: value.model, outputJson: value.succeeded ? value.outputJson : '' });
+  const actualPrice = ctx.db.modelPrice.id.find(priceId(attempt.pricingVersion, value.model));
+  const requestPrice = ctx.db.modelPrice.id.find(priceId(attempt.pricingVersion, attempt.model));
+  const price = actualPrice ?? requestPrice;
+  if (!price) throw new SenderError('Recorded model price disappeared');
+  const actualSpendMicros = costMicros(value.inputTokens, value.cacheReadTokens, value.cacheWriteTokens, value.outputTokens, price);
+  const actualKnown = Boolean(actualPrice);
+  const underReserved = value.usageKnown && (actualTokens > attempt.reservedTokens || actualSpendMicros > attempt.reservedSpendMicros);
+  const unpricedActualModel = value.usageKnown && value.model !== attempt.model && !actualKnown;
+  const failed = !value.succeeded || unpricedActualModel || underReserved;
+  // A provider error or timeout can have incurred the full request charge. Keep
+  // the reservation. Known usage that exceeds its reservation is recorded at
+  // actual cost, the result is discarded, and the run pauses before more work.
+  const settleActual = value.usageKnown && actualKnown && !unpricedActualModel;
+  const settledTokens = settleActual ? actualTokens : attempt.reservedTokens;
+  const settledSpendMicros = settleActual ? actualSpendMicros : attempt.reservedSpendMicros;
+  const totalTokens = config.usedTokens - attempt.reservedTokens + settledTokens;
+  const totalSpendMicros = config.usedSpendMicros - attempt.reservedSpendMicros + settledSpendMicros;
+  if (totalTokens > 0xffff_ffff || totalSpendMicros > U64_MAX) throw new SenderError('Inference budget counter overflow');
+  ctx.db.runConfig.runId.update({ ...config, usedTokens: totalTokens, usedSpendMicros: totalSpendMicros });
+  if (underReserved || unpricedActualModel) {
+    const run = ctx.db.run.id.find(attempt.runId)!;
+    if (run.status === 'active') ctx.db.run.id.update({ ...run, status: 'paused' });
+  }
+  ctx.db.inferenceAttempt.id.update({ ...attempt, status: failed ? 'failed' : 'completed', tokensUsed: settledTokens,
+    inputTokens: value.inputTokens, cacheReadTokens: value.cacheReadTokens, cacheWriteTokens: value.cacheWriteTokens,
+    outputTokens: value.outputTokens, spendMicros: settledSpendMicros, actualModel: value.model,
+    outputJson: failed ? '' : value.outputJson,
+    failureReason: unpricedActualModel ? 'actual_model_unpriced' : underReserved ? 'usage_exceeded_reservation' : failed ? 'provider_call_uncertain' : '' });
 });

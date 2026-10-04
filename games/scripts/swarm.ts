@@ -4,11 +4,12 @@ import { resolve } from 'node:path';
 import { connectDatabase, DATABASE } from '../src/database.ts';
 
 const cli=process.env.SPACETIME_CLI??'spacetime';
+const server=process.env.SPACETIME_SERVER??'local';
 const runId=process.env.GAME_RUN_ID??'minecraft-pilot';
 const count=Number(process.env.GAME_AGENT_COUNT??10);
 if(!Number.isInteger(count)||count<1||count>10)throw new Error('GAME_AGENT_COUNT must be 1-10');
 const names=Array.from({length:count},(_,i)=>`qs-agent-${i+1}`);
-function call(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server','local',DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
+function call(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server',server,DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
 const command=process.argv[2];
 if(command==='setup'){
   mkdirSync('.runtime',{recursive:true});
@@ -16,6 +17,17 @@ if(command==='setup'){
   if(!existsSync(marker)){
     try{call('create_run',[runId,process.env.GAME_GOAL??'Collect five oak logs each and craft a crafting table; share local resource locations',process.env.GAME_INFO_MODE??'knowledge',Number(process.env.GAME_MAX_CALLS??200),Number(process.env.GAME_MAX_TOKENS??1000000),Number(process.env.GAME_MAX_CONCURRENT??2)]);}catch(error){if(!String((error as {stderr?:Buffer}).stderr??error).includes('Run already exists'))throw error;}
     writeFileSync(marker,JSON.stringify({runId,names}));
+  }
+  if((process.env.GAME_BRAIN??'rules')!=='rules'){
+    const version=process.env.GAME_PRICING_VERSION;
+    if(!version)throw new Error('GAME_PRICING_VERSION is required when GAME_BRAIN uses a model');
+    const model=process.env.AGENT_MODEL??(process.env.GAME_BRAIN==='fixture'?'local-fixture':process.env.GAME_BRAIN==='claude'?'claude-opus-5-5':'gpt-6-astra');
+    const rates=['GAME_INPUT_MICROS_USD_PER_MILLION','GAME_CACHE_READ_MICROS_USD_PER_MILLION','GAME_CACHE_WRITE_MICROS_USD_PER_MILLION','GAME_OUTPUT_MICROS_USD_PER_MILLION'].map(key=>process.env[key]);
+    if(rates.some(value=>!value||!/^\d+$/.test(value)))throw new Error('All four GAME_*_MICROS_USD_PER_MILLION integer rates are required');
+    const runCap=process.env.GAME_MAX_SPEND_MICROS;
+    const workerCap=process.env.GAME_MAX_WORKER_SPEND_MICROS;
+    if(!runCap||!/^\d+$/.test(runCap)||!workerCap||!/^\d+$/.test(workerCap))throw new Error('GAME_MAX_SPEND_MICROS and GAME_MAX_WORKER_SPEND_MICROS are required');
+    call('configure_spend',[runId,version,model,...rates as string[],runCap,workerCap]);
   }
   for(const name of names){const conn=await connectDatabase(name,false);call('grant_member',[runId,conn.identity!.toHexString(),name]);conn.disconnect();}
   console.log(`Run ${runId}: ${count} workers registered and granted; start with swarm up`);

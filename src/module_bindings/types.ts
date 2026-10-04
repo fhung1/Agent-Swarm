@@ -124,6 +124,16 @@ export const InferenceAttempt = __t.object("InferenceAttempt", {
   expiresAt: __t.timestamp(),
   actualModel: __t.string(),
   outputJson: __t.string(),
+  pricingVersion: __t.string(),
+  reservedInputTokens: __t.u32(),
+  reservedOutputTokens: __t.u32(),
+  inputTokens: __t.u32(),
+  cacheReadTokens: __t.u32(),
+  cacheWriteTokens: __t.u32(),
+  outputTokens: __t.u32(),
+  reservedSpendMicros: __t.u64(),
+  spendMicros: __t.u64(),
+  failureReason: __t.string(),
 });
 export type InferenceAttempt = __Infer<typeof InferenceAttempt>;
 
@@ -175,6 +185,18 @@ export const Message = __t.object("Message", {
 });
 export type Message = __Infer<typeof Message>;
 
+export const ModelPrice = __t.object("ModelPrice", {
+  id: __t.string(),
+  version: __t.string(),
+  model: __t.string(),
+  inputMicrosPerMillion: __t.u64(),
+  cacheReadMicrosPerMillion: __t.u64(),
+  cacheWriteMicrosPerMillion: __t.u64(),
+  outputMicrosPerMillion: __t.u64(),
+  createdAt: __t.timestamp(),
+});
+export type ModelPrice = __Infer<typeof ModelPrice>;
+
 export const MyAccountCheck = __t.object("MyAccountCheck", {});
 export type MyAccountCheck = __Infer<typeof MyAccountCheck>;
 
@@ -216,6 +238,9 @@ export type MyMarketObservation = __Infer<typeof MyMarketObservation>;
 
 export const MyMessage = __t.object("MyMessage", {});
 export type MyMessage = __Infer<typeof MyMessage>;
+
+export const MyModelPrice = __t.object("MyModelPrice", {});
+export type MyModelPrice = __Infer<typeof MyModelPrice>;
 
 export const MyOrderCancelRequest = __t.object("MyOrderCancelRequest", {});
 export type MyOrderCancelRequest = __Infer<typeof MyOrderCancelRequest>;
@@ -386,6 +411,10 @@ export const RunConfig = __t.object("RunConfig", {
   maxAttempts: __t.u32(),
   usedInferences: __t.u32(),
   usedTokens: __t.u32(),
+  pricingVersion: __t.string(),
+  maxSpendMicros: __t.u64(),
+  maxWorkerSpendMicros: __t.u64(),
+  usedSpendMicros: __t.u64(),
 });
 export type RunConfig = __Infer<typeof RunConfig>;
 

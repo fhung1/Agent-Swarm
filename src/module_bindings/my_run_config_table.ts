@@ -19,4 +19,8 @@ export default __t.row({
   maxAttempts: __t.u32().name("max_attempts"),
   usedInferences: __t.u32().name("used_inferences"),
   usedTokens: __t.u32().name("used_tokens"),
+  pricingVersion: __t.string().name("pricing_version"),
+  maxSpendMicros: __t.u64().name("max_spend_micros"),
+  maxWorkerSpendMicros: __t.u64().name("max_worker_spend_micros"),
+  usedSpendMicros: __t.u64().name("used_spend_micros"),
 });

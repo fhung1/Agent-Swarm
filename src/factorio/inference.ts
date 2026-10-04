@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { Ask } from '../agents/llm.ts';
+import type { Ask, AskUsage } from '../agents/llm.ts';
 import { validateCommand, type Command } from './protocol.ts';
 
 const move = z.object({ kind: z.literal('move'), x: z.number(), y: z.number(), maxTicks: z.number().int() }).strict();
@@ -80,7 +80,7 @@ export function buildFactorioPrompt(context: FactorioContext): string {
 }
 
 /** No retries/fallback. Timeout races even providers that ignore the abort signal. */
-export async function decideFactorio(ask: Ask, context: FactorioContext, options: { signal?: AbortSignal; timeoutMs?: number; onUsage?: (tokens: number, model?: string) => void } = {}): Promise<FactorioDecision> {
+export async function decideFactorio(ask: Ask, context: FactorioContext, options: { signal?: AbortSignal; timeoutMs?: number; onUsage?: (usage: AskUsage, model?: string) => void } = {}): Promise<FactorioDecision> {
   const timeoutMs = options.timeoutMs ?? 60000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000) throw Error('Invalid inference timeout');
   const signal = options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);

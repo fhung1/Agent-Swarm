@@ -5,26 +5,28 @@ import { parseSwarmConfig, planGrants, planProcesses, researchSymbolEnv, scopedP
 
 const example = fs.readFileSync(new URL('../config/swarm.example.json', import.meta.url), 'utf8');
 const config = (agents: object, extra: object = {}) => parseSwarmConfig(JSON.stringify({ runId: 'pilot-1', agents, ...extra }));
+const testSpend = (models: string[]) => ({pricingVersion:'unit-test-rates',models:models.map(model=>({model,
+  inputUsdPerMillion:'1',cacheReadUsdPerMillion:'1',cacheWriteUsdPerMillion:'1',outputUsdPerMillion:'2'})),maxRunUsd:'10',maxWorkerUsd:'5'});
 
 test('research workers receive model secrets while broker services receive paper secrets',()=>{
   const env={PATH:'/bin',ALPACA_API_KEY:'fake-paper',ALPACA_API_SECRET:'fake-secret',OPENAI_API_KEY:'fake-model',SEC_USER_AGENT:'fake-contact'};
-  const processes=planProcesses(config({coordinator:{count:1,brain:'codex'},analyst:{count:1,brain:'codex'},skeptic:{count:0},risk:{count:1},executor:{count:1}}));
+  const processes=planProcesses(config({coordinator:{count:1,brain:'codex'},analyst:{count:1,brain:'codex'},skeptic:{count:0},risk:{count:1},executor:{count:1}},
+    {spend:testSpend(['gpt-5.3-codex'])}));
   const analyst=scopedProcessEnv(processes.find(p=>p.role==='analyst')!,env);
   assert.equal(analyst.OPENAI_API_KEY,'fake-model');assert.equal(analyst.ALPACA_API_KEY,undefined);assert.equal(analyst.ALPACA_API_SECRET,undefined);assert.equal(analyst.SEC_USER_AGENT,undefined);
   const executor=scopedProcessEnv(processes.find(p=>p.role==='executor')!,env);
   assert.equal(executor.ALPACA_API_KEY,'fake-paper');assert.equal(executor.OPENAI_API_KEY,undefined);assert.equal(executor.PATH,'/bin');
 });
 
-test('the shipped example config is valid', () => {
-  const parsed = parseSwarmConfig(example);
-  assert.ok(planProcesses(parsed).length > 0);
+test('the shipped example fails closed until its model prices and ceilings are configured', () => {
+  assert.throws(() => parseSwarmConfig(example), /require explicit versioned pricing/);
 });
 
 test('agent counts expand into numbered processes per role', () => {
   const processes = planProcesses(config({
     coordinator: { count: 1, brain: 'claude' }, analyst: { count: 3, brain: 'codex', effort: 'medium' },
     skeptic: { count: 2 }, risk: { count: 1 }, executor: { count: 1 },
-  }));
+  }, {spend:testSpend(['claude-opus-5-5','gpt-5.3-codex'])}));
   assert.deepEqual(processes.map(p => p.name), [
     'swarm-coordinator-1', 'swarm-analyst-1', 'swarm-analyst-2', 'swarm-analyst-3',
     'swarm-skeptic-1', 'swarm-skeptic-2', 'swarm-risk-1', 'swarm-executor-1',
@@ -40,7 +42,9 @@ test('agent counts expand into numbered processes per role', () => {
 
 test('optional specialists receive scoped access and coordinator routing flags', () => {
   const parsed = config({ coordinator: { count: 1 }, analyst: { count: 1 },
-    valuation: { count: 1, brain: 'codex' }, portfolio: { count: 1, brain: 'codex' }, skeptic: { count: 1 } });
+    valuation: { count: 1, brain: 'codex' }, portfolio: { count: 1, brain: 'codex' }, skeptic: { count: 1 } },
+    { spend: { pricingVersion: 'specialists-v1', models: [{ model: 'gpt-5.3-codex', inputUsdPerMillion: '1',
+      cacheReadUsdPerMillion: '1', cacheWriteUsdPerMillion: '1', outputUsdPerMillion: '1' }] } });
   const processes = planProcesses(parsed);
   const portfolio = processes.find(p => p.role === 'portfolio')!;
   const valuation = processes.find(p => p.role === 'valuation')!;
@@ -83,6 +87,35 @@ test('inconsistent role mixes are refused', () => {
   assert.throws(() => config({ executor: { count: 1 } }), /needs the risk broker/);
   assert.throws(() => config({ analyst: { count: 1, brain: 'gpt' } }));
   assert.throws(() => config({}, { secrets: { ALPACA_API_KEY: 'x' } }), /Unrecognized key/);
+});
+
+test('paid model workers fail closed without an explicit versioned price entry', () => {
+  assert.throws(() => config({ coordinator: { count: 1, brain: 'claude' } }), /require explicit versioned pricing/);
+  assert.throws(() => config({ coordinator: { count: 1, brain: 'claude' } }, { spend: {
+    pricingVersion: 'fixture-v1', models: [{ model: 'gpt-5.3-codex', inputUsdPerMillion: '1',
+      cacheReadUsdPerMillion: '1', cacheWriteUsdPerMillion: '1', outputUsdPerMillion: '2' }],
+  } }), /Missing price entry.*claude-opus-5-5/);
+  assert.throws(() => config({ coordinator: { count: 1, brain: 'claude' } }, { spend: {
+    pricingVersion: 'fixture-v1', models: [{ model: 'claude-opus-5-5', inputUsdPerMillion: '1.0000001',
+      cacheReadUsdPerMillion: '1', cacheWriteUsdPerMillion: '1', outputUsdPerMillion: '2' }],
+  } }));
+});
+
+test('operator grants install immutable rates and optional run/worker dollar ceilings', () => {
+  const parsed = config({ coordinator: { count: 1, brain: 'codex', model: 'fixture-codex' } }, {
+    limits: { maxInferences: 10, maxTokens: 100_000, maxConcurrent: 1, maxAttempts: 2 },
+    spend: { pricingVersion: 'rates-2026-10', models: [{ model: 'fixture-codex',
+      inputUsdPerMillion: '2.5', cacheReadUsdPerMillion: '1', cacheWriteUsdPerMillion: '3', outputUsdPerMillion: '10' }],
+      maxRunUsd: '5.25', maxWorkerUsd: '2.00' },
+  });
+  const processes=planProcesses(parsed);
+  const identities=new Map(processes.map(process=>[process.name,`agent-${process.name}`]));
+  const commands = planGrants(parsed, processes, identities, 'owner', '', false);
+  const price = commands.find(command => command.reducer === 'configure_model_price')!;
+  assert.deepEqual(price.args, ['rates-2026-10', 'fixture-codex', '2500000', '1000000', '3000000', '10000000']);
+  const spend = commands.find(command => command.reducer === 'configure_run_spend')!;
+  assert.deepEqual(spend.args, ['pilot-1', 'rates-2026-10', '5250000', '2000000']);
+  assert.ok(commands.indexOf(price) < commands.indexOf(spend));
 });
 
 test('market data and research add periodic and one-shot processes', () => {

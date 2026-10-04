@@ -11,11 +11,10 @@ import {
 } from "spacetimedb";
 
 export default {
-  id: __t.string(),
-  runId: __t.string(),
-  reservedInputTokens: __t.u32(),
-  reservedOutputTokens: __t.u32(),
+  version: __t.string(),
   model: __t.string(),
-  workId: __t.string(),
-  inputHash: __t.string(),
+  inputMicrosPerMillion: __t.string(),
+  cacheReadMicrosPerMillion: __t.string(),
+  cacheWriteMicrosPerMillion: __t.string(),
+  outputMicrosPerMillion: __t.string(),
 };

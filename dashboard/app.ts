@@ -148,12 +148,21 @@ function summary(conn: DbConnection, run: Run, account?: AccountSnapshot): HTMLE
     const proposal = all(conn.db.myTradeProposal.iter()).find(row => row.id === order.proposalId);
     return proposal?.runId === run.id && !['filled', 'canceled', 'rejected'].includes(order.status);
   });
+  const dollars = (micros: bigint) => {
+    const whole = micros / 1_000_000n;
+    const fraction = (micros % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '');
+    return `$${whole}${fraction ? `.${fraction}` : ''}`;
+  };
+  const spend = config?.pricingVersion
+    ? `${dollars(config.usedSpendMicros)} / ${config.maxSpendMicros ? dollars(config.maxSpendMicros) : 'uncapped'} · worker ${config.maxWorkerSpendMicros ? dollars(config.maxWorkerSpendMicros) : 'uncapped'} · ${config.pricingVersion}`
+    : 'Pricing unconfigured';
   const strip = node('div', 'stats');
   const stats = [
     ['Run status', run.status, 'status'],
     ['Policy version', policyVersion, 'policy'],
     ['Pilot contract', 'Pending', 'contract'],
     ['Model tokens', config ? `${config.usedTokens} / ${config.maxTokens}` : 'Unconfigured', 'budget'],
+    ['Model spend', spend, 'budget'],
     ['Positions', account ? String(positions.length) : 'No account grant', 'positions'],
     ['Open intents', String(orders.length), 'orders'],
   ];

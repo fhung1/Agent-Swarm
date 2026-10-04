@@ -3,13 +3,15 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { connectDatabase, DATABASE } from '../src/database.ts';
 const cli=process.env.SPACETIME_CLI??'spacetime';
+const server=process.env.SPACETIME_SERVER??'local';
 const runId=`game-check-${Date.now()}`;
-function call(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server','local',DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
+function call(reducer:string,args:(string|number)[]){execFileSync(cli,['call','--server',server,DATABASE,reducer,...args.map(a=>JSON.stringify(a))],{stdio:['ignore','pipe','pipe']});}
 async function visible(read:()=>boolean){const deadline=Date.now()+5000;while(!read()){if(Date.now()>deadline)throw new Error('Subscription update did not arrive');await new Promise(r=>setTimeout(r,50));}}
 const a=await connectDatabase('db-check-a');const b=await connectDatabase('db-check-b');const outsider=await connectDatabase('db-check-outsider');
 try{
   assert.equal([...outsider.db.myRun.iter()].length,0);
-  call('create_run',[runId,'Database authorization and coordination check','knowledge',2,100000,1]);
+  call('create_run',[runId,'Database authorization and coordination check','knowledge',4,100000,2]);
+  call('configure_spend',[runId,'fixture-v1','fixture','1000000','1000000','1000000','1000000','64000','40000']);
   call('grant_member',[runId,a.identity!.toHexString(),'db-check-a']);call('grant_member',[runId,b.identity!.toHexString(),'db-check-b']);
   await visible(()=>[...a.db.myRun.iter()].some(r=>r.id===runId)&&[...b.db.myRun.iter()].some(r=>r.id===runId));
   const stateJson=JSON.stringify({position:[0,70,0],inventory:[]});
@@ -34,12 +36,19 @@ try{
   await assert.rejects(a.reducers.postMessage({id:`big.${randomUUID()}`,runId,recipient:'',kind:'observation',body:'x'.repeat(2001)}));
   const inferenceId=`model.${randomUUID()}`;
   const inputHash='a'.repeat(64);
-  await a.reducers.beginInference({id:inferenceId,runId,reservedTokens:32000,model:'fixture',workId:actionId,inputHash});
-  await assert.rejects(b.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedTokens:32000,model:'fixture',workId:actionId,inputHash}));
-  await a.reducers.finishInference({id:inferenceId,tokensUsed:100,outputJson:'{}'});
-  await assert.rejects(a.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedTokens:32000,model:'fixture',workId:actionId,inputHash}));
-  await b.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedTokens:32000,model:'fixture',workId:actionId,inputHash});
-  await assert.rejects(a.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedTokens:32000,model:'fixture',workId:actionId,inputHash}));
+  await assert.rejects(a.reducers.beginInference({id:`unknown.${randomUUID()}`,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'unpriced',workId:`unknown.${actionId}`,inputHash}),/No model price/);
+  await a.reducers.beginInference({id:inferenceId,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'fixture',workId:actionId,inputHash});
+  assert.equal([...a.db.myRun.iter()].find(r=>r.id===runId)?.usedSpendMicros,32000n);
+  call('resolve_inference',[inferenceId,'Synthetic provider timeout; charge remains reserved']);
+  await visible(()=>[...a.db.myInference.iter()].some(i=>i.id===inferenceId&&i.status==='uncertain'));
+  assert.equal([...a.db.myRun.iter()].find(r=>r.id===runId)?.usedSpendMicros,32000n,'Uncertain calls retain the complete dollar reservation');
+  const settledId=`model.${randomUUID()}`;
+  await b.reducers.beginInference({id:settledId,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'fixture',workId:`${actionId}.settled`,inputHash});
+  await b.reducers.finishInference({id:settledId,inputTokens:80,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:20,usageKnown:true,succeeded:true,model:'fixture',outputJson:'{}'});
+  await visible(()=>[...a.db.myInference.iter()].some(i=>i.id===settledId&&i.status==='completed'));
+  assert.equal([...a.db.myRun.iter()].find(r=>r.id===runId)?.usedSpendMicros,32100n,'Successful usage settles below its reservation');
+  await assert.rejects(a.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'fixture',workId:`${actionId}.worker-cap`,inputHash}),/Inference budget or concurrency limit/);
+  await assert.rejects(b.reducers.beginInference({id:`model.${randomUUID()}`,runId,reservedInputTokens:16000,reservedOutputTokens:16000,model:'fixture',workId:`${actionId}.run-cap`,inputHash}),/Inference budget or concurrency limit/);
   call('set_run_status',[runId,'paused']);
   await assert.rejects(a.reducers.beginAction({id:`action.${randomUUID()}`,runId,commandJson:'{}',refs:''}));
   call('revoke_member',[runId,b.identity!.toHexString()]);

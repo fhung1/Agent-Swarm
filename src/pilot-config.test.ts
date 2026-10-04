@@ -7,6 +7,9 @@ function fixture() {
   const c = JSON.parse(readFileSync('config/paper-pilot.example.json', 'utf8'));
   c.swarm.accountId = 'paper-test-account';
   for (const role of ['coordinator', 'analyst', 'skeptic']) c.swarm.agents[role].model = 'test-model';
+  c.swarm.spend = { pricingVersion: 'fixture-v1', models: [{ model: 'test-model',
+    inputUsdPerMillion: '1', cacheReadUsdPerMillion: '1', cacheWriteUsdPerMillion: '1', outputUsdPerMillion: '1' }],
+    maxRunUsd: '10', maxWorkerUsd: '5' };
   return c;
 }
 test('pilot preserves explicit policy, model budgets and review metadata', () => {
@@ -14,6 +17,7 @@ test('pilot preserves explicit policy, model budgets and review metadata', () =>
   assert.equal(c.policy.maxPortfolioNotional, 5000);
   assert.equal(c.swarm.marketData?.everySeconds, 30);
   assert.equal(c.swarm.limits?.maxConcurrent, 2);
+  assert.equal(c.swarm.spend?.pricingVersion, 'fixture-v1');
   assert.equal(c.reviewEveryHours, 24);
 });
 test('pilot refuses incomplete sample and inconsistent executable plans', () => {
