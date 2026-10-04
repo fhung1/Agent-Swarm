@@ -170,3 +170,28 @@ test('large inspection stays in journal while board audit respects message cap',
   assert.ok(audit.body.length<=8000);
   assert.equal(JSON.parse(audit.body).payload.omittedFromBoard,true);
 });
+
+test('inspection evidence and bounded self decisions persist across wait and restart', async () => {
+  const f=fixture(); f.options.maxCalls=3; let step=0;
+  const state: import('./orchestrator.ts').OrchestratorState=f.state;
+  f.options.ask=(async (_schema,_system,prompt)=>{
+    const c=JSON.parse(prompt); step++;
+    if(step===1) return {kind:'inspect',message:JSON.stringify({kind:'layout',x:0,y:0,radius:4}),recipient:'',title:'',details:'',dependsOn:''};
+    assert.equal(c.toolResult.result.marker,'retrieved evidence');
+    assert.equal(c.recentDecisions.length,step-1);
+    return {kind:'wait',message:'Await actor response',recipient:'',title:'',details:'',dependsOn:''};
+  }) as Ask;
+  const options={...f.options,state,readGameStatus:()=>({tick:100,paused:false,world:{worldId,historyId}}),
+    inspectGame:()=>({world:{worldId,historyId},marker:'retrieved evidence'})};
+  await assert.rejects(runFactorioOrchestrator(options),/call limit exhausted/);
+  assert.equal(state.recentDecisions?.length,3);
+  options.state=JSON.parse(JSON.stringify(state)); options.maxCalls=10;
+  options.ask=(async (_schema,_system,prompt)=>{
+    const c=JSON.parse(prompt);
+    assert.equal(c.toolResult.result.marker,'retrieved evidence');
+    assert.ok(c.recentDecisions.length<=8);
+    return {kind:'wait',message:'Await actor response',recipient:'',title:'',details:'',dependsOn:''};
+  }) as Ask;
+  await assert.rejects(runFactorioOrchestrator(options),/call limit exhausted/);
+  assert.equal(options.state.recentDecisions?.length,8);
+});

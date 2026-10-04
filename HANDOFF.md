@@ -279,3 +279,15 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Same save resumed with all five journals advancing and dashboard HTTP 200.
   All pending operations were null before resume. World/history, counters, plan
   and $100 ledger retained; no run deadline or call cap. Gameplay remains Astra's.
+
+## codex — Bounded overseer continuity (2026-10-04)
+
+- Live board showed repeated layout inspection / pause-directive cycles while all
+  actors waited. Coordinator cleared its latest retrieval after every directive.
+- Retain the latest tool result until replaced, plus eight compact proposed
+  decisions with ticks/recipients. This records Astra's own choices without
+  authoring strategy; engine evidence remains authoritative and can become stale.
+- Typecheck, diff whitespace check and all 12 coordinator tests pass, including
+  inspection persistence through wait decisions and journal restart, bounded at
+  eight entries. Deployed to same save/run, preserving ledger and identities.
+- Factory not yet verified; continue monitoring actual assignments and receipts.
