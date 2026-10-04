@@ -144,14 +144,22 @@ export function buildFactorioPrompt(context: FactorioContext): string {
   const compacted = {...required, omittedContext: omissions};
   base = JSON.stringify(compacted);
   if (base.length > 24000) throw Error('Required Factorio context exceeds 24000 characters');
+  // Activity receipts must not age the coordinator's active assignment out.
+  // Inputs have already passed run/history/recipient filtering.
+  const coordinator = messages.filter(m => m.sender === `${context.runId}-orchestrator` && m.kind === 'chat');
+  const directed = coordinator.filter(m => m.recipient === context.sender).slice(-2);
+  const broadcast = coordinator.filter(m => !m.recipient).slice(-1);
+  const retained = [...directed, ...broadcast].sort((a,b) => BigInt(a.id) > BigInt(b.id) ? -1 : 1);
   const recent = messages.slice(-20);
   const kept: PeerMessage[] = [];
   let used = base.length;
-  for (const message of recent.slice().reverse()) {
+  for (const message of [...retained, ...recent.slice().reverse()]) {
+    if (kept.some(m => m.id === message.id)) continue;
     const size = JSON.stringify(message).length;
-    if (size > 4000 || used + size > 30000) continue;
+    if (size > 4000 || used + size > 29800) continue;
     kept.unshift(message); used += size;
   }
+  kept.sort((a,b) => BigInt(a.id) < BigInt(b.id) ? -1 : 1);
   return JSON.stringify({ ...compacted, messages: kept, omittedMessages: messages.length - kept.length });
 }
 

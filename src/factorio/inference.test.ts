@@ -95,3 +95,27 @@ test('large shared task board does not stop an actor while own evidence survives
   assert.deepEqual(parsed.observation.inventory,own.inventory);assert.deepEqual(parsed.lastResult,receipt);
   assert.ok(parsed.omittedContext.taskDescriptionCharacters>0);
 });
+
+test('coordinator directives survive activity floods with chronology and no duplicates', () => {
+  const directive=(id:string,recipient:string)=>({id,sender:'run-orchestrator',recipient,kind:'chat',payload:{text:'Coordinate '+id}});
+  const messages=[directive('1',context.sender),directive('2',''),directive('3',context.sender),
+    ...Array.from({length:60},(_,i)=>({id:String(i+4),sender:'peer',recipient:'',kind:'action_result',payload:{item:'coal',detail:'x'.repeat(900)}}))];
+  const prompt=buildFactorioPrompt({...context,messages});
+  const data=JSON.parse(prompt);
+  for(const id of ['1','2','3']) assert.ok(data.messages.some((m:any)=>m.id===id));
+  assert.equal(new Set(data.messages.map((m:any)=>m.id)).size,data.messages.length);
+  assert.equal(data.messages.at(-1).id,'63');
+  assert.ok(prompt.length<30000);
+  assert.equal(data.omittedMessages,messages.length-data.messages.length);
+});
+test('latest directed and broadcast instructions fit under heavy required context', () => {
+  const messages=[
+    {id:'1',sender:'run-orchestrator',recipient:context.sender,kind:'chat',payload:{text:'x'.repeat(2000)}},
+    {id:'2',sender:'run-orchestrator',recipient:'',kind:'chat',payload:{text:'y'.repeat(2000)}},
+    ...Array.from({length:30},(_,i)=>({id:String(i+3),sender:'peer',recipient:'',kind:'chat',payload:'z'.repeat(900)}))];
+  const prompt=buildFactorioPrompt({...context,observation:'x'.repeat(23000),messages});
+  const data=JSON.parse(prompt);
+  assert.ok(data.messages.some((m:any)=>m.id==='1'));
+  assert.ok(data.messages.some((m:any)=>m.id==='2'));
+  assert.ok(prompt.length<30000);
+});

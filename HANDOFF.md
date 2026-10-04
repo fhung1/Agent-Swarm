@@ -304,3 +304,15 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   no effects/evidence loss, plus unexpected-error propagation.
 - Resumed same run/save after proving no inference roles remained; restored
   exact saved model/budget/duration mapping. No game edits or strategy directives.
+
+## codex — Retain actor coordination directives (2026-10-04)
+
+- Live evidence: actor1's last directed assignment had 54 newer useful messages;
+  actor4's had 55. The last-20 activity window dropped both assignments while
+  stale initial task text remained, allowing construction intent to disappear.
+- Prioritize two latest directed coordinator chats and latest broadcast before
+  filling recent peer activity; deduplicate, keep chronological order, disclose
+  omitted messages, and retain the 30k prompt ceiling. No gameplay authored.
+- Typecheck and 12 inference tests pass, including 60-message activity flood and
+  heavy required-context regressions. Deploying same saved run, preserving
+  journals, scope and ledger; goal still requires live unattended verification.
