@@ -594,3 +594,18 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - esbuild bundle and Python syntax compile succeeded. No test suite was run per
   operator request. Continue monitoring the same run and let Astra decide all
   gameplay actions.
+
+## codex — Guard run-scoped worker recipients (2026-10-04)
+
+- The first resumed run stopped when Luna 5 tried to send chat to the invented
+  name `iron-modular-20261004-orchestrator-5`; SpacetimeDB rejected the recipient
+  and the supervisor stopped all roles. The game save and spend ledger were
+  intact.
+- Worker context now lists Astra's exact recipient and the live run participants.
+  Chat output is checked against the current run roster before posting; an
+  invalid name becomes corrective feedback to that worker instead of an exit.
+- Restarted the same run after this guard. All five actor call counters advanced,
+  the game was unpaused at tick 504,216, and the $100 ledger remained active
+  ($44.962 charged, $15.198 reserved, $39.840 remaining). Rocket launches remain
+  zero. esbuild and `git diff --check` passed; no test suite run per operator
+  preference. Commit and push this guard, then keep monitoring Astra's run.

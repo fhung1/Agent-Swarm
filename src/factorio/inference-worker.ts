@@ -222,6 +222,8 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
             .map(r => ({ path: r.path, holder: r.holder })),
           tasks: [],
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
+          recipients: { overseer: `${scope.runId}-orchestrator`, actors: board.snapshot().participants
+            .map(participant => participant.name).filter(name => name.startsWith(`${scope.runId}-agent-`)) },
           budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: o.deadline === 0 ? null : remainingRunMs(o.deadline) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
@@ -252,6 +254,13 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       if (observed.paused) { await sleep(500); continue; }
       await post(`${id}-decision`, 'decision', { actorId: scope.actorId, model: o.ask.model ?? 'injected', output });
       if (output.kind === 'chat') {
+        const validNames = new Set(board.snapshot().participants.map(participant => participant.name));
+        const isCurrentRunRecipient = output.recipient === `${scope.runId}-orchestrator` ||
+          output.recipient.startsWith(`${scope.runId}-agent-`);
+        if (output.recipient && (!isCurrentRunRecipient || !validNames.has(output.recipient))) {
+          state.lastResult = { error: `Unknown chat recipient. Use ${scope.runId}-orchestrator for Astra or a listed actor.` };
+          state.decision = null; o.save(state); continue;
+        }
         const repeated = repeatsLatestChat(board.snapshot().messages, scope, output.recipient, output.message);
         if (!repeated) await post(`${id}-chat`, 'chat', { text: output.message, actorId: scope.actorId }, output.recipient);
         state.lastResult = { kind: 'chat', recipient: output.recipient, ...(repeated ? {suppressed: 'Unchanged announcement already delivered; act or wait until something changes'} : {}) }; state.decision = null; o.save(state);
