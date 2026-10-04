@@ -4,9 +4,13 @@
 
 Factorio only: ten individually prompted workers sharing a gameplay board in a private world. The live Development board owns assignments; do not restore cleared historical tasks automatically. This documentation pass changes Markdown only.
 
+## Freeplay work — codex-factorio-demo, 2026-10-03
+
+Started `factorio-freeplay-rocket-subtasks-20261003` after the operator requested a ten-agent freeplay start with no resources, an overarching beat-the-game goal, agent-created subtasks, and shared-container resource requests. Current protocol supports only move/take/put; mine, craft, build, research and rocket-event verification are absent. Next: extend the real-engine action contract and task protocol, verify a zero-grant world, then measure progression. Fixture worlds were saved and stopped.
+
 ## Prompted demo checkpoint — codex-factorio-demo, 2026-10-03
 
-Task `factorio-inference-graphical-20261003`: 16 provider-free tests passed. On that session's host, the gameplay database uses 127.0.0.1:3001; disposable world `.game-runs/prompted-demo-20261003-2052` passed preflight and ran on 127.0.0.1:34197. Dry run found ten unique actors (12–21), configured for `codex`/`gpt-5.3-codex`, 3 calls per actor and 300000 ms. The graphical client launched. No provider calls occurred; the session awaits its requested spend approval and secure provider credential before `--start`. Verify host state before reusing these endpoints.
+`factorio-inference-graphical-20261003`: provider-free acceptance passed (16 tests), graphical viewer joined, and ten independent model workers ran live. The initial run used `gpt-5.3-codex`; after operator correction, a fresh world and board ran `gpt-6-astra`, with peer messages, game receipts and at least two actors holding five actual plates. Fixed contradictory reservation guidance and unstable actor ordering in restart plans. Focused acceptance and root typecheck passed. The operator redirected the work to freeplay, so fixture workers were stopped and their world saved.
 
 ## Implemented and checked
 

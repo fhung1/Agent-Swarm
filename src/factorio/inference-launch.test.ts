@@ -6,6 +6,8 @@ test('ten physical actors map deterministically to ten independent identities/ta
   const plan = inferenceLaunchPlan(input);
   assert.equal(plan.totalCallLimit, 40);
   assert.deepEqual(plan.workers.map(w => w.actorId), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(plan.actorIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(inferenceLaunchPlan({ ...input, actorIds: [...input.actorIds].reverse() }), plan);
   assert.equal(new Set(plan.workers.map(w => w.sender)).size, 10);
   assert.equal(new Set(plan.workers.map(w => w.taskId)).size, 10);
   assert.deepEqual(input.actorIds, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);

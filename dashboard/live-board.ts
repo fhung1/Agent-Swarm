@@ -6,12 +6,14 @@ const labels:Record<BoardId,string>={development:'Development',factorio:'Factori
 const selected:BoardId=new URLSearchParams(location.search).get('board')==='factorio'?'factorio':'development';
 const root=document.getElementById('app')!;
 const clients={} as Record<BoardId,MessageBoardClient>;
-const uri=`ws://${location.hostname}:3001`;
+const boardPort=new URLSearchParams(location.search).get('dbPort')??'3001';
+if(!/^\d{1,5}$/.test(boardPort)||Number(boardPort)>65535)throw Error('Invalid board port');
+const uri=`ws://${location.hostname}:${boardPort}`;
 function esc(value:unknown){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!))}
 function render(){
  const client=clients[selected];if(!client)return;
  const snap=client.snapshot();
- const nav=(Object.keys(databases) as BoardId[]).map(id=>`<li><a href="/?board=${id}">${labels[id]}</a> <span class="${clients[id]?.ready?'live':'offline'}">${clients[id]?.ready?'Available · live':'Unavailable'}</span> <small>http://${location.hostname}:${location.port}/?board=${id}</small></li>`).join('');
+ const nav=(Object.keys(databases) as BoardId[]).map(id=>`<li><a href="/?board=${id}&dbPort=${boardPort}">${labels[id]}</a> <span class="${clients[id]?.ready?'live':'offline'}">${clients[id]?.ready?'Available · live':'Unavailable'}</span> <small>http://${location.hostname}:${location.port}/?board=${id}&dbPort=${boardPort}</small></li>`).join('');
  const messages=snap.messages.slice(-100).reverse().map(m=>{
   let body=String(m.body);try{const e=JSON.parse(body);body=`${e.kind} · ${JSON.stringify(e.payload)}`}catch{}
   return `<li><b>${esc(m.sender)}</b> ${m.taskId?`<small>${esc(m.taskId)}</small>`:''} ${esc(body)}</li>`}).join('');
