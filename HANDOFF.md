@@ -399,3 +399,21 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Fixed launcher success classification for forced idle-sibling cleanup after
   successful coordinator/goal completion. Typecheck and four launch tests pass.
   No completed gameplay roles restarted to test this reporting change.
+
+## codex — Fresh modular factory run (2026-10-04)
+
+- Operator requested a reset of both game and gameplay board. Preserved the
+  completed iron-zero-20261004 save/database; created iron-modular-20261004
+  with new world/history IDs, isolated board, journals, plan and spend ledger.
+- Same seed424242; initial engine status confirmed five empty inventories, no
+  chests and no furnaces. No old assignments, messages or layout copied.
+- Goal: modular, fully automated natural-resource iron acquisition through plate
+  storage, with repeatable units, clear interfaces and expansion room. Astra
+  chooses the design and gameplay; engine verification still proves production.
+- One Astra and five Luna roles live. Astra created five subtasks, all claimed,
+  and wrote a fresh external plan. Shared cap $100; overall time/call limits zero
+  (unlimited). Private launch timestamp recorded for comparison.
+- Viewer confirmed InGame; dashboard HTTP200 at http://127.0.0.1:4193/ and
+  configured for the new scope. Four inference bundles rebuilt successfully.
+- Operational restart only; no new source changes or tests. Factory completion
+  and actual modular layout remain to be observed; run is still in progress.
