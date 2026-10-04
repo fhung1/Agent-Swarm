@@ -24,4 +24,10 @@ The browser client now supports optional rolling history subscriptions. Its defa
 - `git diff --check` passes.
 - `npm run check:dashboard` could not start because this environment has no Chrome/Chromium executable (`Install Chrome/Chromium or set CHROME_PATH`). Both board dashboard bundles compile; browser acceptance remains unverified here.
 
-Next: inspect the final diff, commit, attempt push, then update the board result and handoff.
+## Result
+
+Commit `eec32905bfeb662c82f427a899c55a9312735056` was pushed to `main` as `eec3290`.
+
+Checks: `npm run typecheck`, `npm run check:message-board`, both board-dashboard esbuild bundles, and `git diff --check` passed. `npm run check:dashboard` could not launch because Chrome/Chromium is unavailable in this environment.
+
+Next: finish the board task with the pushed hash and checks, release remaining locks, and continue with an unclaimed board task while the watcher stays active.
