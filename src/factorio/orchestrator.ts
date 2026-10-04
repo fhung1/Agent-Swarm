@@ -16,7 +16,7 @@ export interface OrchestratorContext {
   runId: string; worldId: string; historyId: string; objective: string; agents: string[];
   assignmentTarget?: { actor: string; taskId: string };
   tasks: { id: string; title: string; details: string; status: string; assignee: string; dependsOn: string }[];
-  messages: OrchestratorMessage[]; remainingCalls: number; remainingMs: number;
+  messages: OrchestratorMessage[]; remainingCalls: number | null; remainingMs: number;
 }
 export interface OrchestratorState { calls: number }
 type OrchestratorBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'createTask' | 'claimTask' | 'updateTask'>;
@@ -60,7 +60,7 @@ export function validateOrchestratorDecision(value: unknown, agents: readonly st
 
 export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<void> {
   const { board, scope, state } = o;
-  if (scope.agents.length !== 5 || new Set(scope.agents).size !== 5 || !Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || o.maxCalls > 1000 ||
+  if (scope.agents.length !== 5 || new Set(scope.agents).size !== 5 || !Number.isSafeInteger(o.maxCalls) || o.maxCalls < 0 || o.maxCalls > 1000 ||
     !Number.isSafeInteger(o.intervalMs) || o.intervalMs < 1000 || o.intervalMs > 300000 || !Number.isFinite(o.deadline) || !o.objective.trim()) throw Error('Invalid orchestrator configuration');
   const sleep = o.sleep ?? (ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms)));
   const withinRun = () => { o.signal?.throwIfAborted(); if (Date.now() >= o.deadline) throw Error('Orchestrator run deadline reached'); };
@@ -122,13 +122,13 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
           return !taskExists || !announced;
         })
       : undefined;
-    if (state.calls >= o.maxCalls) throw Error('Orchestrator model-call limit exhausted');
+    if (o.maxCalls > 0 && state.calls >= o.maxCalls) throw Error('Orchestrator model-call limit exhausted');
     const context: OrchestratorContext = {
       runId: scope.runId, worldId: scope.worldId, historyId: scope.historyId, objective: o.objective, agents: scope.agents,
       ...(assignmentTarget ? { assignmentTarget } : {}),
       tasks: s.tasks.filter(task => task.id.startsWith(`${scope.runId}.`)).slice(0, 20)
         .map(task => ({ id: task.id, title: task.title.slice(0, 120), details: task.details.slice(0, 400), status: task.status, assignee: task.assignee, dependsOn: task.dependsOn })),
-      messages: selectRunMessages(s.messages, scope), remainingCalls: o.maxCalls - state.calls - 1, remainingMs: Math.max(0, o.deadline - Date.now()),
+      messages: selectRunMessages(s.messages, scope), remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls - 1, remainingMs: Math.max(0, o.deadline - Date.now()),
     };
     if (JSON.stringify(context).length > 30000) throw Error('Required orchestrator context exceeds 30000 characters');
     state.calls++; o.save(state);

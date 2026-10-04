@@ -120,7 +120,7 @@ async function main() {
       }
     }, 100);
     spendMonitor.unref();
-    const baseEnv = { ...process.env, FACTORIO_RUN_DEADLINE: String(runDeadline), FACTORIO_RUN_SPEND_FILE: spendFile,
+    const baseEnv = { ...process.env, FACTORIO_MAX_CALLS: String(plan.maxCalls ?? 0), FACTORIO_RUN_DEADLINE: String(runDeadline), FACTORIO_RUN_SPEND_FILE: spendFile,
       FACTORIO_RUN_BUDGET_USD: plan.maxRunSpendUsd };
     type ChildResult = { role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null };
     const results: Promise<ChildResult>[] = [];
@@ -163,7 +163,7 @@ async function main() {
     const orchestrator = spawn(process.execPath, [orchestratorScript, world, runId], {
       detached: process.platform !== 'win32',
       env: { ...baseEnv, AGENT_MODEL: plan.orchestrator.model, AGENT_EFFORT: plan.orchestrator.effort,
-        FACTORIO_ORCHESTRATOR_MAX_CALLS: String(plan.orchestrator.maxCalls), FACTORIO_RUN_MS: String(plan.runMs) },
+      FACTORIO_ORCHESTRATOR_MAX_CALLS: String(plan.orchestrator.maxCalls ?? 0), FACTORIO_RUN_MS: String(plan.runMs) },
       stdio: ['ignore', coordinatorLog, coordinatorLog] });
     closeSync(coordinatorLog); children.push(orchestrator);
     let orchestratorExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
@@ -175,7 +175,7 @@ async function main() {
 
     // Hold all actors idle until Astra creates each task and sends its directed
     // announcement. The launcher never creates these actor tasks.
-    const assignmentDeadline = Math.min(runDeadline, Date.now() + plan.orchestrator.maxCalls * Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000) + 10000);
+    const assignmentDeadline = runDeadline;
     while (!stopping) {
       const snapshot = board.snapshot();
       const assigned = targets.every(({ worker, taskId }) => {

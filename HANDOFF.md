@@ -1,5 +1,9 @@
 # Factorio handoff
 
+## Unlimited production calls under shared spend cap — codex, 2026-10-03
+
+Production runs now require `FACTORIO_MAX_CALLS=0` and `FACTORIO_ORCHESTRATOR_MAX_CALLS=0`; both the five actors and Astra continue without a model-call count limit. The shared atomic ledger remains the spend stop and the launcher terminates all six process groups when its cap blocks a request. The dashboard labels call counts as unlimited. Smoke mode retains its small per-actor count for quick checks. Typecheck and four inference bundle builds pass; tests were not run. The prior 2252 run was stopped before this change (charged $0.485961, reserved $0.064757 against its $398.30 cap; one Astra process needed SIGKILL during manual stop). Next: push this change, then start a fresh run with a $400 cap and unlimited calls.
+
 ## Run spend ceiling and overseer-created actor tasks — codex, 2026-10-03
 
 Implemented a shared per-run spend ledger for the Astra overseer and five Luna workers. The launcher hard-limits the configured run cap to $500, reserves worst-case cost before each call using the pinned OpenAI Standard rate card plus 10%, reconciles reported token usage, and preserves uncertain reservations across worker restart. Model audit messages expose the cap and current charged/reserved estimate. Restart with the same run ID requires the original plan and ledger.

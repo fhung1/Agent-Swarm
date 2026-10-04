@@ -52,7 +52,7 @@ function checkReceipt(value: unknown, pending: NonNullable<InferenceState['pendi
  * mutation is journaled before submission. Recovered missing receipts stop the worker. */
 export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<void> {
   const { board, scope, state } = o;
-  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 0 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
+  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 0 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 0 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
   if (state.version !== 1 || JSON.stringify(state.scope) !== JSON.stringify(scope) || !Number.isSafeInteger(state.calls) || state.calls < 0 || !Number.isSafeInteger(state.tick) || state.tick < 0) throw Error('Foreign or corrupt inference journal');
   const sleep = o.sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
   const leaseController = new AbortController();
@@ -151,7 +151,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       if (observed.paused) { await sleep(500); continue; }
       await leases.refresh();
       if (!state.decision) {
-        if (state.calls >= o.maxCalls) throw Error('Inference call budget exhausted');
+        if (o.maxCalls > 0 && state.calls >= o.maxCalls) throw Error('Inference call budget exhausted');
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
         const context = { ...scope, objective: assignedObjective || o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
@@ -160,7 +160,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
             .map(r => ({ path: r.path, holder: r.holder })),
           tasks: board.snapshot().tasks.filter(t => t.id.startsWith(`${scope.runId}.`)).slice(0, 40).map(t => ({ id: t.id, title: t.title, details: t.details, status: t.status, assignee: t.assignee, dependsOn: t.dependsOn })),
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
-          budget: { remainingCalls: o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
+          budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
         let spend: { reservedUsd?: string; chargedUsd?: string } = {};

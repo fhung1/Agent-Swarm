@@ -253,7 +253,9 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
       ? `${run.goal} · ${run.provider}/${run.model} · ${done}/${run.workers.length} tasks complete · ${claimed} in progress`
       : `${run.goal} · ${run.provider}/${run.model} · message board unavailable`);
     put(runPanel, field('Run limits', `${run.mode} · ${run.runMs === null ? 'duration unavailable' : `${Math.round(run.runMs / 60000)} min`}`));
-    if (run.maxCalls !== null && run.totalCallLimit !== null) put(runPanel, field('Call budget', `${run.maxCalls} per actor · ${run.totalCallLimit} total`));
+    put(runPanel, field('Call budget', run.maxCalls === null || run.totalCallLimit === null
+      ? 'Unlimited · shared run spend cap stops all agents'
+      : `${run.maxCalls} per actor · ${run.totalCallLimit} total`));
     const workers = node('div', 'cards factorio-workers');
     if (!client.ready) empty(workers, 'Worker task and participant state will appear when the message-board subscription reconnects.');
     for (const worker of client.ready ? run.workers : []) {
