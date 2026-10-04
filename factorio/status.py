@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read bridge status through private RCON; never accepts arbitrary RCON text."""
+"""Read bridge status or set pause through private RCON; never accepts arbitrary RCON text."""
 import argparse,json,pathlib,socket,struct,time
 
 def read_exact(sock,n):
@@ -58,8 +58,15 @@ def call(world,method,args=()):
             time.sleep(.15*(attempt+1))
 
 def status(world): return call(world,'status')
+def control(world,paused):
+    if type(paused) is not bool: raise ValueError('Expected a boolean pause state')
+    return call(world,'control',[paused])
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--world',required=True)
+    action=p.add_mutually_exclusive_group();action.add_argument('--pause',dest='paused',action='store_true');action.add_argument('--resume',dest='paused',action='store_false')
+    p.set_defaults(paused=None)
     args=p.parse_args()
-    print(json.dumps(status(pathlib.Path(args.world).resolve()),indent=2))
+    world=pathlib.Path(args.world).resolve()
+    result=status(world) if args.paused is None else control(world,args.paused)
+    print(json.dumps(result,indent=2))

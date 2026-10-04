@@ -32,6 +32,43 @@ const dashboardPorts = [
   { port: 4176, label: 'Local tunnel board' },
 ];
 let openDashboards: typeof dashboardPorts = [];
+type FactorioAgent = { index: number; actorId: number; sender: string; taskId: string };
+type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null; runMs: number | null; workers: FactorioAgent[] };
+type FactorioActor = { unit: number; x: number; y: number; inventory: { ironOre: number; coal: number; ironPlate: number; items: Record<string, number> } };
+type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
+let factorioSnapshot: FactorioSnapshot | null = null;
+let factorioStatusError = 'Waiting for the Factorio server status…';
+let factorioControlPending = false;
+let factorioControlMessage = '';
+let factorioControlToken = '';
+let factorioStatusRequest: Promise<void> | undefined;
+async function refreshFactorioStatus(): Promise<void> {
+  if (board.id !== 'factorio' || factorioStatusRequest) return factorioStatusRequest;
+  factorioStatusRequest = (async () => {
+    try {
+      const response = await fetch('/api/factorio/status', { cache: 'no-store', signal: AbortSignal.timeout(12000) });
+      const result = await response.json();
+      if (!response.ok) throw Error(result.error || `Status request failed (${response.status})`);
+      factorioSnapshot = result as FactorioSnapshot;
+      factorioStatusError = '';
+    } catch (reason) { factorioStatusError = String(reason); }
+    finally { factorioStatusRequest = undefined; queueRender(); }
+  })();
+  return factorioStatusRequest;
+}
+async function setFactorioPause(paused: boolean): Promise<void> {
+  if (factorioControlPending) return;
+  factorioControlPending = true; factorioControlMessage = ''; queueRender();
+  try {
+    const response = await fetch('/api/factorio/control', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${factorioControlToken}` },
+      body: JSON.stringify({ paused }), signal: AbortSignal.timeout(12000) });
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error || `Control request failed (${response.status})`);
+    factorioControlMessage = `${result.paused ? 'Paused' : 'Resumed'} at game tick ${result.tick}.`;
+    await refreshFactorioStatus();
+  } catch (reason) { factorioControlMessage = String(reason); }
+  finally { factorioControlPending = false; queueRender(); }
+}
 async function refreshDashboards(): Promise<void> {
   const checked = await Promise.all(dashboardPorts.map(async item => {
     try {
@@ -141,6 +178,103 @@ function boardNavigation(): HTMLElement {
   }
   return navigation;
 }
+function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HTMLElement {
+  const game = factorioSnapshot?.game;
+  const section = panel('Factorio control room', game ? `Authoritative game state · checked ${new Date(factorioSnapshot!.checkedAt).toLocaleTimeString()}` : 'Waiting for the game server');
+  if (factorioStatusError) put(section, node('p', 'error', factorioStatusError));
+  if (!game) {
+    put(section, node('p', 'board-copy', 'Set FACTORIO_WORLD on the Factorio dashboard server and keep the Factorio game server running to load its state and enable pause controls.'));
+    return section;
+  }
+  const summary = node('div', 'factorio-summary');
+  put(summary,
+    field('Game state', game.paused ? 'Paused · new mutations blocked' : 'Running · mutations enabled'),
+    field('Game tick', String(game.tick)),
+    field('World ID', game.world.worldId),
+    field('History ID', game.world.historyId),
+    field('Scenario / seed', `${game.world.scenario} / ${game.world.seed}`),
+    field('Scripted actors', String(game.actors.length)),
+    field('Shared chests / furnaces', `${game.chests.length} / ${game.furnaces}`),
+    field('Rocket launches', String(game.rocketLaunches ?? 0)));
+  put(section, summary);
+  if (factorioSnapshot?.controlsEnabled) {
+    const wrapper = node('label', 'board-input factorio-token');
+    const label = node('span', 'muted small', 'Operator control token (held for this tab only)');
+    const token = node('input');
+    token.type = 'password'; token.autocomplete = 'off'; token.spellcheck = false;
+    token.dataset.field = 'factorioControlToken'; token.value = factorioControlToken;
+    token.addEventListener('input', () => { factorioControlToken = token.value; queueRender(); });
+    put(wrapper, label, token, node('small', 'muted', 'Configured on the dashboard server as FACTORIO_CONTROL_TOKEN.'));
+    put(section, wrapper);
+  } else {
+    put(section, node('p', 'muted small', 'Operator controls are disabled. Configure FACTORIO_CONTROL_TOKEN on the dashboard server.'));
+  }
+  const controls = node('div', 'controls factorio-controls');
+  const pause = button(factorioControlPending ? 'Sending…' : 'Pause mutations', () => { void setFactorioPause(true); }, true);
+  pause.disabled = factorioControlPending || game.paused || !factorioSnapshot?.controlsEnabled || !factorioControlToken || Boolean(factorioStatusError);
+  const resume = button(factorioControlPending ? 'Sending…' : 'Resume mutations', () => { void setFactorioPause(false); });
+  resume.disabled = factorioControlPending || !game.paused || !factorioSnapshot?.controlsEnabled || !factorioControlToken || Boolean(factorioStatusError);
+  put(controls, pause, resume);
+  put(section, controls);
+  if (factorioControlMessage) put(section, node('p', factorioControlMessage.startsWith('Paused') || factorioControlMessage.startsWith('Resumed') ? 'muted small' : 'error', factorioControlMessage));
+  put(section, node('p', 'muted small', 'Pause blocks new game mutations. Message-board coordination remains available.'));
+
+  const actors = node('div', 'factorio-actors');
+  put(actors, node('h3', '', 'Actor state'), node('p', 'muted small', 'Position and inventory are read from the live game server.'));
+  if (!game.actors.length) put(actors, node('p', 'empty', 'No scripted actors are present in this world.'));
+  for (const actor of game.actors) {
+    const inventory = actor.inventory;
+    const card = node('article', 'order-card factorio-actor');
+    const items = Object.entries(inventory.items).sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name} ×${count}`).join(', ') || 'Empty';
+    put(card, node('strong', '', `Actor ${actor.unit}`), field('Position', `${actor.x.toFixed(1)}, ${actor.y.toFixed(1)}`),
+      field('Iron ore / coal / plates', `${inventory.ironOre} / ${inventory.coal} / ${inventory.ironPlate}`), field('Inventory', items));
+    put(actors, card);
+  }
+  put(section, actors);
+  if (game.chests.length) {
+    const chests = node('div', 'factorio-actors');
+    put(chests, node('h3', '', 'Shared chest inventory'));
+    for (const chest of game.chests) {
+      const card = node('article', 'order-card factorio-actor');
+      const items = Object.entries(chest.items).sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => `${name} ×${count}`).join(', ') || 'Empty';
+      put(card, node('strong', '', `Chest ${chest.unit}`), field('Position', `${chest.x.toFixed(1)}, ${chest.y.toFixed(1)}`),
+        field('Iron ore / coal / plates', `${chest.ironOre} / ${chest.coal} / ${chest.ironPlate}`), field('Inventory', items));
+      put(chests, card);
+    }
+    put(section, chests);
+  }
+
+  const run = factorioSnapshot?.run;
+  if (run) {
+    const matchingTasks = run.workers.map(worker => snapshot.tasks.find(task => task.id === worker.taskId));
+    const done = matchingTasks.filter(task => task?.status === 'done').length;
+    const claimed = matchingTasks.filter(task => task?.status === 'claimed').length;
+    const runPanel = panel(`Inference run · ${run.runId}`, client.ready
+      ? `${run.goal} · ${run.provider}/${run.model} · ${done}/${run.workers.length} tasks complete · ${claimed} in progress`
+      : `${run.goal} · ${run.provider}/${run.model} · message board unavailable`);
+    put(runPanel, field('Run limits', `${run.mode} · ${run.runMs === null ? 'duration unavailable' : `${Math.round(run.runMs / 60000)} min`}`));
+    if (run.maxCalls !== null && run.totalCallLimit !== null) put(runPanel, field('Call budget', `${run.maxCalls} per actor · ${run.totalCallLimit} total`));
+    const workers = node('div', 'cards factorio-workers');
+    if (!client.ready) empty(workers, 'Worker task and participant state will appear when the message-board subscription reconnects.');
+    for (const worker of client.ready ? run.workers : []) {
+      const task = snapshot.tasks.find(candidate => candidate.id === worker.taskId);
+      const session = snapshot.participants.find(candidate => candidate.name === worker.sender);
+      const card = node('article', 'order-card');
+      const head = node('div', 'card-head');
+      put(head, node('strong', '', `Agent ${worker.index} · Actor ${worker.actorId}`), pill(task?.status ?? 'neutral'));
+      put(card, head, field('Worker identity', worker.sender), field('Task', task?.title ?? worker.taskId),
+        field('Assigned to', task?.assignee || 'Unclaimed'),
+        field('Board presence', session ? `${session.tool} · last seen ${when(session.lastSeen)}` : 'No participant record'));
+      put(workers, card);
+    }
+    if (!run.workers.length) empty(workers, 'The saved run plan contains no worker mappings.');
+    put(runPanel, workers);
+    put(section, runPanel);
+  } else {
+    put(section, node('p', 'empty', 'No saved inference run plan matches this world. Live game and message-board state are still shown.'));
+  }
+  return section;
+}
 function render(): void {
   const snapshot = client.snapshot();
   const tasks = snapshot.tasks.sort(comparePriority);
@@ -181,6 +315,7 @@ function render(): void {
   const controls = node('div', 'controls');
   put(header, title, controls);
   put(main, header);
+  if (board.id === 'factorio') put(main, factorioPanel(snapshot));
   if (!client.ready) {
     const notice = panel('Connecting to message board', board.label);
     put(notice, node('p', 'board-copy', client.state));
@@ -300,3 +435,7 @@ window.setInterval(queueRender, 30_000);
 
 void refreshDashboards();
 window.setInterval(() => { void refreshDashboards(); }, 30_000);
+if (board.id === 'factorio') {
+  void refreshFactorioStatus();
+  window.setInterval(() => { void refreshFactorioStatus(); }, 5000);
+}

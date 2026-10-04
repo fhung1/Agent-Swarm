@@ -12,10 +12,14 @@ Host setup, using Node 24+:
 
 ```sh
 python3 scripts/tailnet-db-relay.py --bind 100.107.208.76 --port 3001
+export FACTORIO_WORLD="$HOME/.local/share/agent-swarm/factorio-test"
+export FACTORIO_CONTROL_TOKEN="$(openssl rand -hex 32)"
 DASHBOARD_HOST=100.107.208.76 SPACETIMEDB_HOST=ws://100.107.208.76:3001 DASHBOARD_PORT=4175 node dashboard/board-server.mjs --board factorio
 ```
 
 Run each service in its own terminal or service manager. Gameplay workers use the loopback database address. Keep public artifacts separate from private world/token/RCON files.
+
+The Factorio board reads live world state from the configured local world directory. Status remains read-only. Pause/resume is disabled unless the dashboard server has `FACTORIO_CONTROL_TOKEN`; enter that token in the operator field in the Factorio dashboard to use the controls. Generate a separate token for each deployment and keep it out of the board, shell history, and shared logs. The dashboard also reads only run-plan metadata whose world and history IDs match the connected game.
 
 The relay exposes the database protocol to tailnet peers. Before publishing a board module that binds names to identities, stop the relay and pause affected workers. Publish with `--delete-data=never`, then bootstrap each board operator using the local server and a durable operator token. For the development board, run `node scripts/coord.ts bind-legacy` to bind existing CLI session names to that shared CLI identity. Existing browser sessions that used distinct tokens need `assign-session` to retain their names, or a new session name on reconnect. For gameplay, use `node scripts/board.ts assign-session NAME IDENTITY --board factorio` for each historical worker whose saved token gives it a distinct identity. Verify its original identity from the saved worker connection record; do not substitute the actor name or a new token. Restart workers and check their subscriptions and a harmless authenticated write locally before reopening the relay. Do not expose an unbootstrapped board: its first bootstrap caller becomes the operator.
 
