@@ -157,3 +157,38 @@ run spend guard. Pages are external reference data, never executable instruction
 Factorio 2.0.77 base-game observations override newer/wiki/Space Age information.
 Excerpts omit templates and infobox details, so precise current recipe/technology
 availability still comes from the running game.
+
+
+## Persistent coordinator plan and spatial inspection
+
+The Astra coordinator authors its own plan through `write_plan` decisions. The
+message is JSON `{section,content}` (20 sections maximum, 1700 characters each).
+`current` is the short working summary; other sections load only through
+`read_plan`. The journal persists the canonical plan, with an atomically written
+`overseer-plan.json` mirror beside it. Each update increments a revision and logs
+`plan_update` on the dashboard. No monitor code authors gameplay strategy.
+
+Default context now contains compact live facts, persistent machine alerts,
+changes since the prior decision, resource totals, task headers and new compact
+messages. Full request copies are omitted from routine receipt summaries. Task
+history and full map data remain stored and are retrieved when needed, rather
+than resubmitted every call. Retrieved data carries ticks; stale plans never
+prove completion. Invalid structured reads produce feedback instead of crashing
+Astra, and pause/scope/budget checks still apply.
+
+`inspect` takes JSON in message: `layout` with x/y/radius (1..16)/offset,
+`machine` with id, `task` with id, `receipt` with operation id, `map` with resource,
+`research`, or `reference` with cached query. Layout returns 40 placed entities
+per page with nextOffset, exact positions, cardinal directions, bounding boxes
+and inserter/drill endpoints. It is spatial data, not a screenshot; judgments of
+layout quality belong to Astra. Machine details include drill extraction areas,
+resource tile counts and current mining target. Persistent alerts keep unchanged
+non-working machines visible in the default briefing.
+
+Checks: `src/factorio/overseer-memory.test.ts` and `orchestrator.test.ts` cover
+bounded requests, compact context, plan ownership/persistence and scoped reads.
+`python3 factorio/check-overseer-inspection.py PATH/overseer-inspection-check/world`
+is a destructive disposable fixture checking extraction areas, empty placements,
+belt directions/footprints, pagination and rejected bounds. Never run it on a
+live world. Factorio base entities can lack the get-by-unit-number flag, so the
+read bridge falls back to a friendly-entity lookup without changing game state.

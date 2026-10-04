@@ -69,12 +69,24 @@ local function recipe_catalog(force)
   table.sort(names);local omitted=math.max(0,#names-100);while #names>100 do table.remove(names) end
   return {enabled=names,omitted=omitted}
 end
+local function mining_area(e)
+  if e.type~="mining-drill" then return nil end
+  local radius=e.prototype.mining_drill_radius;local area={{e.position.x-radius,e.position.y-radius},{e.position.x+radius,e.position.y+radius}}
+  local resources={};local tiles=0
+  for _,ore in pairs(e.surface.find_entities_filtered{area=area,type="resource"}) do
+    if e.prototype.resource_categories[ore.prototype.resource_category] then resources[ore.name]=(resources[ore.name] or 0)+ore.amount;tiles=tiles+1 end
+  end
+  local target=e.mining_target
+  return {radius=radius,area=area,resourceTiles=tiles,resources=resources,target=target and target.valid and {name=target.name,x=target.position.x,y=target.position.y,amount=target.amount} or nil,
+    note="Resource entities intersecting the prototype extraction area; machine status and current target determine actual mining."}
+end
 local function machine_state(e)
   local fuel=e.get_fuel_inventory();local burner=e.burner;local fuel_items={}
   if fuel then for _,entry in pairs(fuel.get_contents()) do fuel_items[entry.name]=(fuel_items[entry.name] or 0)+entry.count end end
   return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,statusName=status_names[e.status],energy=e.energy,
     fuel=fuel and {items=fuel_items,burning=burner and burner.currently_burning and burner.currently_burning.name or nil,remainingEnergy=burner and burner.remaining_burning_fuel or 0} or nil,
     items=(e.type=="container" or e.type=="furnace" or e.type=="assembling-machine" or e.type=="lab" or fuel) and contents(e) or nil,
+    miningArea=mining_area(e),
     recipe=e.type=="assembling-machine" and recipe_info(e.get_recipe()) or nil,
     craftingProgress=e.type=="assembling-machine" and e.crafting_progress or nil,
     input=e.type=="assembling-machine" and inventory_items(e.get_inventory(defines.inventory.assembling_machine_input)) or nil,
@@ -539,6 +551,40 @@ script.on_event(defines.events.on_rocket_launched,function()
 end)
 remote.add_interface("agent_swarm", {
   observe=observation,
+  inspect=function(raw)
+    if type(raw)~="string" or #raw>2048 then error("Invalid inspection wire request") end
+    local query=helpers.json_to_table(raw)
+    if type(query)~="table" then error("Invalid inspection") end
+    if query.kind=="machine" then
+      exact(query,{"kind","id"});bounded(query.id,1,2147483647)
+      local e=game.get_entity_by_unit_number(query.id)
+      -- Base machines need not carry the get-by-unit-number prototype flag.
+      if not e then for _,candidate in pairs(game.surfaces[1].find_entities_filtered{force="player"}) do
+        if candidate.unit_number==query.id then e=candidate;break end
+      end end
+      if not e or not e.valid or e.force~=game.forces.player or not machine_types[e.type] then error("Friendly machine not found") end
+      return {world=world(),tick=game.tick,machine=machine_state(e),box=e.bounding_box}
+    end
+    exact(query,{"kind","x","y","radius","offset"})
+    if query.kind~="layout" then error("Unsupported inspection") end
+    for _,key in pairs({"x","y"}) do if type(query[key])~="number" or query[key]~=query[key] or math.abs(query[key])>1000000 then error("Invalid coordinate") end end
+    bounded(query.radius,1,16);bounded(query.offset,0,10000)
+    local area={{query.x-query.radius,query.y-query.radius},{query.x+query.radius,query.y+query.radius}}
+    local candidates={}
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{area=area,force="player"}) do
+      if machine_types[e.type] then candidates[#candidates+1]=e end
+    end
+    table.sort(candidates,function(a,b) if a.position.y~=b.position.y then return a.position.y<b.position.y end;if a.position.x~=b.position.x then return a.position.x<b.position.x end;return a.name<b.name end)
+    local entities={}
+    for i=query.offset+1,math.min(#candidates,query.offset+40) do
+      local e=candidates[i];entities[#entities+1]={id=e.unit_number or 0,name=e.name,x=e.position.x,y=e.position.y,direction=e.direction,
+        box=e.bounding_box,status=status_names[e.status],pickup=e.type=="inserter" and e.pickup_position or nil,
+        drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
+    end
+    return {world=world(),tick=game.tick,area=area,entities=entities,total=#candidates,offset=query.offset,
+      nextOffset=query.offset+40<#candidates and query.offset+40 or nil,
+      note="Read-only layout, not a screenshot. Directions: 0 north,4 east,8 south,12 west. Belt direction is travel; inserter direction is pickup side; use actual pickup/drop coordinates. Bounding boxes show footprints. No automatic judgment of aesthetics or design."}
+  end,
   submit=submit,
   receipt=function(id) return (storage.qs_receipts or {})[id] end,
   control=function(paused)

@@ -94,7 +94,9 @@ test('overseer receives read-only global survey without a character or mutation 
   const gameStatus = { tick: 50, paused: false, world: { worldId, historyId },
     resourceMap: { deposits: [{ resource: 'iron-ore', x: 140, y: 80 }] } };
   f.options.ask = (async (_schema, system, input) => {
-    assert.deepEqual(JSON.parse(input).gameStatus, gameStatus);
+    const brief=JSON.parse(input).gameStatus;
+    assert.deepEqual(brief.world,gameStatus.world); assert.equal(brief.tick,gameStatus.tick);
+    assert.equal(brief.resourceMap,undefined); assert.match(brief.detailNotice,/deposits/);
     assert.match(system, /cannot execute game actions/);
     return { kind: 'direct', recipient: agents[0], message: 'Mine 25 iron ore at the mapped deposit.', title: '', details: '', dependsOn: '' };
   }) as Ask;
@@ -134,4 +136,23 @@ test('iron goal rejects unverified automation even with actor inventory claims',
   f.options.ask = (async () => ({kind:'wait', recipient:'', message:'Await automation', title:'',details:'',dependsOn:''})) as Ask;
   await assert.rejects(runFactorioOrchestrator({...f.options, goal:'plates', readGameStatus:()=>({tick:1,paused:false,world:{worldId,historyId},automation:{verified:false},furnaces:5})}), /call limit exhausted/);
   assert.notEqual(f.goal.status, 'done');
+});
+
+
+test('Astra authors durable plan and retrieves a scoped layout without mutating game', async () => {
+  const f=fixture(); f.options.maxCalls=3; let step=0; const saves: unknown[]=[]; const reads: unknown[]=[];
+  const state: import('./orchestrator.ts').OrchestratorState=f.state;
+  f.options.ask=(async (_schema,_system,prompt)=>{
+    const context=JSON.parse(prompt); step++;
+    if(step===1) return {kind:'write_plan',message:JSON.stringify({section:'current',content:'Plan authored by the model'}),recipient:'',title:'',details:'',dependsOn:''};
+    if(step===2) {assert.equal(context.plan.current.content,'Plan authored by the model');return {kind:'inspect',message:JSON.stringify({kind:'layout',x:3,y:4,radius:8}),recipient:'',title:'',details:'',dependsOn:''};}
+    assert.equal(context.toolResult.result.entities[0].direction,4);
+    return {kind:'read_plan',message:'current',recipient:'',title:'',details:'',dependsOn:''};
+  }) as Ask;
+  await assert.rejects(runFactorioOrchestrator({...f.options,state,save:s=>saves.push(structuredClone(s)),
+    readGameStatus:()=>({tick:100,paused:false,world:{worldId,historyId}}),
+    inspectGame:q=>{reads.push(q);return {world:{worldId,historyId},tick:100,entities:[{id:1,name:'transport-belt',x:3,y:4,direction:4}]};}}),/call limit exhausted/);
+  assert.equal(state.plan?.current.revision,1);assert.equal(state.plan?.current.content,'Plan authored by the model');
+  assert.deepEqual(reads,[{kind:'layout',x:3,y:4,radius:8,offset:0}]);assert.ok(saves.length>3);
+  assert.ok(f.posted.some(p=>JSON.parse(p.body).kind==='plan_update'));assert.equal(f.created.length,0);
 });

@@ -205,3 +205,32 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   so do not mistake a deadline stop for a $100 budget exhaustion.
 
 - Follow-up: clarified persistent initial-assignment semantics in both role prompts; later coordinator subtasks remain claimable/completable. Typecheck passes. This changes API guidance, not gameplay decisions.
+
+
+## codex — External Astra plan and targeted inspections (2026-10-04)
+
+- Implemented operator-requested persistent Astra-authored plan sections, plan
+  index/current summary, read_plan/write_plan and scoped inspect APIs for tasks,
+  receipts, resources, technology, cached references, machines and spatial layout.
+  No gameplay strategy was authored by the monitor. Plan updates/inspections are
+  dashboard audit events; plan mirror lives privately beside the journal.
+- Default input now uses factual game summary, persistent non-working machine
+  alerts, machine changes, task headers, new messages and compact receipts. Full
+  map/task/receipt detail is retrieved on demand. Bounded reference/plan retrieval
+  never executes model text as Lua or shell. Invalid request feedback is durable.
+- Added actual mining extraction radius/resources/target to machine observations;
+  layout inspection returns paginated positions/directions/footprints/endpoints.
+  Verified miner 643 has no resource tiles; Astra chooses any relocation.
+- 15 unit/integration tests pass, root/database typecheck passes. Disposable
+  Factorio 2.0.77 engine check passed extraction resources vs empty placement,
+  belt directions/footprints, pagination and rejected bounds. The engine check
+  caught and resolved JSON-wire encoding and base-entity ID-lookup incompatibility.
+- Gracefully saved/deployed server/client mods and role bundle in the same live
+  world, preserving IDs, spend ledger/counters/deadlines; no rollback/reset. Astra
+  used live layout inspection, then wrote its own current plan; journal call96.
+  Measured game-state projection 13130 -> 2808 chars; task data 10131 -> 3331 chars;
+  current plan summary/index 882 chars at that sample. Full tool results load only
+  when requested, so savings vary with retrieval needs.
+- Inherited one-hour deadline remains; user was asked whether to remove it because
+  local instructions require preserving saved deadlines. Monitoring continues;
+  live factory automation is not yet proven.
