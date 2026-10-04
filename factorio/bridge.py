@@ -46,6 +46,11 @@ def encode(world,actor,operation,command):
         if type(command['targetId']) is not int or not 1<=command['targetId']<=2147483647: raise ValueError('Invalid target')
         if type(command['quantity']) is not int or not 1<=command['quantity']<=100: raise ValueError('Invalid quantity')
         if type(command['item']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['item']): raise ValueError('Invalid item')
+    elif kind=='pickup':
+        if set(command)!={'kind','item','x','y','quantity'}: raise ValueError('Unexpected pickup fields')
+        if type(command['item']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['item']): raise ValueError('Invalid pickup item')
+        if type(command['quantity']) is not int or not 1<=command['quantity']<=100: raise ValueError('Invalid quantity')
+        for key in ['x','y']: command[key]=normalized_coordinate(command[key])/COORDINATE_SCALE
     elif kind=='mine':
         if set(command)!={'kind','name','x','y','quantity'}: raise ValueError('Unexpected mine fields')
         if type(command['name']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['name']): raise ValueError('Invalid entity name')

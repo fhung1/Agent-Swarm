@@ -277,6 +277,12 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
             state.lastResult = { error: 'Target not observed within reach; move closer first' }; state.decision = null; o.save(state); continue;
           }
           reservationPath = `world/${scope.worldId}/entity/${command.targetId}`;
+        } else if (command.kind === 'pickup') {
+          const target=observed.nearby.find(e=>e.type==='item-entity' && Math.hypot(e.x-command.x,e.y-command.y)<0.05);
+          if(!target || Math.hypot(observed.x-target.x,observed.y-target.y)>5) {
+            state.lastResult={error:'Ground item not observed within reach'};state.decision=null;o.save(state);continue;
+          }
+          reservationPath=`world/${scope.worldId}/tile/${Math.floor(command.x)}/${Math.floor(command.y)}`;
         } else if (command.kind === 'mine') {
           const target = observed.nearby.find(e => e.name === command.name && ['tree', 'resource'].includes(e.type) && Math.hypot(e.x - command.x, e.y - command.y) < 0.7);
           if (!target || Math.hypot(observed.x - target.x, observed.y - target.y) > 5) {

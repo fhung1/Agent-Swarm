@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 export type Command =
   | { kind: 'move'; x: number; y: number; maxTicks: number }
   | { kind: 'take' | 'put'; targetId: number; item: string; quantity: number }
+  | { kind: 'pickup'; item: string; x: number; y: number; quantity: number }
   | { kind: 'mine'; name: string; x: number; y: number; quantity: number }
   | { kind: 'craft'; recipe: string; quantity: number }
   | { kind: 'place'; item: string; x: number; y: number }
@@ -66,6 +67,13 @@ export function validateCommand(value: unknown): Command {
     integer(c.maxTicks, 1, 600);
   } else if (c.kind === 'take' || c.kind === 'put') {
     exact(c, ['kind', 'targetId', 'item', 'quantity']); integer(c.targetId, 1, 2_147_483_647); integer(c.quantity, 1, 100); itemName(c.item);
+  } else if (c.kind === 'pickup') {
+    exact(c, ['kind','item','x','y','quantity']); itemName(c.item); integer(c.quantity,1,100);
+    for (const key of ['x','y']) {
+      const coordinate=c[key];
+      if(typeof coordinate!=='number'||!Number.isFinite(coordinate)||Math.abs(coordinate)>1_000_000) throw Error('Invalid position');
+      coordinateUnits(coordinate);
+    }
   } else if (c.kind === 'mine') {
     exact(c, ['kind', 'name', 'x', 'y', 'quantity']); itemName(c.name); integer(c.quantity, 1, 20);
     for (const key of ['x', 'y']) {

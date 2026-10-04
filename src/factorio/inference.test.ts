@@ -119,3 +119,9 @@ test('latest directed and broadcast instructions fit under heavy required contex
   assert.ok(data.messages.some((m:any)=>m.id==='2'));
   assert.ok(prompt.length<30000);
 });
+
+test('ground pickup is bounded and uses observed item coordinates', () => {
+ const command={kind:'pickup',item:'iron-ore',x:-62.703125,y:26.5,quantity:5};
+ assert.equal(validateFactorioDecision({...wait,kind:'action',waitMs:0,command}).command?.kind,'pickup');
+ for(const quantity of [0,101,1.5]) assert.throws(()=>validateFactorioDecision({...wait,kind:'action',waitMs:0,command:{...command,quantity}}));
+});

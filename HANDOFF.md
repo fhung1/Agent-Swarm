@@ -316,3 +316,21 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Typecheck and 12 inference tests pass, including 60-message activity flood and
   heavy required-context regressions. Deploying same saved run, preserving
   journals, scope and ledger; goal still requires live unattended verification.
+
+## codex — Ground-item visibility and pickup (2026-10-04)
+
+- Read-only engine diagnostic proved dropped iron ore at (-62.703125,26.5)
+  overlaps Astra's intended furnace site. It was absent from both observation
+  and layout, and the action protocol had no ground pickup.
+- Added bounded pickup(item,x,y,quantity 1..100), exact coordinate validation,
+  locally observed/reachable target gate and tile reservation. Engine transfers
+  actual stack data into inventory, keeps any remainder, records quantity and
+  resets unattended proof. No grants, automatic cleanup or gameplay directives.
+- Observation/layout now include ground items/counts and physical obstacles
+  (characters, trees, simple entities, cliffs). Layout pagination stays bounded.
+- Typecheck, whitespace check, 13 inference tests and disposable real-engine
+  ground-pickup check pass: visibility, partial/full conservation, exact replay,
+  pause/range/wrong-item rejection, build blocked before and allowed after pickup.
+- Saved/restarted live server and viewer to deploy, with private mod/manifest
+  backup. Same scope/save/ledger; all inference roles resumed. Live layout now
+  exposes the one dropped iron ore. Astra must choose pickup/build actions.

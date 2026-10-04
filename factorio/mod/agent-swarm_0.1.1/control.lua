@@ -105,9 +105,9 @@ local function observation(id,radius)
     return ae.name<be.name
   end)
   for _,e in ipairs(candidates) do
-    if e.valid and (machine_types[e.type] or e.type=="resource" or e.type=="tree") then
+    if e.valid and (machine_types[e.type] or e.type=="resource" or e.type=="tree" or e.type=="item-entity" or e.type=="character" or e.type=="simple-entity" or e.type=="cliff") then
       if #entries<100 then
-        local entry=machine_state(e);entry.amount=e.type=="resource" and e.amount or nil;entries[#entries+1]=entry
+        local entry=machine_state(e);entry.amount=e.type=="resource" and e.amount or nil;entry.groundItem=e.type=="item-entity" and {name=e.stack.name,count=e.stack.count} or nil;entries[#entries+1]=entry
       else omitted=omitted+1 end
     end
   end
@@ -334,6 +334,15 @@ submit=function(raw)
         end
         if a.get_item_count(command.item)<command.quantity or not target_store.can_insert{name=command.item,count=command.quantity} or not destination_inventory or destination_inventory.get_insertable_count(command.item)<command.quantity then error("Insufficient source or destination capacity") end
       end
+    elseif command.kind=="pickup" then
+      exact(command,{"kind","item","x","y","quantity"});bounded(command.quantity,1,100)
+      if type(command.item)~="string" or not command.item:match("^[a-z0-9][a-z0-9-]*$") or #command.item>64 then error("Invalid pickup item") end
+      if type(command.x)~="number" or type(command.y)~="number" or command.x~=command.x or command.y~=command.y or math.abs(command.x)>1000000 or math.abs(command.y)>1000000 or distance(a.position,{x=command.x,y=command.y})>6 then error("Pickup target out of reach") end
+      for _,candidate in pairs(a.surface.find_entities_filtered{position={command.x,command.y},radius=0.05,type="item-entity"}) do
+        if candidate.valid and candidate.stack.valid_for_read and candidate.stack.name==command.item then target=candidate;break end
+      end
+      if not target then error("Ground item missing") end
+      if not a.can_insert(target.stack) then error("No inventory capacity for ground item") end
     elseif command.kind=="mine" then
       exact(command,{"kind","name","x","y","quantity"});bounded(command.quantity,1,20)
       if type(command.name)~="string" or not command.name:match("^[a-z0-9][a-z0-9-]*$") or #command.name>64 then error("Invalid mine target") end
@@ -393,6 +402,16 @@ submit=function(raw)
   if command.kind=="move" then
     receipt.target={x=command.x,y=command.y};receipt.deadline=game.tick+command.maxTicks
     if storage.qs_pending then storage.qs_pending[req.operationId]=true end;return receipt
+  end
+  if command.kind=="pickup" then
+    local stack=target.stack;local original=stack.count
+    local count=math.min(original,command.quantity)
+    stack.count=count
+    local ok,inserted=pcall(function() return a.insert(stack) end)
+    if not ok then stack.count=original;return finish(req.operationId,"failed","Pickup insertion failed") end
+    if original>inserted then stack.count=original-inserted else target.destroy() end
+    receipt.quantity=inserted;receipt.item=command.item
+    return finish(req.operationId,inserted>0 and "completed" or "failed",inserted>0 and "Picked up existing ground items" or "No inventory capacity")
   end
   if command.kind=="mine" then
     local mined=0
@@ -571,14 +590,14 @@ remote.add_interface("agent_swarm", {
     bounded(query.radius,1,16);bounded(query.offset,0,10000)
     local area={{query.x-query.radius,query.y-query.radius},{query.x+query.radius,query.y+query.radius}}
     local candidates={}
-    for _,e in pairs(game.surfaces[1].find_entities_filtered{area=area,force="player"}) do
-      if machine_types[e.type] then candidates[#candidates+1]=e end
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{area=area}) do
+      if (machine_types[e.type] and e.force==game.forces.player) or e.type=="item-entity" or e.type=="character" or e.type=="tree" or e.type=="simple-entity" or e.type=="cliff" then candidates[#candidates+1]=e end
     end
     table.sort(candidates,function(a,b) if a.position.y~=b.position.y then return a.position.y<b.position.y end;if a.position.x~=b.position.x then return a.position.x<b.position.x end;return a.name<b.name end)
     local entities={}
     for i=query.offset+1,math.min(#candidates,query.offset+40) do
       local e=candidates[i];entities[#entities+1]={id=e.unit_number or 0,name=e.name,x=e.position.x,y=e.position.y,direction=e.direction,
-        box=e.bounding_box,status=status_names[e.status],pickup=e.type=="inserter" and e.pickup_position or nil,
+        box=e.bounding_box,status=status_names[e.status],type=e.type,groundItem=e.type=="item-entity" and {name=e.stack.name,count=e.stack.count} or nil,pickup=e.type=="inserter" and e.pickup_position or nil,
         drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
     end
     return {world=world(),tick=game.tick,area=area,entities=entities,total=#candidates,offset=query.offset,
