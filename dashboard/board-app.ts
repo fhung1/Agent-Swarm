@@ -467,7 +467,8 @@ function render(): void {
   const composeLinks = node('nav', 'run-list');
   const taskLink = node('a', 'run-item', 'Create a task'); taskLink.href = '#create-task';
   const messageLink = node('a', 'run-item', 'Send a message'); messageLink.href = '#send-message';
-  put(composeLinks, taskLink, messageLink);
+  const liveMessagesLink = node('a', 'run-item', 'View live messages'); liveMessagesLink.href = '#live-messages';
+  put(composeLinks, liveMessagesLink, taskLink, messageLink);
   put(sidebar, node('div', 'side-label', 'QUICK ACTIONS'), composeLinks);
   const footer = node('div', 'side-footer');
   put(footer, node('span', client.ready ? 'online-dot' : 'offline-dot'), node('span', '', client.ready ? 'LIVE · LOCAL' : 'CONNECTING'), node('small', '', `${board.label} board`));
@@ -562,6 +563,7 @@ function render(): void {
   });
   const displayedMessages = matchingMessages.slice(0, messageLimit);
   const messagePanel = panel('Live messages', `${displayedMessages.length} displayed · ${matchingMessages.length} matching · ${messages.length} total`);
+  messagePanel.id = 'live-messages';
   const messageControls = node('div', 'controls message-controls');
   const channelLabel = node('label', 'board-input');
   const channelSelect = node('select'); channelSelect.dataset.field = 'Message channel';
@@ -665,10 +667,15 @@ function render(): void {
     put(content, top, node('p', 'board-copy', message.body));
     if (message.taskId) put(content, node('small', 'muted mono', message.taskId));
     put(event, node('span', 'event-mark decision'), content);
+    put(stream, event);
   }
   put(messagePanel, stream);
   if (matchingMessages.length > messageLimit) put(messagePanel, button('Load older messages', () => { messageLimit += 100; queueRender(); }));
-  put(secondary, messagePanel);
+  // The Factorio status and map can span several screens. Keep the live message
+  // stream directly under the page heading so it is visible without scrolling
+  // past the entire game report.
+  if (board.id === 'factorio') main.insertBefore(messagePanel, main.children[1] ?? null);
+  else put(secondary, messagePanel);
   const sessionPanel = panel('Participants', 'Most recently seen first');
   for (const session of sessions) {
     const card = node('article', 'order-card');

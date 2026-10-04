@@ -555,3 +555,17 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Existing focused recovery checks and typecheck passed before the operator
   asked to prioritize live operation. No further tests were run for this
   deployment.
+
+## codex — Live dashboard message rendering (2026-10-04)
+
+- The active Factorio board contained 9,800+ messages and the dashboard header
+  counted 100 displayed, but the timeline was empty. `dashboard/board-app.ts`
+  built each message card without appending it to the timeline.
+- Appended the cards and placed the live message panel directly below the page
+  heading, with a sidebar link. The full game report had previously pushed the
+  message panel several screens down.
+- Verified the served port 4193 page in a fresh browser session: it showed 100
+  actual message cards, including current actor-to-overseer messages, alongside
+  the live count. No board data, game state or inference process was changed.
+  The existing Zen tab may need a reload to fetch the rebuilt dashboard script.
+- The operator prioritized the live demo; no test suite was run for this edit.
