@@ -1,5 +1,13 @@
 # Factorio handoff
 
+## Burner bridge repair and interaction audit — codex, 2026-10-04
+
+Stopped paid actors, paused mutations and explicitly saved before updating the existing server/client mod. Fixed three confirmed gaps: (1) fuel put/take now supports burner drills, burner inserters and boilers through their real fuel inventories; (2) transfer admission requires capacity for the whole requested quantity, rather than `can_insert`'s partial acceptance; (3) mining receipts count actual resource depletion because this engine returns false even when ore was produced and the resource remains. Added fuel inventory/current burn/remaining energy, named status and drill output coordinates; expanded visibility/recovery to boiler/steam/piping/basic belt infrastructure. No items were granted to the live game.
+
+Checks: new disposable `factorio/check-burner-bridge.py` passes crafting prerequisites, oriented build/recovery, all three fuel targets, nonfuel/capacity/foreign/range/pause rejection, immutable receipt replay, chest/furnace routing, real fueled drill→furnace→inserter→chest production, and exact three-ore mining receipt/inventory delta. Existing real-engine rejection/restart and production suites pass. Thirteen protocol/inference tests plus typecheck/build pass. A fixture placement helper initially selected a tile lacking a valid drill placement; the test now uses the engine's `can_place_entity` predicate. Source conservation and reject-without-partial-transfer are verified.
+
+Resumed `iron-zero-20261004` on the same world/history, actor journals, tasks, original deadline and $100 ledger. Server uses updated bridge; old mod backed up under `.game-runs/iron-zero-20261004/bridge-before-fuel-repair`, maintenance save retained. GUI relaunched against the same world. Live automation completion still pending. Advanced research/assembler recipes/circuit configuration remain unsupported and are outside this burner iron-line goal.
+
 ## Stable dashboard dropdown interaction — codex, 2026-10-04
 
 The dashboard replaced the full layout on each board/status refresh, destroying open native select menus despite restoring focus afterward. Live redraws now coalesce while a select is being used; change, blur, outside interaction or Escape/Tab releases the pending redraw. Incoming subscription state continues updating, and the eventual render uses the latest snapshot. Programmatic focus restoration does not reopen the interaction guard. Applies to agent/direction/channel filters and other dashboard selects. Dashboard TypeScript check, diff check and live watch build pass; no tests run. Refresh the existing dashboard tab once to load this fix. Gameplay is untouched.

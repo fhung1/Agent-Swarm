@@ -75,3 +75,31 @@ world; it does not guarantee indefinite output after ore depletion or full stora
 A disposable engine fixture validates the chain and proof reset:
 `python3 factorio/check-automation.py PATH/automation-check/WORLD`.
 Never run that fixture against an operator save or the inference demonstration.
+
+## Bridge coverage for the burner iron line
+
+The bounded bridge supports moving, mining observed resources/trees, hand crafting
+unlocked recipes (including craftable intermediates), placing with cardinal
+orientation, recovering placed machines, chest/furnace transfers, and fuel-only
+put/take for burner drills, burner inserters and boilers. The last three use their
+actual fuel inventory; non-fuel items and electric machines without fuel slots
+are rejected. Full requested transfer quantities must fit before mutation.
+
+Observations include fuel stacks, currently burning fuel, remaining burner energy,
+readable machine status and mining-drill output coordinates. Boiler/steam/piping
+and basic belt infrastructure are visible and recoverable. Fuel in the active
+burner is distinct from items still in its inventory. Mining receipts count actual
+resource depletion: Factorio 2.0.77 can return false from `mine_entity` while still
+adding ore to the character and leaving the resource entity present.
+
+`python3 factorio/check-burner-bridge.py PATH/burner-bridge-check/WORLD` is a
+**destructive disposable fixture**, requiring a path containing
+`burner-bridge-check`. It checks crafting/build/recovery, fuel transfers,
+full-capacity rejection, immutable replay, ownership/range/pause rejection,
+observations, chest/furnace routing, real fueled production and mining receipts.
+It must never target the live inference save.
+
+This covers the planned burner-based iron factory. Selecting assembler recipes,
+choosing research, circuit programming and advanced machine configuration are
+not implemented by this bridge; a broader factory/rocket objective needs those
+capabilities added and independently verified.

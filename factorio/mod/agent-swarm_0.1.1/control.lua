@@ -25,13 +25,21 @@ local function contents(e)
     local inventory=e.get_inventory(index)
     if inventory then for _,entry in pairs(inventory.get_contents()) do items[entry.name]=(items[entry.name] or 0)+entry.count end end
   end
-  return {ironOre=e.get_item_count("iron-ore"),coal=e.get_item_count("coal"),ironPlate=e.get_item_count("iron-plate"),items=items}
+  if e.type~="character" and e.type~="container" and e.type~="furnace" then
+    local fuel=e.get_fuel_inventory()
+    if fuel then for _,entry in pairs(fuel.get_contents()) do items[entry.name]=(items[entry.name] or 0)+entry.count end end
+  end
+  return {ironOre=items["iron-ore"] or 0,coal=items["coal"] or 0,ironPlate=items["iron-plate"] or 0,items=items}
 end
-local machine_types={container=true,furnace=true,["mining-drill"]=true,inserter=true,["transport-belt"]=true,["electric-pole"]=true,["solar-panel"]=true,accumulator=true}
+local machine_types={container=true,furnace=true,["mining-drill"]=true,inserter=true,["transport-belt"]=true,["electric-pole"]=true,["solar-panel"]=true,accumulator=true,boiler=true,generator=true,pipe=true,["pipe-to-ground"]=true,["offshore-pump"]=true,["storage-tank"]=true,["underground-belt"]=true,splitter=true}
+local status_names={};for name,value in pairs(defines.entity_status) do status_names[value]=name end
 local function machine_state(e)
-  return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,energy=e.energy,
-    items=(e.type=="container" or e.type=="furnace") and contents(e) or nil,
-    pickup=e.type=="inserter" and e.pickup_position or nil,drop=e.type=="inserter" and e.drop_position or nil}
+  local fuel=e.get_fuel_inventory();local burner=e.burner;local fuel_items={}
+  if fuel then for _,entry in pairs(fuel.get_contents()) do fuel_items[entry.name]=(fuel_items[entry.name] or 0)+entry.count end end
+  return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,statusName=status_names[e.status],energy=e.energy,
+    fuel=fuel and {items=fuel_items,burning=burner and burner.currently_burning and burner.currently_burning.name or nil,remainingEnergy=burner and burner.remaining_burning_fuel or 0} or nil,
+    items=(e.type=="container" or e.type=="furnace" or fuel) and contents(e) or nil,
+    pickup=e.type=="inserter" and e.pickup_position or nil,drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
 end
 local function observation(id,radius)
   local a=actor(id);radius=bounded(radius or 32,1,32)
@@ -122,7 +130,7 @@ local function target_for(a,id)
   for _, candidate in pairs(a.surface.find_entities_filtered{position=a.position,radius=6}) do
     if candidate.unit_number==id then e=candidate;break end
   end
-  if not e or not e.valid or e.surface~=a.surface or e.force~=a.force or (e.type~="container" and e.type~="furnace") then error("Invalid transfer target: "..tostring(e and e.name).."/"..tostring(e and e.type).." force="..tostring(e and e.force.name).." actor="..a.force.name.." surface="..tostring(e and e.surface.index).."/"..a.surface.index) end
+  if not e or not e.valid or e.surface~=a.surface or e.force~=a.force or (e.type~="container" and e.type~="furnace" and not ((e.type=="mining-drill" or e.type=="inserter" or e.type=="boiler") and e.get_fuel_inventory())) then error("Invalid transfer target: "..tostring(e and e.name).."/"..tostring(e and e.type).." force="..tostring(e and e.force.name).." actor="..a.force.name.." surface="..tostring(e and e.surface.index).."/"..a.surface.index) end
   if distance(a.position,e.position)>6 then error("Transfer out of reach") end
   return e
 end
@@ -225,7 +233,7 @@ submit=function(raw)
     if existing.request~=raw then error("Operation ID content changed") end
     return existing
   end
-  local a,target
+  local a,target,target_inventory
   local command=req.command
   -- A valid scoped operation always has a durable outcome, including admission
   -- rejection. No mutation occurs inside validation; uncertain transport can
@@ -245,10 +253,20 @@ submit=function(raw)
       exact(command,{"kind","targetId","item","quantity"})
       target=target_for(a,command.targetId);bounded(command.quantity,1,100)
       if type(command.item)~="string" or not command.item:match("^[a-z0-9][a-z0-9-]*$") or #command.item>64 or not prototypes.item[command.item] then error("Invalid item") end
+      if target.type~="container" and target.type~="furnace" then
+        target_inventory=target.get_fuel_inventory()
+        if not target_inventory or prototypes.item[command.item].fuel_value<=0 then error("Target accepts fuel items only") end
+      end
+      local target_store=target_inventory or target
       if command.kind=="take" then
-        if target.get_item_count(command.item)<command.quantity or not a.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
+        if target_store.get_item_count(command.item)<command.quantity or not a.can_insert{name=command.item,count=command.quantity} or a.get_inventory(defines.inventory.character_main).get_insertable_count(command.item)<command.quantity then error("Insufficient source or destination capacity") end
       else
-        if a.get_item_count(command.item)<command.quantity or not target.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
+        local destination_inventory=target_inventory
+        if target.type=="container" then destination_inventory=target.get_inventory(defines.inventory.chest)
+        elseif target.type=="furnace" then
+          destination_inventory=prototypes.item[command.item].fuel_value>0 and target.get_fuel_inventory() or target.get_inventory(defines.inventory.furnace_source)
+        end
+        if a.get_item_count(command.item)<command.quantity or not target_store.can_insert{name=command.item,count=command.quantity} or not destination_inventory or destination_inventory.get_insertable_count(command.item)<command.quantity then error("Insufficient source or destination capacity") end
       end
     elseif command.kind=="mine" then
       exact(command,{"kind","name","x","y","quantity"});bounded(command.quantity,1,20)
@@ -294,7 +312,16 @@ submit=function(raw)
   end
   if command.kind=="mine" then
     local mined=0
-    for _=1,command.quantity do if not target.valid or not a.mine_entity(target) then break end;mined=mined+1 end
+    for _=1,command.quantity do
+      if not target.valid then break end
+      local amount_before=target.type=="resource" and target.amount or nil
+      local result=a.mine_entity(target)
+      -- In 2.0.77 a resource can yield an item while mine_entity returns false
+      -- because the ore entity remains. Count the engine's actual depletion.
+      local progressed=result or not target.valid or (amount_before and target.amount<amount_before)
+      if not progressed then break end
+      mined=mined+1
+    end
     receipt.quantity=mined;receipt.item=command.name
     return finish(req.operationId,mined>0 and "completed" or "failed",mined>0 and "Mined in game" or "Mining failed")
   end
@@ -316,9 +343,11 @@ submit=function(raw)
     receipt.quantity=1;receipt.item=command.item;receipt.targetId=placed.unit_number
     return finish(req.operationId,"completed","Built from inventory")
   end
-  local source=command.kind=="take" and target or a
-  local dest=command.kind=="take" and a or target
-  local removed=source.remove_item{name=command.item,count=command.quantity}
+  local source=command.kind=="take" and (target_inventory or target) or a
+  local dest=command.kind=="take" and a or (target_inventory or target)
+  local removed
+  if command.kind=="take" and target_inventory then removed=source.remove{name=command.item,count=command.quantity}
+  else removed=source.remove_item{name=command.item,count=command.quantity} end
   local inserted=dest.insert{name=command.item,count=removed}
   if inserted<removed then source.insert{name=command.item,count=removed-inserted} end
   receipt.quantity=inserted;receipt.item=command.item;receipt.targetId=target.unit_number
@@ -408,7 +437,7 @@ remote.add_interface("agent_swarm", {
       local c=contents(e);c.unit=e.unit_number;c.x=e.position.x;c.y=e.position.y;chests[#chests+1]=c
     end
     local productionSites={};local omittedSites=0
-    for _,e in pairs(game.surfaces[1].find_entities_filtered{type={"furnace","mining-drill","inserter","transport-belt","electric-pole","solar-panel","accumulator"},force="player"}) do
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{type={"furnace","mining-drill","inserter","transport-belt","electric-pole","solar-panel","accumulator","boiler","generator","pipe","pipe-to-ground","offshore-pump","storage-tank","underground-belt","splitter"},force="player"}) do
       if #productionSites<160 then
         productionSites[#productionSites+1]=machine_state(e)
       else omittedSites=omittedSites+1 end
