@@ -195,3 +195,24 @@ test('inspection evidence and bounded self decisions persist across wait and res
   await assert.rejects(runFactorioOrchestrator(options),/call limit exhausted/);
   assert.equal(options.state.recentDecisions?.length,8);
 });
+
+test('malformed provider JSON consumes a call and retries without effects or lost evidence', async () => {
+  const f=fixture();f.options.maxCalls=2;let attempts=0;
+  const state: import('./orchestrator.ts').OrchestratorState=f.state;
+  state.toolResult={evidence:'preserved'};
+  f.options.ask=(async (_schema,_system,prompt)=>{
+    attempts++;
+    if(attempts===1) throw new SyntaxError('Error reading response: invalid structured output JSON.');
+    assert.deepEqual(JSON.parse(prompt).toolResult,{evidence:'preserved'});
+    return {kind:'wait',message:'Await response',recipient:'',title:'',details:'',dependsOn:''};
+  }) as Ask;
+  await assert.rejects(runFactorioOrchestrator(f.options),/call limit exhausted/);
+  assert.equal(attempts,2);assert.equal(state.calls,2);assert.equal(f.created.length,0);
+  assert.equal(f.posted.filter(p=>JSON.parse(p.body).kind==='orchestrator_decision_rejected').length,1);
+});
+test('unexpected provider errors still stop the overseer', async () => {
+  const f=fixture();
+  f.options.ask=(async ()=>{throw new Error('Authentication failed');}) as Ask;
+  await assert.rejects(runFactorioOrchestrator(f.options),/Authentication failed/);
+  assert.equal(f.state.calls,1);
+});

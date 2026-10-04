@@ -254,6 +254,19 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
         },
       }), stopped]);
       modelSignal.throwIfAborted();
+    } catch (error) {
+      modelSignal.throwIfAborted();
+      if (!(error instanceof z.ZodError) && !(error instanceof Error &&
+        (error.message === 'Model output did not match the schema' ||
+         (error instanceof SyntaxError && error.message === 'Error reading response: invalid structured output JSON.')))) throw error;
+      // No decision was accepted: retain the last evidence and reserve unknown
+      // usage conservatively. A fresh call gets a fresh spend reservation.
+      await post(`${callId}-rejected`, 'orchestrator_decision_rejected', {
+        reason: 'Provider returned malformed structured output; no decision dispatched. Retrying.',
+        usageKnown: Boolean(usage), reservedUsd: spend.reservedUsd || undefined,
+        chargedUsd: spend.chargedUsd || undefined,
+      });
+      await sleep(1000); continue;
     } finally { modelSignal.removeEventListener('abort', abort); }
     let decision: OrchestratorDecision;
     try { decision = validateOrchestratorDecision(rawDecision, scope.agents, context.tasks); }

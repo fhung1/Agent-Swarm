@@ -291,3 +291,16 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   inspection persistence through wait decisions and journal restart, bounded at
   eight entries. Deployed to same save/run, preserving ledger and identities.
 - Factory not yet verified; continue monitoring actual assignments and receipts.
+
+## codex — Malformed coordinator response recovery (2026-10-04)
+
+- Live overseer call167 failed in SDK structured JSON parsing. Team shutdown
+  worked: all roles stopped, mutations paused; $31.948394 charged/$100 cap,
+  unknown in-flight usage remains reserved conservatively.
+- Handle only known structured-output parsing/schema failures as rejected
+  decisions, retaining previous evidence and consuming a fresh reservation on
+  retry. Authentication, arbitrary errors and aborts still propagate.
+- Typecheck and 14 coordinator tests pass, including malformed JSON retry with
+  no effects/evidence loss, plus unexpected-error propagation.
+- Resumed same run/save after proving no inference roles remained; restored
+  exact saved model/budget/duration mapping. No game edits or strategy directives.
