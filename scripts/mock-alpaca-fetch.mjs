@@ -25,7 +25,7 @@ globalThis.fetch=async(input,options={})=>{
     throw new TypeError('Synthetic transport loss AFTER broker accepted order');
   }
   if(method!=='GET')throw new Error(`Unexpected mock mutation ${method}`);
-  if(url.pathname==='/v2/account')return json({id:state.accountId,status:'ACTIVE',cash:String(1000-state.filled*100+(state.cashDrift??0)),buying_power:'1000',equity:'1000',trading_blocked:false});
+  if(url.pathname==='/v2/account')return json({id:state.accountId,status:'ACTIVE',cash:String(1000-state.filled*100+(state.cashDrift??0)),buying_power:'1000',equity:'1000',last_equity:'1000',trading_blocked:false});
   if(url.pathname==='/v2/positions')return json(state.filled?[{symbol:'QMOCK',qty:String(state.filled),market_value:String(state.filled*100)}]:[]);
   if(url.pathname==='/v2/orders')return json([...(state.order&&state.filled<2?[order()]:[]),...(state.externalOrder?[{id:'external',client_order_id:'manual-order',symbol:'QMOCK',side:'buy',qty:'1',filled_qty:'0'}]:[])]);
   if(url.pathname==='/v2/orders:by_client_order_id')return state.order&&url.searchParams.get('client_order_id')===state.order.client_order_id?json(order()):json({},404);

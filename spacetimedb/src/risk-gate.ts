@@ -32,7 +32,8 @@ export function evaluateProposal(ctx: Ctx, proposalId: string) {
   const clock = ctx.db.marketClock.accountId.find(policyRow.accountId);
   const clockAge = clock ? ctx.timestamp.microsSinceUnixEpoch - clock.asOf.microsSinceUnixEpoch : -1n;
   const result = evaluateRisk({ proposal: { ...proposal, createdAt: proposal.createdAt.toDate() }, quote, quotes, pendingIntents,
-    account: { ...snapshot, status: snapshot.accountStatus, capturedAt: snapshot.capturedAt.toDate() },
+    account: { ...snapshot, dailyPnl: snapshot.dailyPnl ?? undefined,
+      status: snapshot.accountStatus, capturedAt: snapshot.capturedAt.toDate() },
     marketOpen: !!clock && clock.isOpen && clockAge >= 0n && clockAge <= 60_000_000n,
     runStatus: ctx.db.run.id.find(proposal.runId)?.status ?? '', now: ctx.timestamp.toDate() }, policy);
   const price = proposal.orderType === 'limit' ? Number(proposal.limitPrice) : Number(proposal.side === 'buy' ? quote.askPrice : quote.bidPrice);

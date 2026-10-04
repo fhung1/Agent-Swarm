@@ -40,6 +40,7 @@ export const AccountSnapshot = __t.object("AccountSnapshot", {
   cash: __t.string(),
   buyingPower: __t.string(),
   equity: __t.string(),
+  dailyPnl: __t.option(__t.string()),
   positionsJson: __t.string(),
   openOrdersJson: __t.string(),
   capturedAt: __t.timestamp(),

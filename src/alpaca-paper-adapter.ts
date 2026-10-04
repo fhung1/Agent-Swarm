@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DbConnection } from './module_bindings/index.js';
 import {
-  amountField, credentialsFromEnv, getAccount, getLatestQuotes, getOpenOrders, getPositions, object, parseFeed,
+  amountField, credentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getOpenOrders, getPositions, object, parseFeed,
   parseQuote, requiredEnv, textField, type Feed,
 } from './alpaca-client.js';
 
@@ -115,6 +115,7 @@ async function main(): Promise<void> {
       cash: amountField(account, 'cash'),
       buyingPower: amountField(account, 'buying_power'),
       equity: amountField(account, 'equity'),
+      dailyPnl: dailyPnlField(account),
       positionsJson: JSON.stringify(positionsRaw),
       openOrdersJson: JSON.stringify(ordersRaw),
       observations,

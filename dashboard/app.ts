@@ -328,7 +328,8 @@ function accountPanel(conn: DbConnection, account?: AccountSnapshot): HTMLElemen
   const section = panel('Paper account', account ? `Snapshot ${when(account.capturedAt)}` : 'Account access is granted separately');
   if (!account) { put(section, empty('No account snapshot is visible for this run. Grant this identity account access, then ingest a paper account snapshot.')); return section; }
   const info = node('div', 'account-grid');
-  for (const [label, value] of [['Status', account.accountStatus], ['Cash', account.cash], ['Buying power', account.buyingPower], ['Equity', account.equity]]) {
+  for (const [label, value] of [['Status', account.accountStatus], ['Cash', account.cash], ['Buying power', account.buyingPower],
+    ['Equity', account.equity], ['Daily P&L vs prior close', account.dailyPnl ?? 'Unavailable']]) {
     put(info, field(label, value));
   }
   put(section, info);

@@ -92,7 +92,7 @@ export const fill = table({ name: 'fill' }, {
 });
 export const accountSnapshot = table({ name: 'account_snapshot' }, {
   id: t.string().primaryKey(), accountId: t.string().index('btree'), accountStatus: t.string(),
-  cash: t.string(), buyingPower: t.string(), equity: t.string(),
+  cash: t.string(), buyingPower: t.string(), equity: t.string(), dailyPnl: t.option(t.string()),
   positionsJson: t.string(), openOrdersJson: t.string(), capturedAt: t.timestamp(),
 });
 export const marketObservation = table({ name: 'market_observation', public: false }, {

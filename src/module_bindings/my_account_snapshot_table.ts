@@ -17,6 +17,7 @@ export default __t.row({
   cash: __t.string(),
   buyingPower: __t.string().name("buying_power"),
   equity: __t.string(),
+  dailyPnl: __t.option(__t.string()).name("daily_pnl"),
   positionsJson: __t.string().name("positions_json"),
   openOrdersJson: __t.string().name("open_orders_json"),
   capturedAt: __t.timestamp().name("captured_at"),

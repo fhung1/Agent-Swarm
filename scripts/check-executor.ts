@@ -34,7 +34,7 @@ try{
   await coordinator.conn.reducers.recordTradeDecision({decisionId:`${runId}.decision`,rationale:'Mock broker only',proposalId,runId,thesisId,symbol:'QMOCK',side:'buy',quantity:'2',orderType:'market',limitPrice:''});
   const policy={version:policyId,allowedSymbols:['QMOCK'],longOnly:true,maxOrderNotional:500,maxPositionNotional:1000,maxQuoteAgeMs:300000,maxAccountAgeMs:300000,maxLimitDeviation:0.03,approvalTtlMs:300000,maxProposalAgeMs:900000,requireMarketOpen:true};
   call('add_risk_policy',policyId,runId,accountId,JSON.stringify(policy));call('configure_run_limits',runId,10,100000,1,1);
-  await risk.conn.reducers.recordAccountSnapshot({id:snapshotId,accountId,accountStatus:'ACTIVE',cash:'1000',buyingPower:'1000',equity:'1000',positionsJson:'[]',openOrdersJson:'[]',observations:[{id:`${snapshotId}.quote`,symbol:'QMOCK',feed:'iex',bidPrice:'99',askPrice:'100',bidSize:'10',askSize:'10',asOf:now}]});
+  await risk.conn.reducers.recordAccountSnapshot({id:snapshotId,accountId,accountStatus:'ACTIVE',cash:'1000',buyingPower:'1000',equity:'1000',dailyPnl:'0',positionsJson:'[]',openOrdersJson:'[]',observations:[{id:`${snapshotId}.quote`,symbol:'QMOCK',feed:'iex',bidPrice:'99',askPrice:'100',bidSize:'10',askSize:'10',asOf:now}]});
   await risk.conn.reducers.recordMarketClock({accountId,isOpen:true,asOf:now});
   await risk.conn.reducers.recordRiskDecision({id:`${runId}.risk`,proposalId,policyVersion:policyId,outcome:'pass',checks:'fixture',expiresAt:Timestamp.fromDate(new Date(Date.now()+300000)),snapshotId,clockAsOf:now});
   writeFileSync(stateFile,JSON.stringify({accountId,posts:0,filled:0}));start();

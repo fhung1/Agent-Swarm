@@ -62,7 +62,7 @@ try {
   call('grant_account_access',reader.identity.toHexString(),'fixture-paper');
   const quoteId=`${runId}.quote`;
   await reader.reducers.recordAccountSnapshot({id:`${runId}.account`,accountId:'fixture-paper',accountStatus:'ACTIVE',
-    cash:'10000',buyingPower:'10000',equity:'10000',positionsJson:'[]',openOrdersJson:'[]',
+    cash:'10000',buyingPower:'10000',equity:'10000',dailyPnl:'0',positionsJson:'[]',openOrdersJson:'[]',
     observations:[{id:quoteId,symbol:'QFIX',feed:'iex',bidPrice:'199.90',bidSize:'1',askPrice:'200.10',askSize:'1',asOf:Timestamp.fromDate(new Date())}]});
   const sourceId=`${runId}.source`;
   await ingestor.reducers.addSource({id:sourceId,runId,symbol:'QFIX',kind:'fixture',uri:'fixture://research-check',asOf:Timestamp.fromDate(new Date()),checksum:'fixture',artifactRef:''});

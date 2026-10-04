@@ -214,7 +214,7 @@ try {
   await op.conn.reducers.addRiskPolicy({id:policyId,runId,accountId,policyJson:JSON.stringify(policy)});
   const snapshot = async (suffix: string, malformed = false) => {
     const id = `${runId}.account.${suffix}`;
-    await risk.conn.reducers.recordAccountSnapshot({id,accountId,accountStatus:'ACTIVE',cash:'250',buyingPower:'250',equity:'10000',positionsJson:malformed?'[{"symbol":"QPHASE","qty":"bad","market_value":"bad"}]':'[]',openOrdersJson:'[]',observations:['QPHASE','QSECOND'].map(symbol=>({id:`${id}.${symbol}`,symbol,feed:'iex',bidPrice:'99',askPrice:'100',bidSize:'1',askSize:'1',asOf:now()}))});
+    await risk.conn.reducers.recordAccountSnapshot({id,accountId,accountStatus:'ACTIVE',cash:'250',buyingPower:'250',equity:'10000',dailyPnl:'0',positionsJson:malformed?'[{"symbol":"QPHASE","qty":"bad","market_value":"bad"}]':'[]',openOrdersJson:'[]',observations:['QPHASE','QSECOND'].map(symbol=>({id:`${id}.${symbol}`,symbol,feed:'iex',bidPrice:'99',askPrice:'100',bidSize:'1',askSize:'1',asOf:now()}))});
     return id;
   };
   await assert.rejects(snapshot('bad',true));

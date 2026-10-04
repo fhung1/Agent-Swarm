@@ -29,7 +29,7 @@ try {
   role('analyst');
   call('publish_thesis', thesisId, runId, '', symbol, hostile, 'Fixture counterargument', 'Synthetic assumption', 'Fixture invalidation', `${sourceId},${factId},${unsafeId}`);
   role('market_data');
-  call('record_account_snapshot', snapshotId, accountId, 'ACTIVE', '12345.67', '12345.67', '20000', '[]', '[]',
+  call('record_account_snapshot', snapshotId, accountId, 'ACTIVE', '12345.67', '12345.67', '20000', '0', '[]', '[]',
     [{ id: quoteId, symbol, feed: 'iex', bid_price: '99', ask_price: '100', bid_size: '1', ask_size: '1', as_of: stamp() }]);
   const clock = stamp(); call('record_market_clock', accountId, true, clock);
   role('coordinator');

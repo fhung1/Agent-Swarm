@@ -94,7 +94,7 @@ export async function modelSpecialistReport(ask: Ask, conn: DbConnection, task: 
     }
     contextRef = snapshot.id;
     context = `<paper_account_snapshot id="${snapshot.id}" as_of="${snapshot.capturedAt.toISOString()}">` +
-      `Status: ${snapshot.accountStatus}; cash: ${snapshot.cash}; buying power: ${snapshot.buyingPower}; equity: ${snapshot.equity}.\n` +
+      `Status: ${snapshot.accountStatus}; cash: ${snapshot.cash}; buying power: ${snapshot.buyingPower}; equity: ${snapshot.equity}; daily P&L vs prior close: ${snapshot.dailyPnl ?? 'unavailable'}.\n` +
       `Positions: ${clip(snapshot.positionsJson, 2500)}\nOpen orders: ${clip(snapshot.openOrdersJson, 2500)}\n` +
       `Policy: ${clip(policy.policyJson, 2500)}</paper_account_snapshot>`;
   }

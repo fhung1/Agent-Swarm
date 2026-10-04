@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
 import {
-  amountField, credentialsFromEnv, getAccount, getLatestQuotes, getMarketOpen, getOpenOrders, getPositions,
+  amountField, credentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getMarketOpen, getOpenOrders, getPositions,
   object, parseFeed, parseQuote, requiredEnv, textField, type AlpacaCredentials, type Feed,
 } from './alpaca-client.js';
 import {
@@ -113,6 +113,7 @@ async function captureInputs(conn: DbConnection, accountId: string, symbols: Set
   const snapshot = {
     id: snapshotId, accountId, accountStatus: textField(account, 'status', 'account status'),
     cash: String(account.cash), buyingPower: amountField(account, 'buying_power'), equity: amountField(account, 'equity'),
+    dailyPnl: dailyPnlField(account),
     positionsJson: JSON.stringify(positionsRaw), openOrdersJson: JSON.stringify(orders),
   };
   await conn.reducers.recordAccountSnapshot({ ...snapshot, observations });
@@ -128,7 +129,7 @@ async function captureInputs(conn: DbConnection, accountId: string, symbols: Set
   });
   return {
     snapshotId,
-    account: { status: stored.row.accountStatus, buyingPower: stored.row.buyingPower, positionsJson: stored.row.positionsJson,
+    account: { status: stored.row.accountStatus, dailyPnl: stored.row.dailyPnl ?? undefined, buyingPower: stored.row.buyingPower, positionsJson: stored.row.positionsJson,
       openOrdersJson: stored.row.openOrdersJson, capturedAt: stored.row.capturedAt.toDate() },
     quotes: stored.quotes.map(o => ({ symbol: o.symbol, bidPrice: o.bidPrice, askPrice: o.askPrice, asOf: o.asOf.toDate() })),
     clockOpen: stored.clock.isOpen, clockAsOf: stored.clock.asOf,

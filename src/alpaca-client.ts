@@ -75,6 +75,25 @@ export function amountField(value: JsonObject, key: string): string {
   return result;
 }
 
+// Alpaca defines daily balance change as current equity minus equity at the prior market close.
+// Keep the subtraction exact to the database's 12-decimal money precision.
+export function dailyPnlField(account: JsonObject): string | undefined {
+  if (account.last_equity === undefined || account.last_equity === null || account.last_equity === '') return undefined;
+  const toUnits = (key: string): bigint => {
+    const amount = amountField(account, key);
+    const match = /^(0|[1-9]\d*)(?:\.(\d{1,12}))?$/.exec(amount);
+    if (!match) throw new Error(`Alpaca response has invalid ${key} precision`);
+    return BigInt(match[1]) * 1_000_000_000_000n + BigInt((match[2] ?? '').padEnd(12, '0') || '0');
+  };
+  const change = toUnits('equity') - toUnits('last_equity');
+  if (change === 0n) return '0';
+  const sign = change < 0n ? '-' : '';
+  const absolute = change < 0n ? -change : change;
+  const whole = absolute / 1_000_000_000_000n;
+  const fraction = (absolute % 1_000_000_000_000n).toString().padStart(12, '0').replace(/0+$/, '');
+  return `${sign}${whole}${fraction ? `.${fraction}` : ''}`;
+}
+
 // Normalizes one latest-quote entry, keeping the microsecond precision of Alpaca's timestamp.
 export function parseQuote(symbol: string, raw: unknown) {
   const quote = object(raw, `quote for ${symbol}`);

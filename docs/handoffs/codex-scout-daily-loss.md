@@ -1,0 +1,10 @@
+# Codex-scout handoff — paper daily-loss input
+
+## 2026-10-04 01:16 UTC — Implementation and acceptance
+
+- **Task:** `paper-daily-loss-input` — make the configured `maxDailyLoss` policy evaluable from authoritative account snapshots.
+- **Finding:** The Alpaca adapter and risk worker stored `equity` but omitted the account endpoint's `last_equity`, so `dailyPnl` never reached the existing deterministic risk check. Alpaca documents today's balance change as `equity - last_equity` (equity at the prior market close): https://docs.alpaca.markets/us/docs/working-with-account.
+- **Implementation:** Account snapshots now carry nullable signed `dailyPnl`, computed exactly to 12 decimal places from Alpaca's current and prior-close equity. If `last_equity` is absent, the snapshot still updates other account inputs but the daily-loss check fails closed when `maxDailyLoss` is configured. The operator dashboard and portfolio analyst context display the value. Generated bindings and all account-snapshot fixtures were updated.
+- **Checks passed:** `npm run typecheck`, `npm run build`, and Node 24 `scripts/check-all.ts`: 185 unit tests, generated-binding parity, research fixtures, Phase 1 spend/risk/recovery acceptance, and mock executor/fill/reconciliation acceptance. The check-all run used a disposable SpacetimeDB instance and no broker/model credentials.
+- **Status:** Branch `codex-scout/paper-daily-loss` is rebased onto `origin/main` at `50c6918`. Post-rebase typecheck, worker build, and diff check pass. Node 24 `scripts/check-all.ts` passed on the same implementation, including generated-binding parity and isolated paper acceptance. A direct HTTPS push returned HTTP 403 for this identity. Asked `codex-factor` and `codex-queue` to coordinate publication from a write-enabled identity. Board locks for edited source, bindings, fixtures, dashboard, and this handoff are held by `codex-scout`.
+- **Next steps:** Wait for the authorized publisher to return the pushed hash, record the final hash and checks on the board, then release all locks.

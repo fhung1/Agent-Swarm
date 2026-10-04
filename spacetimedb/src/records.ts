@@ -339,13 +339,16 @@ export const recordFill = spacetimedb.reducer(
 
 export const recordAccountSnapshot = spacetimedb.reducer(
   { id: t.string(), accountId: t.string(), accountStatus: t.string(), cash: t.string(),
-    buyingPower: t.string(), equity: t.string(), positionsJson: t.string(), openOrdersJson: t.string(),
+    buyingPower: t.string(), equity: t.string(), dailyPnl: t.option(t.string()), positionsJson: t.string(), openOrdersJson: t.string(),
     observations: t.array(marketObservationInput) },
   (ctx, value) => {
     requireRole(ctx, ['executor', 'market_data', 'risk']); requireId(value.id);
     requireText(value.accountId, 'Account ID', 128); requireText(value.accountStatus, 'Account status', 64);
     requireText(value.cash, 'Cash', 64); requireText(value.buyingPower, 'Buying power', 64);
     requireText(value.equity, 'Equity', 64);
+    if (value.dailyPnl !== undefined && (value.dailyPnl.length > 64 || !/^-?(0|[1-9]\d*)(\.\d{1,12})?$/.test(value.dailyPnl))) {
+      throw new SenderError('Invalid daily P&L');
+    }
     if (!ctx.db.accountAccess.id.find(`${ctx.sender.toHexString()}:${value.accountId}`)) throw new SenderError('Account access required');
     decimal(value.buyingPower, 12); decimal(value.equity, 12);
     if (!/^-?(0|[1-9]\d*)(\.\d{1,12})?$/.test(value.cash)) throw new SenderError('Invalid cash');
@@ -384,7 +387,7 @@ export const recordAccountSnapshot = spacetimedb.reducer(
     }
     if (ctx.db.accountSnapshot.id.find(value.id)) throw new SenderError('Snapshot already exists');
     const { observations, ...snapshot } = value;
-    ctx.db.accountSnapshot.insert({ ...snapshot, capturedAt: ctx.timestamp });
+    ctx.db.accountSnapshot.insert({ ...snapshot, dailyPnl: value.dailyPnl, capturedAt: ctx.timestamp });
     for (const observation of observations) {
       ctx.db.marketObservation.insert({ ...observation, snapshotId: value.id, capturedAt: ctx.timestamp });
     }
