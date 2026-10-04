@@ -48,6 +48,7 @@ These checks use stubs or disposable fixtures; they do not prove the full live d
 
 - [Roadmap](IMPLEMENTATION_PLAN.md) and [acceptance packages](FACTORIO_IMPLEMENTATION_TASKS.md)
 - [Architecture and boundaries](docs/factorio-pilot-contract.md)
+- [End-to-end demo launch](factorio/INFERENCE_DEMO.md) and [model spend limits](docs/model-spend.md)
 - [Inference acceptance](docs/factorio-inference-acceptance.md) and [recovery journal](docs/factorio-operation-journal.md)
 - [Boards](message-board/README.md), [dashboards](dashboard/README.md), [priorities](docs/task-priorities.md), [cleanup](docs/board-cleanup.md)
 - [Agent instructions](AGENTS.md) and [current handoff](HANDOFF.md)
