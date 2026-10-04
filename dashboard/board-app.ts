@@ -43,7 +43,7 @@ type FactorioAgent = { index: number; actorId: number; sender: string; taskId: s
 type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null;
   runMs: number | null; maxRunSpendUsd: string | null; spend: { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean } | null; workers: FactorioAgent[] };
 type FactorioActor = { unit: number; x: number; y: number; inventory: { ironOre: number; coal: number; ironPlate: number; items: Record<string, number> } };
-type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { resourceMap?: ResourceSurvey; tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
+type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { automation?: {verified:boolean; windows:number; mined:number; smelted:number; delivered:number; currentStored:number}; resourceMap?: ResourceSurvey; tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
 type ResourceSurvey = { tick: number; generatedChunks: number; totals: Record<string, number>; omittedCells: number;
   deposits: Array<{ id: string; resource: string; name: string; x: number; y: number; amount: number; distance: number }>; frontiers: Array<{x: number; y: number}> };
 let mapExpanded = false;
@@ -260,6 +260,17 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
   if (factorioControlMessage) put(section, node('p', factorioControlMessage.startsWith('Paused') || factorioControlMessage.startsWith('Resumed') ? 'muted small' : 'error', factorioControlMessage));
   put(section, node('p', 'muted small', 'Pause blocks new game mutations. Message-board coordination remains available.'));
 
+  const proof = game.automation;
+  if (proof) {
+    const automation = node('div', 'factorio-actors');
+    put(automation, node('h3', '', 'Automatic iron production'),
+      field('Engine proof', proof.verified ? 'Verified unattended production' : 'Waiting for two consecutive 30-second production windows'),
+      field('Completed windows', String(proof.windows ?? 0)),
+      field('This window: mined / smelted / stored', `${proof.mined ?? 0} / ${proof.smelted ?? 0} / ${proof.delivered ?? 0}`),
+      field('Plates in storage', String(proof.currentStored ?? 0)),
+      node('p','muted small','Actor material transfers, mining, crafting and construction reset the proof. Supplied equipment is declared in the save manifest.'));
+    put(section, automation);
+  }
   const survey = game.resourceMap;
   if (survey) {
     const map = node('div', 'factorio-actors');

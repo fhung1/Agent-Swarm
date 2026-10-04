@@ -66,3 +66,12 @@ test('abort ends inference even if a provider ignores cancellation', async () =>
   await assert.rejects(decision, /Operator stopped/);
   await assert.rejects(decideFactorio(ask, context, { signal: controller.signal }), /Operator stopped/);
 });
+
+test('construction decisions require cardinal directions and bounded recovery targets', () => {
+  const action = {...wait,kind:'action',waitMs:0,message:'Build',command:{kind:'build',item:'inserter',x:0.5,y:1.5,direction:8}};
+  assert.equal(validateFactorioDecision(action).kind,'action');
+  assert.throws(()=>validateFactorioDecision({...action,command:{...action.command,direction:2}}));
+  assert.throws(()=>validateFactorioDecision({...action,command:{...action.command,direction:16}}));
+  assert.equal(validateFactorioDecision({...action,command:{kind:'recover',targetId:25}}).kind,'action');
+  assert.throws(()=>validateFactorioDecision({...action,command:{kind:'recover',targetId:0}}));
+});

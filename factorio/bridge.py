@@ -56,8 +56,11 @@ def encode(world,actor,operation,command):
         if set(command)!={'kind','recipe','quantity'}: raise ValueError('Unexpected craft fields')
         if type(command['recipe']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['recipe']): raise ValueError('Invalid recipe')
         if type(command['quantity']) is not int or not 1<=command['quantity']<=20: raise ValueError('Invalid quantity')
-    elif kind=='place':
-        if set(command)!={'kind','item','x','y'}: raise ValueError('Unexpected place fields')
+    elif kind=='recover':
+        if set(command)!={'kind','targetId'} or type(command['targetId']) is not int or not 1<=command['targetId']<=2147483647: raise ValueError('Invalid recover target')
+    elif kind in ['place','build']:
+        if set(command)!=({'kind','item','x','y','direction'} if kind=='build' else {'kind','item','x','y'}): raise ValueError('Unexpected place fields')
+        if kind=='build' and (type(command['direction']) is not int or command['direction'] not in [0,4,8,12]): raise ValueError('Invalid cardinal direction')
         if type(command['item']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['item']): raise ValueError('Invalid item')
         for key in ['x','y']:
             if type(command[key]) not in [int,float] or not -1000000<=command[key]<=1000000: raise ValueError('Invalid position')

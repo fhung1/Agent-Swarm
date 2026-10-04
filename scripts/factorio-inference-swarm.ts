@@ -89,10 +89,10 @@ async function main() {
     await board.register(plan.orchestrator.sender, 'factorio-orchestrator', `Board-only coordinator; five ${plan.actorModel} low-effort game actors; ${plan.orchestrator.model} high effort`);
     const goalTaskId = `${runId}.goal-${goal}`;
     if (!board.snapshot().tasks.some(t => t.id === goalTaskId)) {
-      const title = goal === 'rocket' ? 'Beat Factorio: launch a rocket' : 'Build and operate an iron plate factory';
+      const title = goal === 'rocket' ? 'Beat Factorio: launch a rocket' : 'Build a fully automated iron plate factory';
       const details = goal === 'rocket'
         ? `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. The overseer must create one run-scoped subtask per actor before workers start.`
-        : `World ${manifest.worldId}; history ${manifest.historyId}. Build and operate a furnace-based iron plate factory using game resources, crafting and shared logistics. Each of the five assigned actors must contribute, produce at least five iron plates, and verify that a furnace remains in the world. The overseer must create one run-scoped subtask per actor before workers start.`;
+        : `World ${manifest.worldId}; history ${manifest.historyId}. Build a fully automated iron plate factory using the declared supplied machine kit. Machines must mine natural iron ore, smelt it and automatically deposit plates in storage. No manual actor feeding or hauling counts. Completion requires engine status.automation.verified after 60 game seconds of unattended production. The overseer must create one run-scoped subtask per actor before workers start.`;
       await board.createTask(plan.orchestrator.sender, { id: goalTaskId, title, area: 'factorio-goal', details, priority: 'high' });
     }
     if (!board.snapshot().messages.some(row => {

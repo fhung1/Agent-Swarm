@@ -27,14 +27,27 @@ local function contents(e)
   end
   return {ironOre=e.get_item_count("iron-ore"),coal=e.get_item_count("coal"),ironPlate=e.get_item_count("iron-plate"),items=items}
 end
+local machine_types={container=true,furnace=true,["mining-drill"]=true,inserter=true,["transport-belt"]=true,["electric-pole"]=true,["solar-panel"]=true,accumulator=true}
+local function machine_state(e)
+  return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,energy=e.energy,
+    items=(e.type=="container" or e.type=="furnace") and contents(e) or nil,
+    pickup=e.type=="inserter" and e.pickup_position or nil,drop=e.type=="inserter" and e.drop_position or nil}
+end
 local function observation(id,radius)
   local a=actor(id);radius=bounded(radius or 32,1,32)
   local entries={};local omitted=0
-  for _,e in pairs(a.surface.find_entities_filtered{position=a.position,radius=radius}) do
-    if e.valid and (e.type=="container" or e.type=="furnace" or e.type=="resource" or e.type=="tree") then
+  local candidates=a.surface.find_entities_filtered{position=a.position,radius=radius}
+  table.sort(candidates,function(ae,be)
+    local ad=distance(a.position,ae.position);local bd=distance(a.position,be.position)
+    if ad~=bd then return ad<bd end
+    if ae.position.x~=be.position.x then return ae.position.x<be.position.x end
+    if ae.position.y~=be.position.y then return ae.position.y<be.position.y end
+    return ae.name<be.name
+  end)
+  for _,e in ipairs(candidates) do
+    if e.valid and (machine_types[e.type] or e.type=="resource" or e.type=="tree") then
       if #entries<100 then
-        entries[#entries+1]={unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,
-          amount=e.type=="resource" and e.amount or nil,items=(e.type=="container" or e.type=="furnace") and contents(e) or nil}
+        local entry=machine_state(e);entry.amount=e.type=="resource" and e.amount or nil;entries[#entries+1]=entry
       else omitted=omitted+1 end
     end
   end
@@ -249,13 +262,18 @@ submit=function(raw)
       exact(command,{"kind","recipe","quantity"});bounded(command.quantity,1,20)
       if type(command.recipe)~="string" or not command.recipe:match("^[a-z0-9][a-z0-9-]*$") or #command.recipe>64 or not a.force.recipes[command.recipe] or not a.force.recipes[command.recipe].enabled then error("Recipe unavailable") end
       if a.get_craftable_count(command.recipe)<command.quantity then error("Insufficient crafting inputs") end
-    elseif command.kind=="place" then
-      exact(command,{"kind","item","x","y"})
+    elseif command.kind=="recover" then
+      exact(command,{"kind","targetId"});bounded(command.targetId,1,2147483647)
+      for _,candidate in pairs(a.surface.find_entities_filtered{position=a.position,radius=6}) do if candidate.unit_number==command.targetId then target=candidate;break end end
+      if not target or not target.valid or not machine_types[target.type] or target.force~=a.force or target.surface~=a.surface or distance(a.position,target.position)>6 or not target.minable then error("Recover target unavailable or out of reach") end
+    elseif command.kind=="place" or command.kind=="build" then
+      exact(command,command.kind=="build" and {"kind","item","x","y","direction"} or {"kind","item","x","y"})
+      if command.kind=="build" and command.direction~=0 and command.direction~=4 and command.direction~=8 and command.direction~=12 then error("Invalid cardinal direction") end
       if type(command.item)~="string" or not command.item:match("^[a-z0-9][a-z0-9-]*$") or #command.item>64 then error("Invalid place item") end
       local prototype=prototypes.item[command.item]
       if not prototype or not prototype.place_result or a.get_item_count(command.item)<1 then error("Place item unavailable") end
       if type(command.x)~="number" or type(command.y)~="number" or command.x~=command.x or command.y~=command.y or math.abs(command.x)>1000000 or math.abs(command.y)>1000000 or distance(a.position,{x=command.x,y=command.y})>6 then error("Place target out of reach") end
-      if not a.surface.can_place_entity{name=prototype.place_result.name,position={command.x,command.y},force=a.force} then error("Place target blocked") end
+      if not a.surface.can_place_entity{name=prototype.place_result.name,position={command.x,command.y},force=a.force,direction=command.direction or 0} then error("Place target blocked") end
     else error("Unsupported command") end
   end)
   if not accepted then
@@ -267,6 +285,7 @@ submit=function(raw)
     -- while an earlier operation is still moving the same actor.
     return receipt
   end
+  if command.kind~="move" then storage.qs_automation=nil end
   local receipt={version=1,operationId=req.operationId,digest=req.digest,worldId=w.worldId,historyId=w.historyId,actorId=req.actorId,status="pending",startTick=game.tick,request=raw}
   storage.qs_receipts[req.operationId]=receipt;storage.qs_busy[req.actorId]=req.operationId
   if command.kind=="move" then
@@ -284,9 +303,13 @@ submit=function(raw)
     receipt.quantity=started;receipt.item=command.recipe
     return finish(req.operationId,started==command.quantity and "completed" or "failed",started==command.quantity and "Craft queued in game" or "Craft queue rejected")
   end
-  if command.kind=="place" then
+  if command.kind=="recover" then
+    local recovered=a.mine_entity(target)
+    return finish(req.operationId,recovered and "completed" or "failed",recovered and "Recovered machine into inventory" or "Recovery failed")
+  end
+  if command.kind=="place" or command.kind=="build" then
     local prototype=prototypes.item[command.item]
-    local placed=a.surface.create_entity{name=prototype.place_result.name,position={command.x,command.y},force=a.force}
+    local placed=a.surface.create_entity{name=prototype.place_result.name,position={command.x,command.y},force=a.force,direction=command.direction or 0}
     if not placed then return finish(req.operationId,"failed","Placement rejected") end
     local removed=a.remove_item{name=command.item,count=1}
     if removed~=1 then placed.destroy();return finish(req.operationId,"failed","Place item disappeared") end
@@ -381,16 +404,41 @@ remote.add_interface("agent_swarm", {
       if e.valid and not e.player then actors[#actors+1]={unit=e.unit_number,x=e.position.x,y=e.position.y,inventory=contents(e)} end
     end
     local chests={}
-    for _,e in pairs(game.surfaces[1].find_entities_filtered{name="wooden-chest"}) do
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{type="container",force="player"}) do
       local c=contents(e);c.unit=e.unit_number;c.x=e.position.x;c.y=e.position.y;chests[#chests+1]=c
     end
     local productionSites={};local omittedSites=0
-    for _,e in pairs(game.surfaces[1].find_entities_filtered{type="furnace"}) do
-      if #productionSites<16 then
-        productionSites[#productionSites+1]={unit=e.unit_number,name=e.name,x=e.position.x,y=e.position.y,inventory=contents(e)}
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{type={"furnace","mining-drill","inserter","transport-belt","electric-pole","solar-panel","accumulator"},force="player"}) do
+      if #productionSites<160 then
+        productionSites[#productionSites+1]=machine_state(e)
       else omittedSites=omittedSites+1 end
     end
-    return {version="0.1.1",tick=game.tick,actors=actors,actorCount=#actors,world=world(),chests=chests,furnaces=#game.surfaces[1].find_entities_filtered{name="stone-furnace"},paused=storage.qs_paused or false,
+    return {version="0.1.1",tick=game.tick,actors=actors,actorCount=#actors,world=world(),chests=chests,automation=storage.qs_automation or {verified=false},furnaces=#game.surfaces[1].find_entities_filtered{type="furnace",force="player"},paused=storage.qs_paused or false,
       productionSites=productionSites,omittedSites=omittedSites,resourceMap=resource_map(),rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
   end
 })
+
+-- A rolling engine proof, never a model claim. Each half of a minute must
+-- include fresh mining, smelting and stored output; manual mutations reset it.
+script.on_nth_tick(60,function()
+  local surface=game.surfaces[1]
+  for _,a in pairs(surface.find_entities_filtered{name="character"}) do
+    if a.crafting_queue_size>0 or (a.player and a.player.mining_state.mining) then storage.qs_automation=nil;return end
+  end
+  local stats=game.forces.player.get_item_production_statistics(surface)
+  local ore=stats.get_input_count("iron-ore");local plates=stats.get_input_count("iron-plate");local stored=0
+  for _,e in pairs(surface.find_entities_filtered{type="container",force="player"}) do stored=stored+e.get_item_count("iron-plate") end
+  local proof=storage.qs_automation
+  if not proof then proof={verified=false,startTick=game.tick,ore=ore,plates=plates,stored=stored,windows=0};storage.qs_automation=proof end
+  proof.currentStored=stored;proof.tick=game.tick
+  proof.mined=ore-proof.ore;proof.smelted=plates-proof.plates;proof.delivered=stored-proof.stored
+  if game.tick-proof.startTick>=1800 then
+    if proof.mined>=5 and proof.smelted>=5 and proof.delivered>=5 then proof.windows=proof.windows+1 else proof.windows=0 end
+    proof.verified=proof.windows>=2
+    proof.startTick=game.tick;proof.ore=ore;proof.plates=plates;proof.stored=stored
+    if proof.verified then proof.verifiedTick=game.tick end
+  end
+end)
+for _,event in pairs({defines.events.on_built_entity,defines.events.on_player_mined_entity,defines.events.on_player_main_inventory_changed,defines.events.on_player_rotated_entity,defines.events.on_player_crafted_item}) do
+  script.on_event(event,function() storage.qs_automation=nil end)
+end

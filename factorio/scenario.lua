@@ -13,6 +13,16 @@ script.on_init(function()
     local p=surface.find_non_colliding_position("character",{spawn.x+i*2,spawn.y},32,0.5)
     local actor=surface.create_entity{name="character",position=p,force="player"}
     if not actor then error("Failed actor spawn") end
+    if "SCENARIO_NAME"=="automation-starter" then
+      assert(actor.insert{name="electric-mining-drill",count=1}==1)
+      assert(actor.insert{name="electric-furnace",count=1}==1)
+      assert(actor.insert{name="solar-panel",count=12}==12)
+      assert(actor.insert{name="accumulator",count=10}==10)
+      assert(actor.insert{name="medium-electric-pole",count=20}==20)
+      assert(actor.insert{name="transport-belt",count=60}==60)
+      assert(actor.insert{name="inserter",count=12}==12)
+      assert(actor.insert{name="wooden-chest",count=4}==4)
+    end
   end
   if "SCENARIO_NAME"=="cooperative-starter" then
     local p=surface.find_non_colliding_position("wooden-chest",{spawn.x,spawn.y+4},32,1)

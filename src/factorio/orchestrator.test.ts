@@ -119,3 +119,19 @@ test('overseer does not call the model while authoritative game status is paused
     readGameStatus: () => ({ tick: ++reads, paused: reads === 1, world: { worldId, historyId } }) });
   assert.equal(f.state.calls, 1);
 });
+
+test('iron goal uses authoritative unattended automation proof, not actor plate claims', async () => {
+  const f = fixture();
+  await runFactorioOrchestrator({ ...f.options, goal: 'plates', readGameStatus: () => ({tick: 3600, paused: false, world: {worldId,historyId}, automation: {verified:true}}),
+    ask: (async () => { throw Error('No model call needed for engine proof'); }) as Ask });
+  assert.equal(f.goal.status, 'done');
+  assert.equal(f.state.calls, 0);
+  assert.match(f.posted.at(-1)!.body, /unattended/);
+});
+
+test('iron goal rejects unverified automation even with actor inventory claims', async () => {
+  const f = fixture(); f.options.maxCalls = 1;
+  f.options.ask = (async () => ({kind:'wait', recipient:'', message:'Await automation', title:'',details:'',dependsOn:''})) as Ask;
+  await assert.rejects(runFactorioOrchestrator({...f.options, goal:'plates', readGameStatus:()=>({tick:1,paused:false,world:{worldId,historyId},automation:{verified:false},furnaces:5})}), /call limit exhausted/);
+  assert.notEqual(f.goal.status, 'done');
+});

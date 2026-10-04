@@ -47,7 +47,7 @@ def main():
     args=parser.parse_args(); world=pathlib.Path(args.world).resolve()
     if args.command=='init':
         config=json.loads(pathlib.Path(args.config).read_text())
-        if config['version']!=VERSION or config['agentCount']!=5 or config['scenario'] not in ['cooperative-starter','freeplay']: raise ValueError('Unsupported pilot contract')
+        if config['version']!=VERSION or config['agentCount']!=5 or config['scenario'] not in ['cooperative-starter','freeplay','automation-starter']: raise ValueError('Unsupported pilot contract')
         if type(config['seed']) is not int or not 0<=config['seed']<=4294967295: raise ValueError('Invalid seed')
         exe,version=binary(); ports(config)
         world.mkdir(parents=True,exist_ok=False)
@@ -60,6 +60,7 @@ def main():
         (world/'map-gen.json').write_text(json.dumps({'seed':config['seed'],'peaceful_mode':True}))
         (world/'server-settings.json').write_text(json.dumps({'name':'Quant Swarm private pilot','description':'Scripted avatars; initial fixture grants declared in manifest','visibility':{'public':False,'lan':False},'require_user_verification':False,'auto_pause':False,'autosave_interval':2,'autosave_slots':3}))
         manifest={**config,'worldId':str(uuid.uuid4()),'historyId':str(uuid.uuid4()),'binaryVersion':version,'mods':modlist,'bridgeSha256':digest_tree(source),'fixtureGrants':{'sharedChest':{'iron-ore':50,'coal':20},'sharedFurnaces':2,'actorInventories':{}} if config['scenario']=='cooperative-starter' else {'actorInventories':{},'sharedChest':{},'sharedFurnaces':0}}
+        if config['scenario']=='automation-starter': manifest['fixtureGrants']={'perActor':{'electric-mining-drill': 1, 'electric-furnace': 1, 'solar-panel': 12, 'accumulator': 10, 'medium-electric-pole': 20, 'transport-belt': 60, 'inserter': 12, 'wooden-chest': 4},'rawResources':{},'prebuiltMachines':0}
         (world/'manifest.json').write_text(json.dumps(manifest,indent=2))
         (world/'rcon.password').write_text(uuid.uuid4().hex); os.chmod(world/'rcon.password',0o600)
         (world/'runtime.cfg').write_text('[path]\nread-data='+str(exe.parents[2]/'data')+'\nwrite-data='+str(world/'data')+'\n')

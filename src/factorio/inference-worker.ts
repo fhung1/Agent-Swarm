@@ -117,10 +117,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     }
     const assignedObjective = [initial.title, initial.details].filter(Boolean).join('\n');
     if (initial.status === 'done' && initial.assignee === scope.sender) {
-      const observed = observe();
-      const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number };
+      observe();
+      const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
       const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
-        : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates && Number(engineStatus.furnaces) >= 1;
+        : engineStatus.automation?.verified === true;
       if (state.pending || !won) throw Error('Completed task disagrees with live actor state');
       return;
     }
@@ -198,15 +198,15 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.lastResult = { kind: 'wait', reason: output.message }; state.decision = null; o.save(state);
         await sleep(output.waitMs);
       } else if (output.kind === 'complete') {
-        const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number };
+        const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
         const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
-          : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates && Number(engineStatus.furnaces) >= 1;
+          : engineStatus.automation?.verified === true;
         if (!won) {
           state.lastResult = { error: o.goal === 'rocket' ? 'Completion rejected: no engine-observed rocket launch'
-            : 'Completion rejected: live inventory needs five iron plates and the game must contain a furnace' }; state.decision = null; o.save(state); continue;
+            : 'Completion rejected: engine must verify unattended mining, smelting and plate storage for 60 game seconds' }; state.decision = null; o.save(state); continue;
         }
         await post(`${id}-complete`, 'completion', { taskId: o.taskId, inventory: observed.inventory, tick: observed.tick,
-          rocketLaunches: engineStatus.rocketLaunches, furnaces: engineStatus.furnaces });
+          rocketLaunches: engineStatus.rocketLaunches, furnaces: engineStatus.furnaces, automation: engineStatus.automation });
         leases.stop();
         for (const r of board.snapshot().reservations.filter(r => r.holder === scope.sender && r.taskId === o.taskId)) {
           leases.release(r.path); await board.releaseReservation(scope.sender, r.path);
@@ -214,7 +214,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         snapshot();
         await board.updateTask(scope.sender, o.taskId, 'done', o.goal === 'rocket'
           ? `Engine rocket launch observed by actor ${scope.actorId} at tick ${observed.tick}`
-          : `Game verified ${observed.inventory.ironPlate} iron plates in actor ${scope.actorId}'s inventory and ${engineStatus.furnaces} furnace(s) at tick ${observed.tick}`);
+          : `Game verified unattended ore mining, smelting and plate storage at tick ${observed.tick}`);
         state.decision = null; o.save(state); return;
       } else if (output.kind === 'subtask' || output.kind === 'resource_request') {
         const taskId = `${scope.runId}.subtask-${scope.actorId}-${state.calls}`;
@@ -272,7 +272,11 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
             state.lastResult = { error: 'Mine target not observed within reach' }; state.decision = null; o.save(state); continue;
           }
           reservationPath = `world/${scope.worldId}/resource/${command.name}/${Math.round(command.x * 100)}/${Math.round(command.y * 100)}`;
-        } else if (command.kind === 'place') {
+        } else if (command.kind === 'recover') {
+          const target = observed.nearby.find(e => e.unit === command.targetId && !['tree','resource'].includes(e.type));
+          if (!target || Math.hypot(observed.x-target.x, observed.y-target.y)>5) { state.lastResult={error:'Recover target not observed within reach'}; state.decision=null; o.save(state); continue; }
+          reservationPath = `world/${scope.worldId}/entity/${command.targetId}`;
+        } else if (command.kind === 'place' || command.kind === 'build') {
           if (Math.hypot(observed.x - command.x, observed.y - command.y) > 5 || (observed.inventory.items?.[command.item] ?? 0) < 1) {
             state.lastResult = { error: 'Place item absent or target out of reach' }; state.decision = null; o.save(state); continue;
           }
@@ -360,7 +364,7 @@ export async function inferenceWorkerMain(): Promise<void> {
     await runInferenceWorker({ scope, state, taskId: process.env.FACTORIO_TASK_ID ?? `${runId}.production-${index}`,
       objective: process.env.FACTORIO_OBJECTIVE ?? (process.env.FACTORIO_GOAL === 'rocket'
         ? 'Beat Factorio by launching a rocket from this empty-resource freeplay world. Decompose the goal into board subtasks and cooperate through resource requests and shared chests.'
-        : 'Cooperate to build and operate a furnace-based iron plate factory; deliver five game-produced plates into your inventory and verify a furnace remains in the world.'),
+        : 'Build an automated iron factory with supplied machines: natural ore mining, powered smelting and automatic plate delivery into storage. No ongoing actor feeding or hauling. Completion requires status.automation.verified.'),
       operatorPrompt: () => process.env.FACTORIO_PROMPT_FILE ? readFileSync(process.env.FACTORIO_PROMPT_FILE, 'utf8') : process.env.FACTORIO_PROMPT ?? 'Share plans and observations; avoid resource contention.',
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,

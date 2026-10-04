@@ -5,7 +5,9 @@ export type Command =
   | { kind: 'take' | 'put'; targetId: number; item: string; quantity: number }
   | { kind: 'mine'; name: string; x: number; y: number; quantity: number }
   | { kind: 'craft'; recipe: string; quantity: number }
-  | { kind: 'place'; item: string; x: number; y: number };
+  | { kind: 'place'; item: string; x: number; y: number }
+  | { kind: 'build'; item: string; x: number; y: number; direction: number }
+  | { kind: 'recover'; targetId: number };
 export interface Operation {
   version: 1; worldId: string; historyId: string; operationId: string; actorId: number; command: Command;
 }
@@ -71,8 +73,11 @@ export function validateCommand(value: unknown): Command {
     }
   } else if (c.kind === 'craft') {
     exact(c, ['kind', 'recipe', 'quantity']); itemName(c.recipe); integer(c.quantity, 1, 20);
-  } else if (c.kind === 'place') {
-    exact(c, ['kind', 'item', 'x', 'y']); itemName(c.item);
+  } else if (c.kind === 'recover') {
+    exact(c, ['kind', 'targetId']); integer(c.targetId, 1, 2_147_483_647);
+  } else if (c.kind === 'place' || c.kind === 'build') {
+    exact(c, c.kind === 'build' ? ['kind', 'item', 'x', 'y', 'direction'] : ['kind', 'item', 'x', 'y']); itemName(c.item);
+    if (c.kind === 'build' && ![0,4,8,12].includes(c.direction as number)) throw Error('Invalid cardinal direction');
     for (const key of ['x', 'y']) {
       const coordinate = c[key];
       if (typeof coordinate !== 'number' || !Number.isFinite(coordinate) || Math.abs(coordinate) > 1_000_000) throw new Error('Invalid position');
