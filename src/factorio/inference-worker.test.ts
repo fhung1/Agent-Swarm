@@ -24,8 +24,10 @@ function fixture() {
 }
 test('model completion is verified and call charged before dispatch', async () => {
   const f = fixture();
-  f.options.ask = (async () => {
+  f.options.ask = (async (_schema, _system, prompt) => {
     assert.equal(f.saves.at(-1)?.calls, 1);
+    const budget = JSON.parse(prompt).budget;
+    assert.equal(budget.remainingCalls, 1); assert.ok(budget.remainingMs > 0);
     return { kind: 'complete', command: null, message: 'Verified', recipient: '', waitMs: 0 };
   }) as Ask;
   await runInferenceWorker(f.options);
