@@ -56,34 +56,49 @@ local function submit(raw)
   if req.worldId~=w.worldId or req.historyId~=w.historyId then error("World/history mismatch") end
   if type(req.operationId)~="string" or #req.operationId>96 or not req.operationId:match("^[%w_.:-]+$") then error("Invalid operation ID") end
   if type(req.digest)~="string" or #req.digest~=64 or not req.digest:match("^[0-9a-f]+$") then error("Invalid digest") end
+  bounded(req.actorId,1,2147483647)
   storage.qs_receipts=storage.qs_receipts or {};storage.qs_busy=storage.qs_busy or {}
   local existing=storage.qs_receipts[req.operationId]
   if existing then
     if existing.request~=raw then error("Operation ID content changed") end
     return existing
   end
-  if storage.qs_paused then error("World paused") end
-  local a=actor(req.actorId)
-  if storage.qs_busy[req.actorId] then error("Actor has pending operation") end
+  local a,target
   local command=req.command
-  if type(command)~="table" then error("Missing command") end
-  -- Validate every argument before recording or mutating resources.
-  local target
-  if command.kind=="move" then
-    exact(command,{"kind","x","y","maxTicks"})
-    if type(command.x)~="number" or type(command.y)~="number" or command.x~=command.x or command.y~=command.y or math.abs(command.x)>1000000 or math.abs(command.y)>1000000 then error("Invalid position") end
-    if distance(a.position,{x=command.x,y=command.y})>32 then error("Movement outside local radius") end
-    bounded(command.maxTicks,1,600)
-  elseif command.kind=="take" or command.kind=="put" then
-    exact(command,{"kind","targetId","item","quantity"})
-    target=target_for(a,command.targetId);bounded(command.quantity,1,20)
-    if command.item~="iron-ore" and command.item~="coal" and command.item~="iron-plate" then error("Unsupported item") end
-    if command.kind=="take" then
-      if target.get_item_count(command.item)<command.quantity or not a.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
-    else
-      if a.get_item_count(command.item)<command.quantity or not target.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
-    end
-  else error("Unsupported command") end
+  -- A valid scoped operation always has a durable outcome, including admission
+  -- rejection. No mutation occurs inside validation; uncertain transport can
+  -- reconcile this failed receipt instead of inventing a retry.
+  local accepted,rejection=pcall(function()
+    if storage.qs_paused then error("World paused") end
+    a=actor(req.actorId)
+    if storage.qs_busy[req.actorId] then error("Actor has pending operation") end
+    if type(command)~="table" then error("Missing command") end
+    -- Validate every argument before recording or mutating resources.
+    if command.kind=="move" then
+      exact(command,{"kind","x","y","maxTicks"})
+      if type(command.x)~="number" or type(command.y)~="number" or command.x~=command.x or command.y~=command.y or math.abs(command.x)>1000000 or math.abs(command.y)>1000000 then error("Invalid position") end
+      if distance(a.position,{x=command.x,y=command.y})>32 then error("Movement outside local radius") end
+      bounded(command.maxTicks,1,600)
+    elseif command.kind=="take" or command.kind=="put" then
+      exact(command,{"kind","targetId","item","quantity"})
+      target=target_for(a,command.targetId);bounded(command.quantity,1,20)
+      if command.item~="iron-ore" and command.item~="coal" and command.item~="iron-plate" then error("Unsupported item") end
+      if command.kind=="take" then
+        if target.get_item_count(command.item)<command.quantity or not a.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
+      else
+        if a.get_item_count(command.item)<command.quantity or not target.can_insert{name=command.item,count=command.quantity} then error("Insufficient source or destination capacity") end
+      end
+    else error("Unsupported command") end
+  end)
+  if not accepted then
+    local receipt={version=1,operationId=req.operationId,digest=req.digest,worldId=w.worldId,
+      historyId=w.historyId,actorId=req.actorId,status="failed",startTick=game.tick,
+      endTick=game.tick,detail=tostring(rejection),request=raw}
+    storage.qs_receipts[req.operationId]=receipt
+    -- Never clear qs_busy here: this rejection may belong to a second request
+    -- while an earlier operation is still moving the same actor.
+    return receipt
+  end
   local receipt={version=1,operationId=req.operationId,digest=req.digest,worldId=w.worldId,historyId=w.historyId,actorId=req.actorId,status="pending",startTick=game.tick,request=raw}
   storage.qs_receipts[req.operationId]=receipt;storage.qs_busy[req.actorId]=req.operationId
   if command.kind=="move" then

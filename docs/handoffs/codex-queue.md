@@ -18,3 +18,8 @@ Reviewing main at `a9a9c9a` in an isolated worktree. Scope: Factorio runtime/bri
 
 
 Review follow-up: All 15 findings are tracked on Development with evidence, acceptance requirements and **push when finished**. Fourteen new Factorio tasks remain open (6 High, 6 Normal, 2 Low); identity authorization is consolidated into concurrently added High task `board-auth-tailnet`, and our duplicate is cancelled. `factorio-history-scale` covers Lua receipt scanning; `board-history-scale` covers shared subscriptions/rendering. Existing assignments were preserved; freeplay capability work depends on `factorio-ci-fault-acceptance`. Start with `factorio-wire-canonicalization` and `factorio-rejection-receipts`, then recovery/supervision, lease renewal and the inference verifier.
+
+
+## Current: factorio-rejection-receipts
+
+Implemented durable terminal failure receipts for valid scoped rejected operations; malformed envelopes/foreign histories still fail admission, and rejecting a second request preserves the actor’s current busy operation. Worker tests prove next-turn feedback and restart without replay. Passed 18 inference tests, root typecheck, real-engine rejection/replay/restart/conservation checks and the existing production/graceful-restart fixture. `factorio/check-rejections.py` is documented in the runtime guide. Canonicalization owner’s files were preserved; board result records the pushed commit.

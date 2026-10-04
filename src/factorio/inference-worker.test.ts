@@ -98,3 +98,37 @@ test('losing a resource reservation race becomes model feedback, not a mutation'
   assert.match(JSON.stringify(f.options.state.lastResult), /reservation refused/);
   assert.equal(f.options.state.pending, null);
 });
+test('known game rejection is published as feedback and the next model turn can recover', async () => {
+  const f = fixture(); let calls = 0;
+  const command = { kind: 'move' as const, x: 100, y: 0, maxTicks: 10 };
+  f.options.ask = (async (_schema, _system, prompt) => {
+    if (++calls === 1) return { kind: 'action', command, message: 'Move', recipient: '', waitMs: 0 };
+    assert.equal(JSON.parse(prompt).lastResult.status, 'failed');
+    assert.match(JSON.parse(prompt).lastResult.detail, /outside local radius/);
+    assert.equal(f.options.state.pending, null);
+    return { kind: 'complete', command: null, message: 'Inventory already satisfies goal', recipient: '', waitMs: 0 };
+  }) as Ask;
+  f.options.game = request => {
+    if (request.kind === 'execute') throw Error('Bridge reports failed admission');
+    if (request.kind !== 'receipt') return f.observation;
+    const pending = f.options.state.pending!;
+    return { version: 1, operationId: pending.id, digest: pending.digest, worldId: scope.worldId,
+      historyId: scope.historyId, actorId: scope.actorId, status: 'failed', startTick: 100, endTick: 100,
+      detail: 'Movement outside local radius' };
+  };
+  await runInferenceWorker(f.options);
+  assert.equal(calls, 2); assert.equal(f.task.status, 'done');
+  assert.equal(f.events.filter(e => e.kind === 'action_result').length, 1);
+});
+test('restart reconciles a rejected operation without resubmitting it', async () => {
+  const f = fixture();
+  f.options.state.pending = { id: 'rejected', command: { kind: 'move', x: 100, y: 0, maxTicks: 10 }, digest: 'a'.repeat(64) };
+  f.options.game = request => {
+    assert.notEqual(request.kind, 'execute');
+    return request.kind === 'receipt' ? { version: 1, operationId: 'rejected', digest: 'a'.repeat(64),
+      worldId: scope.worldId, historyId: scope.historyId, actorId: scope.actorId,
+      status: 'failed', startTick: 100, endTick: 100, detail: 'Movement outside local radius' } : f.observation;
+  };
+  await runInferenceWorker(f.options);
+  assert.equal(f.options.state.pending, null); assert.equal(f.task.status, 'done');
+});
