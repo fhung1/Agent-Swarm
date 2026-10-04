@@ -445,3 +445,15 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   API returned run iron-modular-20261004, two plan sections, eight decisions and
   game tick56300; served browser bundle contains the new section. Dashboard
   typecheck and server syntax check pass. Factory remains in progress.
+
+## codex — Archive modular run Astra launch instructions (2026-10-04)
+
+- Saved private `iron-modular-20261004/orchestrator-initial-prompt.md` under
+  `.game-runs/` with exact system instructions from launch code `e673ca6`
+  and exact operator objective read from the launch file. File mode 0600.
+- The first provider request also had a live JSON briefing generated at
+  call time. That serialized briefing was not retained as a prompt; the
+  archive explicitly says the complete first request cannot be recovered
+  exactly. Checked both saved blocks byte-for-byte against their sources.
+- No game, board, model or budget state changed. Private artifact stays
+  ignored and is not pushed; this handoff records its location.
