@@ -417,3 +417,17 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   configured for the new scope. Four inference bundles rebuilt successfully.
 - Operational restart only; no new source changes or tests. Factory completion
   and actual modular layout remain to be observed; run is still in progress.
+
+## codex — Live modular run inspection stall (2026-10-04)
+
+- Same run iron-modular-20261004 remained live, unpaused, with all six roles
+  and five claimed actor tasks. At tick ~47k, four bootstrap furnaces and four
+  drills existed, but no chest or automated production. Astra's broadcast held
+  permanent builds pending exact coordinates; the last eight decisions mostly
+  alternated research/layout inspections while actors repeatedly waited.
+- Added an inspection-loop signal and bounded inspection refusal after repeated
+  reads without a plan or assignment. Astra still chooses all layout and actor
+  directives. Resumed same save/board/journals/$100 ledger after clean role stop.
+  Astra issued a fresh bootstrap directive at call134; full module build pending.
+- Root typecheck and 15 focused orchestrator tests passed; rebuilt deployed
+  orchestrator bundle. No gameplay items, board tasks or run settings reset.

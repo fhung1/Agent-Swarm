@@ -88,6 +88,26 @@ test('orchestrator only consumes protocol messages from the same run and history
   assert.deepEqual(selected.map(message => message.id), ['1']);
 });
 
+test('stalled inspection cycle returns a loop signal and lets Astra issue its own directive', async () => {
+  const f = fixture();
+  Object.assign(f.state, { calls: 8, lastPlanOrDirectiveCall: 0,
+    recentDecisions: Array.from({length: 8}, (_, i) => ({call: i + 1, tick: i + 1,
+      kind: 'inspect', recipient: '', message: i % 2 ? '{"kind":"research"}' : '{"kind":"layout","x":0,"y":0,"radius":8}', title: ''})) });
+  f.options.maxCalls = 11;
+  let calls = 0;
+  f.options.ask = (async (_schema, _system, input) => {
+    assert.match(JSON.parse(input).inspectionLoop, /Repeated inspections/);
+    calls++;
+    return calls === 1
+      ? {kind:'inspect', recipient:'', message:'{"kind":"research"}', title:'', details:'', dependsOn:''}
+      : {kind:'direct', recipient:agents[0], message:'Choose a module location and begin construction.', title:'', details:'', dependsOn:''};
+  }) as Ask;
+  await runFactorioOrchestrator(f.options);
+  assert.equal(calls, 2);
+  assert.ok(f.posted.some(row => JSON.parse(row.body).kind === 'inspection_result' && /Inspection loop/.test(row.body)));
+  assert.ok(f.posted.some(row => row.recipient === agents[0] && JSON.parse(row.body).kind === 'chat'));
+});
+
 
 test('overseer receives read-only global survey without a character or mutation API', async () => {
   const f = fixture();
