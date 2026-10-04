@@ -58,7 +58,7 @@ local function submit(raw)
   if type(req.operationId)~="string" or #req.operationId>96 or not req.operationId:match("^[%w_.:-]+$") then error("Invalid operation ID") end
   if type(req.digest)~="string" or #req.digest~=64 or not req.digest:match("^[0-9a-f]+$") then error("Invalid digest") end
   bounded(req.actorId,1,2147483647)
-  storage.qs_receipts=storage.qs_receipts or {};storage.qs_busy=storage.qs_busy or {};storage.qs_pending=storage.qs_pending or {}
+  storage.qs_receipts=storage.qs_receipts or {};storage.qs_busy=storage.qs_busy or {}
   local existing=storage.qs_receipts[req.operationId]
   if existing then
     if existing.request~=raw then error("Operation ID content changed") end
@@ -104,7 +104,7 @@ local function submit(raw)
   storage.qs_receipts[req.operationId]=receipt;storage.qs_busy[req.actorId]=req.operationId
   if command.kind=="move" then
     receipt.target={x=command.x,y=command.y};receipt.deadline=game.tick+command.maxTicks
-    storage.qs_pending[req.operationId]=true;return receipt
+    if storage.qs_pending then storage.qs_pending[req.operationId]=true end;return receipt
   end
   local source=command.kind=="take" and target or a
   local dest=command.kind=="take" and a or target
@@ -121,7 +121,13 @@ local function submit(raw)
   return finish(req.operationId,inserted==command.quantity and "completed" or "failed",inserted==command.quantity and "Transferred" or "Capacity changed")
 end
 script.on_event(defines.events.on_tick,function()
-  for id,_ in pairs(storage.qs_pending or {}) do
+  if not storage.qs_pending then
+    storage.qs_pending={}
+    for id,receipt in pairs(storage.qs_receipts or {}) do
+      if receipt.status=="pending" and receipt.target then storage.qs_pending[id]=true end
+    end
+  end
+  for id,_ in pairs(storage.qs_pending) do
     local receipt=(storage.qs_receipts or {})[id]
     if not receipt then storage.qs_pending[id]=nil
     else

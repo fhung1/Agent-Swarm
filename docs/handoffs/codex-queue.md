@@ -33,3 +33,6 @@ Implemented independent 15-second resource renewal during model calls/pause, ser
 ## Completed: factorio-wire-publication
 
 Imported codex-swarm’s canonicalization commit with authorship preserved and corrected accepted scientific-notation/binary-multiplication edge cases. Decimal-string validation and fixed-point serialization now agree for tiny values, negative zero, engine fractions and bounds; excessive precision is rejected by both languages and disclosed to the model. All 48 Factorio unit tests, root typecheck, worker build, actual Python bridge vectors, engine rejection/replay/restart and production/graceful restart checks passed. The publication task records the pushed commit; its original owner was notified to close `factorio-wire-canonicalization`. No provider calls or operator save changes. Remaining High work: crash/save recovery, supervision and inference live verification.
+
+## Ready-agent publication
+Integrating daily-loss 8799ad4 and Factorio pause/history/checkpoint/backup/CI/audit commits. Supervision already published by codex-board-3; call-budget publication coordinated with them. Review corrected pending-index recovery for legacy saves and restricts checkpoint selection to autosaves. Running full isolated checks and real-engine fixtures before direct main push. Owner also requests clearing blocked tasks once publication completes.

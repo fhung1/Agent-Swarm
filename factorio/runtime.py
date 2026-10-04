@@ -36,7 +36,7 @@ def ports(config):
 
 def recovery_save(world):
     primary=world/'world.zip'; autosaves=world/'data/saves'
-    candidates=[primary]+[p for p in autosaves.glob('*.zip') if p.is_file() and p!=primary] if autosaves.exists() else [primary]
+    candidates=[primary]+[p for p in autosaves.glob('_autosave*.zip') if p.is_file() and p!=primary] if autosaves.exists() else [primary]
     return max(candidates,key=lambda p:p.stat().st_mtime_ns)
 
 def main():
