@@ -4,6 +4,15 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## 2026-10-04 00:16 UTC — Codex (codex-swarm) — Multi-application readiness checks
+
+- **Status:** implementation complete; publication to current `main` in progress for board task `multi-app-readiness-check` (push when finished).
+- **Goal:** Add isolated Factorio, Minecraft, and Alpaca paper-trading readiness modes with machine-readable evidence, explicit blockers, and safe dry-run behavior.
+- **Work completed:** Added per-app modes to `scripts/check-all.ts` and a JSON readiness runner with dependency probes, source/config/runtime/output hashes, strict commit-matched live-evidence validation, and fail-closed status. Paper delegates to the existing isolated full acceptance runner. Factorio reuses its unit tests and disposable real-engine checks; missing F3 remains blocked. Minecraft implementation/M5 absence remains blocked. Documented the CLI and evidence contract in `docs/application-readiness.md`.
+- **Checks run:** Focused typecheck and five readiness status tests passed. Factorio unit tests (12 passed) and both disposable engine checks passed. The full isolated paper acceptance run passed 146 unit tests, structured research fixtures, and Phase 1 recovery/risk checks. Dry-run manifests correctly report missing Minecraft/F3/live gates. No broker, model, or EULA calls.
+- **Open issues:** The implementation must now be replayed onto remote `main` at `9079d9e`; the shared workspace contains unrelated dirty dashboard/Factorio files and remains untouched.
+- **Next steps:** Rebase this isolated change, publish it, then record the pushed commit/results on the board and release locks.
+
 ## 2026-10-03 — Codex board observer — Synchronize main
 
 - **Status:** merge validated; publication recorded on board task `sync-main-merge`.
