@@ -1,6 +1,6 @@
 # Factorio model spend
 
-Every Factorio inference run has one shared, durable USD ledger for the Astra overseer and all five actor workers. The hard configured maximum is **$500 per run**; `FACTORIO_RUN_BUDGET_USD` may lower the cap but the launcher rejects larger values. The ledger is stored under the private world directory at `WORLD/inference/RUN/run-spend.json`.
+Every Factorio inference run has one shared, durable USD ledger for the Astra overseer and all five actor workers. The hard configured maximum is **$400 per run**; `FACTORIO_RUN_BUDGET_USD` may lower the cap but the launcher rejects larger values. The ledger is stored under the private world directory at `WORLD/inference/RUN/run-spend.json`. If a request cannot reserve its worst-case charge, that transaction marks the ledger halted and the launcher terminates the overseer and all five workers.
 
 Before each provider request, the process atomically reserves the maximum charge allowed by the input byte bound and output token limit. Input is reserved at the highest configured cache rate. The request is not sent when the remaining run budget cannot cover its reservation. Confirmed usage settles the reservation using integer micro-USD arithmetic and adds a 10% margin. An interrupted or unreported request keeps its full reservation. All six processes and supervisor restarts use the same ledger; a missing or mismatched ledger fails closed.
 

@@ -42,7 +42,20 @@ export async function supervise(options: { statePath: string; runId: string; dea
   let stopped = false;
   let child: ReturnType<typeof spawn> | undefined;
   let cancelWait: (() => void) | undefined;
-  const stop = () => { stopped = true; child?.kill('SIGTERM'); cancelWait?.(); };
+  let forceStop: NodeJS.Timeout | undefined;
+  const stop = () => {
+    stopped = true;
+    if (child && !forceStop) {
+      child.kill('SIGTERM');
+      const target = child;
+      forceStop = setTimeout(() => {
+        if (target.exitCode === null && target.signalCode === null) target.kill('SIGKILL');
+      }, 5000);
+      target.once('exit', () => { if (forceStop) clearTimeout(forceStop); forceStop = undefined; });
+      forceStop.unref();
+    }
+    cancelWait?.();
+  };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);
   const deadlineTimer = setTimeout(stop, Math.max(0, Math.min(2_147_483_647, state.deadline - Date.now())));
   try {

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, openSync, closeSync, fsyncSync, readFileSync, re
 import { dirname, join } from 'node:path';
 import { microsToUsd, quoteUsageMicros, reserveUsageMicros, usdToMicros, type ModelRates, type TokenUsage } from '../agents/spend-pricing.ts';
 
-export const FACTORIO_RUN_SPEND_CAP_USD = '500';
+export const FACTORIO_RUN_SPEND_CAP_USD = '400';
 export const FACTORIO_SPEND_PRICE_VERSION = 'openai-standard-2026-10-03-plus-10pct';
 export const FACTORIO_MAX_INPUT_BYTES = 40_000;
 export const FACTORIO_MAX_OUTPUT_TOKENS = 16_000;
@@ -38,12 +38,14 @@ export interface FactorioSpendLedger {
   historyId: string;
   capMicros: string;
   priceVersion: string;
+  halted: boolean;
+  haltReason?: string;
   records: Record<string, SpendRecord>;
 }
 export interface FactorioSpendGuard {
   reserve(callId: string, model: string, system: string, prompt: string, outputTokenCeiling?: number): string;
   settle(callId: string, usage: TokenUsage, actualModel?: string): string;
-  snapshot(): { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string };
+  snapshot(): { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean; haltReason?: string };
 }
 
 function safeCost(value: bigint): string { return value.toString(); }
@@ -71,7 +73,7 @@ export function createFactorioSpendGuard(options: {
   const path = options.path, capUsd = options.capUsd ?? FACTORIO_RUN_SPEND_CAP_USD;
   const priceVersion = options.priceVersion ?? FACTORIO_SPEND_PRICE_VERSION;
   const capMicros = usdToMicros(capUsd);
-  if (capMicros < 1n || capMicros > usdToMicros(FACTORIO_RUN_SPEND_CAP_USD)) throw Error('Factorio per-run spend cap must be greater than zero and at most $500');
+  if (capMicros < 1n || capMicros > usdToMicros(FACTORIO_RUN_SPEND_CAP_USD)) throw Error('Factorio per-run spend cap must be greater than zero and at most $400');
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   if (existsSync(path)) {
     const existing = JSON.parse(readFileSync(path, 'utf8')) as FactorioSpendLedger;
@@ -80,7 +82,7 @@ export function createFactorioSpendGuard(options: {
       !existing.records || typeof existing.records !== 'object') throw Error('Run spend ledger differs from immutable run scope or spend plan');
   } else {
     const initial: FactorioSpendLedger = { version: 1, runId: options.runId, worldId: options.worldId, historyId: options.historyId,
-      capMicros: capMicros.toString(), priceVersion, records: {} };
+      capMicros: capMicros.toString(), priceVersion, halted: false, records: {} };
     const fd = openSync(path, 'wx', 0o600);
     try { writeFileSync(fd, JSON.stringify(initial, null, 2)); fsyncSync(fd); } finally { closeSync(fd); }
   }
@@ -132,17 +134,25 @@ export function createFactorioSpendGuard(options: {
       const inputByteCeiling = Buffer.byteLength(system, 'utf8') + Buffer.byteLength(prompt, 'utf8');
       if (inputByteCeiling > FACTORIO_MAX_INPUT_BYTES) throw Error(`Model input exceeds the ${FACTORIO_MAX_INPUT_BYTES}-byte spend reservation bound`);
       const rates = ratesFor(model), amount = withMargin(reserveUsageMicros(rates, inputByteCeiling, outputTokenCeiling));
-      transact(ledger => {
+      const accepted = transact(ledger => {
+        if (ledger.halted) return false;
         if (ledger.records[callId]) throw Error('Run spend call ID already reserved; refusing request replay');
         const totals = ledgerTotal(ledger), next = totals.charged + totals.reserved + amount;
-        if (next > BigInt(ledger.capMicros)) throw Error(`Factorio run dollar budget exhausted; request would exceed $${capUsd}`);
+        if (next > BigInt(ledger.capMicros)) {
+          ledger.halted = true;
+          ledger.haltReason = `A request reservation would exceed the $${capUsd} per-run ceiling`;
+          return false;
+        }
         ledger.records[callId] = { status: 'reserved', model, reservedMicros: safeCost(amount), chargedMicros: '0', inputByteCeiling, outputTokenCeiling };
+        return true;
       });
+      if (!accepted) throw Error('Factorio run dollar budget exhausted; the full run is stopping');
       return microsToUsd(amount);
     },
     settle(callId, usage, actualModel) {
       const cost = transact(ledger => {
         const row = ledger.records[callId];
+        if (ledger.halted) throw Error('Factorio run is halted; refusing more model spend');
         if (!row || row.status !== 'reserved') throw Error('Missing or already settled run spend reservation');
         if (actualModel && pricingModel(actualModel) !== pricingModel(row.model)) throw Error(`Provider used unexpected model ${actualModel}; retaining maximum reservation`);
         const inputTokens = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
@@ -158,11 +168,17 @@ export function createFactorioSpendGuard(options: {
       return microsToUsd(cost);
     },
     snapshot() {
-      return transact(ledger => {
-        const totals = ledgerTotal(ledger), charged = totals.charged, reserved = totals.reserved, remaining = BigInt(ledger.capMicros) - charged - reserved;
-        return { capUsd: microsToUsd(BigInt(ledger.capMicros)), chargedUsd: microsToUsd(charged),
-          reservedUsd: microsToUsd(reserved), remainingUsd: microsToUsd(remaining) };
-      });
+      // Writers replace the file atomically, so monitoring can read the last
+      // complete snapshot without taking the cross-process write lock.
+      const ledger = JSON.parse(readFileSync(path, 'utf8')) as FactorioSpendLedger;
+      if (ledger.version !== 1 || ledger.runId !== options.runId || ledger.worldId !== options.worldId || ledger.historyId !== options.historyId ||
+          ledger.capMicros !== capMicros.toString() || ledger.priceVersion !== priceVersion || !ledger.records || typeof ledger.records !== 'object') {
+        throw Error('Run spend ledger scope changed');
+      }
+      const totals = ledgerTotal(ledger), charged = totals.charged, reserved = totals.reserved, remaining = BigInt(ledger.capMicros) - charged - reserved;
+      return { capUsd: microsToUsd(BigInt(ledger.capMicros)), chargedUsd: microsToUsd(charged),
+        reservedUsd: microsToUsd(reserved), remainingUsd: microsToUsd(remaining), halted: Boolean(ledger.halted),
+        ...(ledger.haltReason ? { haltReason: ledger.haltReason } : {}) };
     },
   };
 }

@@ -18,7 +18,7 @@ export function inferenceLaunchPlan(input: InferenceLaunchInput) {
   if (!Number.isSafeInteger(orchestratorMaxCalls) || orchestratorMaxCalls < 5 || orchestratorMaxCalls > 1000) throw Error('The Astra overseer needs at least five calls to create one subtask per actor');
   const maxRunSpendUsd = input.maxRunSpendUsd ?? FACTORIO_RUN_SPEND_CAP_USD;
   const capMicros = usdToMicros(maxRunSpendUsd);
-  if (capMicros < 1n || capMicros > usdToMicros(FACTORIO_RUN_SPEND_CAP_USD)) throw Error('Factorio run spend cap must be greater than zero and at most $500');
+  if (capMicros < 1n || capMicros > usdToMicros(FACTORIO_RUN_SPEND_CAP_USD)) throw Error('Factorio run spend cap must be greater than zero and at most $400');
   if (mode === 'smoke' && input.maxCalls > 3) throw Error('Smoke runs permit at most three calls per actor');
   if (mode === 'production' && input.maxCalls < 8) throw Error('Production demos require at least eight calls per actor');
   const actorIds = input.actorIds.slice().sort((a, b) => a - b);

@@ -13,7 +13,7 @@ npx esbuild scripts/factorio-inference-orchestrator.ts --bundle --platform=node 
 npx esbuild scripts/factorio-inference-swarm.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-swarm.mjs
 ```
 
-Set `AGENT_BRAIN=codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap of eight. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` of at least five; the overseer uses five calls to create one task for each actor. The default run dollar limit is $500; `FACTORIO_RUN_BUDGET_USD` can lower it but values above $500 are rejected.
+Set `AGENT_BRAIN=codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap of eight. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` of at least five; the overseer uses five calls to create one task for each actor. The default run dollar limit is $400; `FACTORIO_RUN_BUDGET_USD` can lower it but values above $400 are rejected. If a worst-case pre-call reservation would exceed the cap, the shared ledger halts and the launcher terminates the overseer and all workers.
 
 ## Launch and stop
 

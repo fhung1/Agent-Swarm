@@ -50,7 +50,19 @@ async function main() {
     onToken: token => writeFileSync(tokenPath, token, { mode: 0o600 }) });
   const children: ChildProcess[] = [];
   let stopping = false;
-  const stop = () => { stopping = true; for (const child of children) child.kill('SIGTERM'); };
+  let stopTimer: NodeJS.Timeout | undefined;
+  let spendMonitor: NodeJS.Timeout | undefined;
+  let killTimer: NodeJS.Timeout | undefined;
+  const stop = () => {
+    stopping = true;
+    for (const child of children) child.kill('SIGTERM');
+    if (!killTimer && children.some(child => child.exitCode === null && child.signalCode === null)) {
+      killTimer = setTimeout(() => {
+        for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      }, 5000);
+      killTimer.unref();
+    }
+  };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   board.start();
   try {
@@ -77,7 +89,22 @@ async function main() {
         payload: { capUsd: spend.snapshot().capUsd, priceVersion: plan.spendPriceVersion, actors: plan.actorModel, overseer: plan.orchestrator.model } }), '', `${runId}.goal-rocket`);
     }
     const runDeadline = Date.now() + plan.runMs;
-    const stopTimer = setTimeout(stop, Math.max(0, plan.runMs));
+    stopTimer = setTimeout(stop, Math.max(0, plan.runMs));
+    // A rejected reservation commits halted=true before the requesting worker
+    // exits. Watch the atomic ledger so every sibling stops immediately too.
+    spendMonitor = setInterval(() => {
+      try {
+        const snapshot = spend.snapshot();
+        if (snapshot.halted) {
+          console.error(`Run spend guard halted ${runId}: ${snapshot.haltReason ?? 'budget exhausted'}`);
+          stop();
+        }
+      } catch (error) {
+        console.error(`Run spend ledger unavailable; stopping ${runId}: ${String(error)}`);
+        stop();
+      }
+    }, 100);
+    spendMonitor.unref();
     const baseEnv = { ...process.env, FACTORIO_RUN_DEADLINE: String(runDeadline), FACTORIO_RUN_SPEND_FILE: spendFile,
       FACTORIO_RUN_BUDGET_USD: plan.maxRunSpendUsd };
     const results: Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>[] = [];
@@ -132,11 +159,13 @@ async function main() {
         child.once('error', reject); child.once('exit', (code, signal) => resolveResult({ role: 'actor', actorId: worker.actorId, code, signal }));
       }));
     }
-    try {
-      const completed = await Promise.all(results);
-      console.log(JSON.stringify({ runId, results: completed, spend: spend.snapshot(), logs: directory }));
-      if (completed.some(r => r.code !== 0)) process.exitCode = 1;
-    } finally { clearTimeout(stopTimer); }
-  } finally { stop(); board.stop(); }
+    const completed = await Promise.all(results);
+    console.log(JSON.stringify({ runId, results: completed, spend: spend.snapshot(), logs: directory }));
+    if (completed.some(r => r.code !== 0)) process.exitCode = 1;
+  } finally {
+    if (stopTimer) clearTimeout(stopTimer);
+    if (spendMonitor) clearInterval(spendMonitor);
+    stop(); board.stop();
+  }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
