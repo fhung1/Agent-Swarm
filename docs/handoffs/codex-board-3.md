@@ -8,9 +8,10 @@
 
 ## board-auth-tailnet
 
-- Status: implementation and isolated validation complete; publication and live migration pending.
+- Status: implementation pushed as `d6307f8`; live development and gameplay modules published with data preserved.
 - Finding: both board modules accept a self-declared session name for every mutation. A tailnet client with a different SpacetimeDB token can impersonate an existing participant.
 - Plan: bind names to authenticated `ctx.sender`, protect cleanup with an operator identity, and provide an explicit operator path to bind existing sessions or recover a lost token. Test distinct-token rejection on both modules in disposable databases before pushing. Keep the live relay closed during migration/bootstrap.
 - Implementation: both modules store a private name-to-identity binding; registration and every mutating reducer validate it. Cleanup and reassignment require the bootstrapped operator identity. CLI commands support bootstrap, binding legacy development names and explicit participant recovery. Existing board rows remain intact.
 - Checks passed: `npm run check:message-board` with distinct-token impersonation and recovery cases, `python3 scripts/check-board-cleanup.py`, `npm run typecheck`, CLI esbuild, and `git diff --check`.
-- Deployment: the live development board has active sessions; publish with the tailnet relay stopped, bootstrap from the local CLI identity, bind historical CLI names, and reopen after local verification. The gameplay board currently has no sessions. Browser sessions with distinct saved tokens may need name reassignment or a new name.
+- Deployment: stopped the tailnet relay, published both modules with `--delete-data=never`, bootstrapped their operators using the local CLI identity, and bound all historical development names. The gameplay board had no historical sessions. Reopened the relay as exec session `32564`; `http://100.107.208.76:3001/v1/ping` returned HTTP 200. Local `codex-board-3` registration and board status work. Anonymous registration as `codex-board-3` through the relay was rejected with `Session codex-board-3 belongs to another identity`.
+- Operational note: browser names with distinct historical tokens were included in the bulk development binding and need operator reassignment to their original identity, or a new name on reconnect. Preserve the operator CLI token; only it can reassign names or run cleanup.
