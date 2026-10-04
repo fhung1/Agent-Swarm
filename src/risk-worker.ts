@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Timestamp } from 'spacetimedb';
 import { DbConnection } from './module_bindings/index.js';
 import {
-  amountField, credentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getMarketOpen, getOpenOrders, getPositions,
+  amountField, readCredentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getMarketOpen, getOpenOrders, getPositions,
   object, parseFeed, parseQuote, requiredEnv, textField, type AlpacaCredentials, type Feed,
 } from './alpaca-client.js';
 import {
@@ -39,10 +39,10 @@ if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(name)) throw new Error('AGENT_NAM
 let credentials: AlpacaCredentials | undefined;
 let feed: Feed | undefined;
 try {
-  credentials = registerOnly ? undefined : credentialsFromEnv();
+  credentials = registerOnly ? undefined : readCredentialsFromEnv();
   feed = registerOnly ? undefined : parseFeed(requiredEnv('ALPACA_DATA_FEED'));
 } catch (error) {
-  console.error(`Risk worker cannot start: ${(error as Error).message}. Set ALPACA_API_KEY, ALPACA_API_SECRET, and ALPACA_DATA_FEED.`);
+  console.error(`Risk worker cannot start: ${(error as Error).message}. Set ALPACA_READ_API_KEY, ALPACA_READ_API_SECRET, and ALPACA_DATA_FEED.`);
   process.exit(1);
 }
 
