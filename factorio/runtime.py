@@ -34,6 +34,11 @@ def ports(config):
             try: s.bind((game_bind(config) if key=='gamePort' else '127.0.0.1',value))
             except OSError as e: raise ValueError(f'{key} {game_bind(config) if key=="gamePort" else "127.0.0.1"}:{value} unavailable: {e}')
 
+def recovery_save(world):
+    primary=world/'world.zip'; autosaves=world/'data/saves'
+    candidates=[primary]+[p for p in autosaves.glob('*.zip') if p.is_file() and p!=primary] if autosaves.exists() else [primary]
+    return max(candidates,key=lambda p:p.stat().st_mtime_ns)
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command',choices=['init','preflight','start','inspect'])
@@ -78,7 +83,8 @@ def main():
     if args.command=='inspect': print(json.dumps(manifest,indent=2)); return
     exe,version=binary(); ports(manifest)
     if args.command=='preflight': print('PASS: pinned binary, manifest, bridge, save and ports'); return
-    cmd=[str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(world/'mods'),'--start-server',str(world/'world.zip'),'--server-settings',str(world/'server-settings.json'),'--bind',game_bind(manifest),'--port',str(manifest['gamePort']),'--rcon-bind','127.0.0.1:'+str(manifest['rconPort']),'--rcon-password', (world/'rcon.password').read_text().strip()]
+    save=recovery_save(world)
+    cmd=[str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(world/'mods'),'--start-server',str(save),'--server-settings',str(world/'server-settings.json'),'--bind',game_bind(manifest),'--port',str(manifest['gamePort']),'--rcon-bind','127.0.0.1:'+str(manifest['rconPort']),'--rcon-password', (world/'rcon.password').read_text().strip()]
     print('Private server starting; Ctrl+C saves and stops. Manifest:',world/'manifest.json',flush=True)
     # foreground ownership: never search for or kill an unrelated Factorio process
     child=subprocess.Popen(cmd)
