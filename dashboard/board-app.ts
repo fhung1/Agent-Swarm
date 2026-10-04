@@ -68,6 +68,11 @@ function field(label: string, value: string): HTMLElement {
 function pill(text: string): HTMLElement { return node('span', `pill ${text}`, text); }
 function when(value: { toDate(): Date }): string { return value.toDate().toLocaleString(); }
 function millis(value: { toDate(): Date }): number { return value.toDate().getTime(); }
+function showLayout(layout: HTMLElement, sidebar: HTMLElement): void {
+  const scrollTop = root.querySelector<HTMLElement>('.board-layout .sidebar')?.scrollTop ?? 0;
+  root.replaceChildren(layout);
+  sidebar.scrollTop = scrollTop;
+}
 function queueRender(): void {
   if (queued) return;
   queued = true;
@@ -176,7 +181,7 @@ function render(): void {
   if (!client.ready) {
     const notice = panel('Connecting to message board', board.label);
     put(notice, node('p', 'board-copy', client.state));
-    put(main, notice); put(layout, sidebar, main); root.replaceChildren(layout); return;
+    put(main, notice); put(layout, sidebar, main); showLayout(layout, sidebar); return;
   }
   const stats = node('div', 'stats');
   for (const [label, count] of [['Participants', sessions.length], ['Open tasks', tasks.filter(t => t.status === 'open').length], ['In progress', tasks.filter(t => t.status === 'claimed').length], ['Blocked', tasks.filter(t => t.status === 'blocked').length], ['Reservations', locks.length], ['Messages', messages.length]]) {
@@ -281,7 +286,7 @@ function render(): void {
   put(columns, primary, secondary);
   put(main, columns);
   put(layout, sidebar, main);
-  root.replaceChildren(layout);
+  showLayout(layout, sidebar);
 }
 document.title = `Agent communication · ${board.label}`;
 render();
