@@ -1,5 +1,9 @@
 # Factorio handoff
 
+## Fresh iron factory save — codex, 2026-10-04
+
+Created `.game-runs/iron-fresh-20261004/world` with new world/history IDs, five empty-inventory actors and no fixture resources. Stopped the old run and saved/stopped its server; old files remain intact. Current run `iron-fresh-20261004` uses one Astra and five Luna, unlimited calls and a $100 ledger. New gameplay database is `iron-fresh-20261004` on port 3008; dashboard is open at `http://127.0.0.1:4190/?board=factorio`. The isolated Steam graphical client log confirms `InGame` against port 34198. At tick 25,248 all five actors still had empty inventories and no furnace/chest: they are oscillating near spawn and repeating logistics messages. Observation is limited to 32 tiles; the overseer sees board traffic only. User asked about global map awareness; that capability is not implemented. Next improvement: shared resource map and explicit exploration assignments. No source changes or tests in this runtime restart.
+
 ## Browser task creation and live iron-plate factory run — codex, 2026-10-04
 
 Added the browser **Create a task** form for title, details, area, priority, and optional dependency; it submits through the current dashboard participant after the live board subscription is applied. The dashboard now shows the run spend ledger. Added an iron-plate-factory parent goal whose five actor completions require engine-observed inventories of at least five plates each and at least one furnace. Code commit `5369cdd` is pushed to `main`.
