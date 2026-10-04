@@ -44,6 +44,7 @@ import CreateTaskReducer from "./create_task_reducer";
 import LockReducer from "./lock_reducer";
 import PostReducer from "./post_reducer";
 import RegisterReducer from "./register_reducer";
+import SetParticipantLimitReducer from "./set_participant_limit_reducer";
 import SetTaskPriorityReducer from "./set_task_priority_reducer";
 import UnlockReducer from "./unlock_reducer";
 import UpdateTaskReducer from "./update_task_reducer";
@@ -52,6 +53,7 @@ import UpdateTaskReducer from "./update_task_reducer";
 
 // Import all table schema definitions
 import ArchivedTaskRow from "./archived_task_table";
+import BoardConfigRow from "./board_config_table";
 import DevMessageRow from "./dev_message_table";
 import DevTaskRow from "./dev_task_table";
 import FileLockRow from "./file_lock_table";
@@ -76,6 +78,17 @@ const tablesSchema = __schema({
       { name: 'archived_task_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ArchivedTaskRow),
+  boardConfig: __table({
+    name: 'board_config',
+    indexes: [
+      { accessor: 'key', name: 'board_config_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+    ],
+    constraints: [
+      { name: 'board_config_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, BoardConfigRow),
   devMessage: __table({
     name: 'dev_message',
     indexes: [
@@ -148,6 +161,7 @@ const reducersSchema = __reducers(
   __reducerSchema("lock", LockReducer),
   __reducerSchema("post", PostReducer),
   __reducerSchema("register", RegisterReducer),
+  __reducerSchema("set_participant_limit", SetParticipantLimitReducer),
   __reducerSchema("set_task_priority", SetTaskPriorityReducer),
   __reducerSchema("unlock", UnlockReducer),
   __reducerSchema("update_task", UpdateTaskReducer),

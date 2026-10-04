@@ -13,7 +13,7 @@ npx esbuild scripts/factorio-inference-orchestrator.ts --bundle --platform=node 
 npx esbuild scripts/factorio-inference-swarm.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-swarm.mjs
 ```
 
-Set `AGENT_BRAIN=claude` or `codex`, `AGENT_MODEL=gpt-6-astra`, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` for the coordinator. The total ceiling is five times the actor limit plus the coordinator limit; a call cap is not a dollar cap. Keep credentials private.
+Set `AGENT_BRAIN=claude` or `codex`, `AGENT_MODEL=gpt-6-astra`, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap that defaults to eight; the operator can set a limit from one to eight using `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token. The Factorio launcher configures eight before starting workers. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` for the coordinator. The total ceiling is five times the actor limit plus the coordinator limit; a call cap is not a dollar cap. Keep credentials private.
 
 ## Launch and stop
 
@@ -22,7 +22,7 @@ node dist/factorio-inference-swarm.mjs /absolute/path/to/world prompted-demo
 node dist/factorio-inference-swarm.mjs /absolute/path/to/world prompted-demo --start
 ```
 
-The default dry run reads game status and checks actor/world configuration without model calls or board writes. `--start` seeds the rocket goal and five run-scoped actor tasks, then launches five workers and the board-only coordinator. Ctrl+C stops the launcher and children; stop/save the separately started world afterward.
+The default dry run reads game status and checks actor/world configuration without model calls or board writes. `--start` bootstraps the board operator under the coordinator's saved identity, sets the participant cap to eight, seeds the rocket goal and five run-scoped actor tasks, then launches five workers and the board-only coordinator. Setup and coordinator reuse one board identity. Ctrl+C stops the launcher and children; stop/save the separately started world afterward.
 
 The immutable plan/logs are under `WORLD/inference/RUN/`; actor tokens, state and deadlines are under `WORLD/inference/RUN-agent-N/`. Restart retains original call counts/deadlines. Unknown actions without valid engine receipts are quarantined, not replayed. Resource leases renew every 15 seconds independently of model calls and pause. Lost, expired or uncertain renewal cancels inference and stops new actions for reconciliation. Rules and inference workers use `world/WORLD_ID/entity/UNIT_ID` reservations; stop old workers using legacy chest/furnace paths before mixing versions.
 

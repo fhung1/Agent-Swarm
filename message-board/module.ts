@@ -5,6 +5,9 @@ import { SenderError, schema, table, t, type InferSchema, type ReducerCtx } from
 // same schema and reducers. Wire names dev_task/dev_message/file_lock are retained
 // for compatibility with existing development histories and generated clients.
 // Participant names are bound to the authenticated SpacetimeDB identity on registration.
+export const DEFAULT_PARTICIPANT_LIMIT = 8;
+export const MAX_PARTICIPANT_LIMIT = 8;
+
 export function createMessageBoard(options: { taskInstruction?: string } = {}) {
 
   const session = table({ name: 'session', public: true }, {
@@ -15,6 +18,9 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
   });
   const boardOperator = table({ name: 'board_operator' }, {
     key: t.string().primaryKey(), identity: t.identity(),
+  });
+  const boardConfig = table({ name: 'board_config', public: true }, {
+    key: t.string().primaryKey(), participantLimit: t.u32(),
   });
   const taskColumns = () => ({
     id: t.string().primaryKey(), title: t.string(), details: t.string(), area: t.string(),
@@ -37,7 +43,7 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     taskId: t.string().primaryKey(), priority: t.string(), updatedBy: t.string(), updatedAt: t.timestamp(),
   });
 
-  const spacetimedb = schema({ session, sessionIdentity, boardOperator, devTask, archivedTask, devMessage, fileLock, taskPriority });
+  const spacetimedb = schema({ session, sessionIdentity, boardOperator, boardConfig, devTask, archivedTask, devMessage, fileLock, taskPriority });
 
   type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
 
@@ -107,11 +113,26 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
         requireSession(ctx, name);
         ctx.db.session.name.update(row);
       } else {
+        const limit = ctx.db.boardConfig.key.find('main')?.participantLimit ?? DEFAULT_PARTICIPANT_LIMIT;
+        const count = [...ctx.db.session.iter()].length;
+        if (count >= limit) throw new SenderError(`Participant limit reached (${count}/${limit}); only the board operator can change the limit (maximum ${MAX_PARTICIPANT_LIMIT})`);
         ctx.db.session.insert(row);
         ctx.db.sessionIdentity.insert({ name, identity: ctx.sender });
       }
     }
   );
+
+  const setParticipantLimit = spacetimedb.reducer({ participantLimit: t.u32() }, (ctx, { participantLimit }) => {
+    requireOperator(ctx);
+    if (participantLimit < 1 || participantLimit > MAX_PARTICIPANT_LIMIT) {
+      throw new SenderError(`Participant limit must be 1-${MAX_PARTICIPANT_LIMIT}`);
+    }
+    const count = [...ctx.db.session.iter()].length;
+    if (participantLimit < count) throw new SenderError(`Participant limit cannot be lower than the current participant count (${count})`);
+    const row = { key: 'main', participantLimit };
+    if (ctx.db.boardConfig.key.find('main')) ctx.db.boardConfig.key.update(row);
+    else ctx.db.boardConfig.insert(row);
+  });
 
   // Call from the private server before exposing a new or migrated board remotely.
   const bootstrapBoardOperator = spacetimedb.reducer({}, ctx => {
@@ -287,6 +308,6 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     }
   );
 
-  return { setTaskPriority, cleanupBoard, bootstrapBoardOperator, assignSessionIdentity, bindLegacySessions,
+  return { setTaskPriority, cleanupBoard, bootstrapBoardOperator, setParticipantLimit, assignSessionIdentity, bindLegacySessions,
     spacetimedb, register, post, createTask, applyPushPolicy, claimTask, updateTask, lock, unlock };
 }

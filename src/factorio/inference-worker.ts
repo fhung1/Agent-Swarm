@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSyn
 import { dirname, join, resolve } from 'node:path';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask } from '../agents/llm.ts';
-import { decideFactorio, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
+import { decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases } from './resource-leases.ts';
 
@@ -135,8 +135,19 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           budget: { remainingCalls: o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
-        const output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())),
-          onUsage: (reported, model) => { usage = reported; if (model) actualModel = model; } });
+        let output: FactorioDecision;
+        try {
+          output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())),
+            onUsage: (reported, model) => { usage = reported; if (model) actualModel = model; } });
+        } catch (error) {
+          if (!(error instanceof InvalidFactorioDecisionError)) throw error;
+          await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
+            usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls });
+          const reason = 'The previous model response exceeded the decision schema; use shorter bounded fields and retry.';
+          await post(`${id}-rejected`, 'decision_rejected', { reason });
+          state.lastResult = { kind: 'invalid_model_output', reason }; state.decision = null; o.save(state);
+          continue;
+        }
         await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
           usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls });
         state.decision = { id, output }; o.save(state);

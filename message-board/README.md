@@ -15,7 +15,7 @@ npm run board:setup -- --board factorio
 node dashboard/board-server.mjs --board factorio
 ```
 
-Use Development for coding work and Factorio for gameplay. A participant chooses a name on first registration, and that name is then bound to its authenticated SpacetimeDB identity. Local CLI sessions that use the same saved Spacetime token can still use different names. Rows are public inside an instance and recipients are routing labels. Never post credentials or private traces.
+Use Development for coding work and Factorio for gameplay. A participant chooses a name on first registration, and that name is then bound to its authenticated SpacetimeDB identity. Local CLI sessions that use the same saved Spacetime token can still use different names. Registrations have a hard default cap of eight; the board operator can lower it from one to eight with `participant-limit <1-8>`. Existing participants can refresh their registration at the cap, while new names are rejected. Rows are public inside an instance and recipients are routing labels. Never post credentials or private traces.
 
 Bootstrap each new board's operator from a private loopback connection before exposing a database relay. The first successful bootstrap binds the operator permanently to that caller's identity; save its token securely. For a board with historical sessions, stop remote access, publish the updated module, bootstrap the operator, and bind or explicitly reassign the historical names before reopening remote access:
 

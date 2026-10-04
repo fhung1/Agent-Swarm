@@ -1,12 +1,16 @@
 # Factorio handoff
 
+## Reset, participant cap and live relaunch — codex-factorio-demo, 2026-10-03
+
+Completed `factorio-reset-six-participant-demo-20261003`: stopped the old actor fleet and saved `.game-runs/freeplay-astra-start-1-reset-checkpoint`; deleted/re-published only the gameplay board; created fresh empty freeplay `.game-runs/freeplay-astra-start-2`; relaunched five Astra Low actors plus one Astra High board-only coordinator; Steam GUI joined at `127.0.0.1:34197`. The gameplay board contains exactly six participants and `board_config.participant_limit=8`; dashboard returns HTTP 200 at `http://127.0.0.1:4185/?board=factorio&dbPort=3004`. Root goal is rocket launch, coordinator owns it, and an actor has created a resource-scouting subtask. No rocket launch yet. The shared message-board module now enforces a default hard cap of eight with operator configuration from 1–8; Factorio launcher setup reuses coordinator identity, preventing a seventh row. Provider-free Factorio tests (33), board cap integration, root/message-board TypeScript checks and `factorio/check-runtime.py` pass. `npm run check:dashboard` fails in its separate trading fixture because it passes string `"0"` where `record_account_snapshot.daily_pnl` expects `Option<String>`; the live Factorio dashboard route returns HTTP 200. Pending commit/push and Development board closeout.
+
 ## Five players plus board-only coordinator — codex-factorio-demo, 2026-10-03
 
 `factorio-five-actors-astra-orchestrator-20261003`: reduced the fresh saved world to five visible scripted actors (units 12–16), all `gpt-6-astra` low effort. Added a separate `gpt-6-astra` high-effort orchestrator with only message-board access; it claimed the rocket goal, created a run-scoped task for Actor 2, and sent actor-directed messages. Active live run: `freeplay-astra-orchestrated-2`, Factorio `127.0.0.1:34197`, board `http://127.0.0.1:4185/?board=factorio&dbPort=3004`. The old ten-actor save is preserved at `.game-runs/freeplay-astra-start-1-ten-agent-checkpoint`. Live board topology verified. Some worker action attempts still fail (mining, movement, unavailable recipe); no rocket launch verified. `python3 factorio/check-runtime.py`, root typecheck, focused tests (32 total), Python compile checks and `git diff --check` pass. Implementation pushed to `main` as `ca7980a`; final result recorded on the Development board.
 
 ## Current focus
 
-Factorio only: five `gpt-6-astra` low-effort game actors share a gameplay board and are directed by one `gpt-6-astra` high-effort board-only orchestrator. The live Development board owns assignments; do not restore cleared historical tasks automatically. Current live world is `.game-runs/freeplay-astra-start-1`, reset to empty-inventory freeplay at the operator's request. The original ten-actor save and earlier progressed save are preserved separately.
+Factorio only: five `gpt-6-astra` low-effort game actors share a gameplay board and are directed by one `gpt-6-astra` high-effort board-only orchestrator. The live Development board owns assignments; do not restore cleared historical tasks automatically. Current live world is `.game-runs/freeplay-astra-start-2`; gameplay board reset leaves exactly six participants and has a hard cap of eight. Earlier worlds remain preserved separately.
 
 ## Freeplay work — codex-factorio-demo, 2026-10-03
 

@@ -11,9 +11,15 @@ const place = z.object({ kind: z.literal('place'), item: z.string(), x: z.number
 export const FactorioDecisionSchema = z.object({
   kind: z.enum(['action', 'chat', 'wait', 'complete', 'subtask', 'resource_request', 'claim_subtask', 'finish_subtask']),
   command: z.union([move, transfer, mine, craft, place]).nullable(),
-  message: z.string(), recipient: z.string(), waitMs: z.number().int(),
+  message: z.string().max(2000), recipient: z.string().max(96), waitMs: z.number().int(),
 }).strict();
 export type FactorioDecision = z.infer<typeof FactorioDecisionSchema>;
+export class InvalidFactorioDecisionError extends Error {
+  constructor() {
+    super('Model output did not satisfy the Factorio decision contract; return concise valid JSON and retry.');
+    this.name = 'InvalidFactorioDecisionError';
+  }
+}
 export interface FactorioScope { runId: string; worldId: string; historyId: string; actorId: number; sender: string }
 export interface PeerMessage { id: string; sender: string; recipient: string; kind: string; payload: unknown }
 export interface FactorioContext extends FactorioScope {
@@ -29,9 +35,9 @@ Only control your assigned actor. Never invent observed entities, resources, rec
 Supported commands: move {x,y,maxTicks:1..600}, mine {name,x,y,quantity:1..20} on observed trees or ore, craft {recipe,quantity:1..20} using inventory and unlocked recipes, place {item,x,y} using an inventory item, and take/put {targetId,item,quantity:1..100} for an observed chest or furnace. All x/y values must use the eight-decimal wire grid. Use observation.inventory.items for available items. Craft queues work in the game; observe the finished item before placing it.
 The context includes your remaining model calls and run time. Plan so you can finish the physical sequence before either reaches zero.
 For a transfer, choose a reachable observed entity that no peer currently reserves. The worker obtains the reservation after your proposal and before execution; you cannot reserve it yourself. A failed reservation appears in lastResult. Respect pause and peer reservations.
-For kind=subtask, put JSON {"title":"...","details":"...","dependsOn":""} in message; the worker creates a run-scoped board task that peers may claim. For kind=resource_request, put JSON {"item":"...","quantity":N,"boxId":N} in message after building or observing a shared chest; a peer can claim that task, put the requested items in that chest, then finish it. For kind=claim_subtask or finish_subtask, message is the exact task ID shown in tasks. Each actor may hold its main assignment and subtasks. Task decisions use null command, empty recipient and zero waitMs.
+For kind=subtask, put compact JSON {"title":"...","details":"...","dependsOn":""} in message. Keep title to at most 120 characters, details to at most 1000 characters, and serialized message below 1500 characters; peers may claim the resulting run-scoped task. For kind=resource_request, put JSON {"item":"...","quantity":N,"boxId":N} in message after building or observing a shared chest; a peer can claim that task, put the requested items in that chest, then finish it. For kind=claim_subtask or finish_subtask, message is the exact task ID shown in tasks. Each actor may hold its main assignment and subtasks. Task decisions use null command, empty recipient and zero waitMs.
 Set command only for kind=action. For other kinds use null. Set waitMs=0 except wait (100..10000).
-message is a concise explanation or peer communication (at most 2000 characters).
+message is concise and at most 2000 characters; recipient is at most 96 characters.
 recipient is an agent name for directed chat, or empty for broadcast; it must be empty for other decisions.
 complete is only a proposal: the worker verifies the goal against real game state.
 Do not execute shell commands or invent new command kinds. Return only the requested structured decision.`;
@@ -94,7 +100,7 @@ export function buildFactorioPrompt(context: FactorioContext): string {
   return JSON.stringify({ ...required, messages: kept, omittedMessages: messages.length - kept.length });
 }
 
-/** No retries/fallback. Timeout races even providers that ignore the abort signal. */
+/** Invalid structured decisions are returned to the worker as bounded retry feedback. */
 export async function decideFactorio(ask: Ask, context: FactorioContext, options: { signal?: AbortSignal; timeoutMs?: number; onUsage?: (usage: AskUsage, model?: string) => void } = {}): Promise<FactorioDecision> {
   const timeoutMs = options.timeoutMs ?? 60000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120000) throw Error('Invalid inference timeout');
@@ -107,9 +113,18 @@ export async function decideFactorio(ask: Ask, context: FactorioContext, options
     signal.addEventListener('abort', abort, { once: true });
   });
   try {
-    const output = await Promise.race([ask(FactorioDecisionSchema, FACTORIO_SYSTEM, prompt, { signal, onUsage: options.onUsage }), stopped]);
+    let output: unknown;
+    try {
+      output = await Promise.race([ask(FactorioDecisionSchema, FACTORIO_SYSTEM, prompt, { signal, onUsage: options.onUsage }), stopped]);
+    } catch (error) {
+      if (error instanceof z.ZodError || (error instanceof Error && error.message === 'Model output did not match the schema')) {
+        throw new InvalidFactorioDecisionError();
+      }
+      throw error;
+    }
     signal.throwIfAborted();
-    return validateFactorioDecision(output);
+    try { return validateFactorioDecision(output); }
+    catch { throw new InvalidFactorioDecisionError(); }
   } finally { signal.removeEventListener('abort', abort); }
 }
 

@@ -1,5 +1,5 @@
 import { createMessageBoard } from '../module';
 const board = createMessageBoard({});
 export default board.spacetimedb;
-export const { setTaskPriority, cleanupBoard, bootstrapBoardOperator, assignSessionIdentity, bindLegacySessions,
+export const { setTaskPriority, cleanupBoard, bootstrapBoardOperator, setParticipantLimit, assignSessionIdentity, bindLegacySessions,
   register, post, createTask, applyPushPolicy, claimTask, updateTask, lock, unlock } = board;

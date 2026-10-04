@@ -38,7 +38,7 @@ async function main() {
   const savedPlan = { worldId: manifest.worldId, historyId: manifest.historyId, goal, ...plan };
   if (existsSync(planPath) && JSON.stringify(JSON.parse(readFileSync(planPath, 'utf8'))) !== JSON.stringify(savedPlan)) throw Error('Run ID already has a different actor/model/budget mapping; choose a new run ID');
   if (!existsSync(planPath)) writeFileSync(planPath, JSON.stringify(savedPlan, null, 2), { flag: 'wx', mode: 0o600 });
-  const tokenPath = join(directory, 'operator.token');
+  const tokenPath = join(directory, 'orchestrator.token');
   const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? manifest.boardHost ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
     token: existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8') : undefined,
     onToken: token => writeFileSync(tokenPath, token, { mode: 0o600 }) });
@@ -51,16 +51,21 @@ async function main() {
     const until = Date.now() + 30000;
     while (!board.ready && !stopping) { if (Date.now() >= until) throw Error('Board connection unavailable'); await new Promise(r => setTimeout(r, 200)); }
     if (stopping) return;
-    const operator = `${runId}-operator`;
-    await board.register(operator, 'operator', `Five ${plan.actorModel} low-effort actors; one ${plan.orchestrator.model} high-effort board-only orchestrator`);
+    // Bootstrap and create initial tasks using the orchestrator identity. Its
+    // worker reuses the saved token, so setup does not add a seventh row.
+    try { await board.bootstrapOperator(); } catch (error) {
+      if (!String(error).includes('already configured')) throw error;
+    }
+    await board.setParticipantLimit(8);
+    await board.register(plan.orchestrator.sender, 'factorio-orchestrator', `Board-only coordinator; five ${plan.actorModel} low-effort game actors; ${plan.orchestrator.model} high effort`);
     if (goal === 'rocket' && !board.snapshot().tasks.some(t => t.id === `${runId}.goal-rocket`)) {
-      await board.createTask(operator, { id: `${runId}.goal-rocket`, title: 'Beat Factorio: launch a rocket', area: 'factorio-goal',
+      await board.createTask(plan.orchestrator.sender, { id: `${runId}.goal-rocket`, title: 'Beat Factorio: launch a rocket', area: 'factorio-goal',
         details: `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. Agents create subtasks and resource requests. push when finished`, priority: 'high' });
     }
     for (const worker of plan.workers) {
       const existing = board.snapshot().tasks.find(t => t.id === worker.taskId);
       if (existing && existing.assignee && existing.assignee !== worker.sender) throw Error(`Task ${worker.taskId} belongs to another agent`);
-      if (!existing) await board.createTask(operator, { id: worker.taskId, title: goal === 'rocket' ? `Actor ${worker.actorId}: contribute to rocket launch` : `Actor ${worker.actorId}: collect five iron plates`,
+      if (!existing) await board.createTask(plan.orchestrator.sender, { id: worker.taskId, title: goal === 'rocket' ? `Actor ${worker.actorId}: contribute to rocket launch` : `Actor ${worker.actorId}: collect five iron plates`,
         area: 'factorio-inference', details: `Run ${runId}; world ${manifest.worldId}; actor ${worker.actorId}; parent goal ${runId}.goal-rocket. Cooperate through subtasks, resource requests and peer messages. push when finished` });
     }
     const results: Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>[] = plan.workers.map(worker => {

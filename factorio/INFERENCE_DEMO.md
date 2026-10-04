@@ -47,7 +47,7 @@ node dist/factorio-inference-swarm.mjs "$WORLD" "$RUN_ID"
 node dist/factorio-inference-swarm.mjs "$WORLD" "$RUN_ID" --start
 ```
 
-Build the orchestrator bundle alongside the worker, supervisor and launcher. Require a successful dry run with five distinct actors, one `gpt-6-astra`/high orchestrator, and five `gpt-6-astra`/low workers before `--start`. The launcher seeds the rocket goal and five actor tasks, persists its plan and starts six independently identified board participants without a rules fallback.
+Build the orchestrator bundle alongside the worker, supervisor and launcher. Require a successful dry run with five distinct actors, one `gpt-6-astra`/high orchestrator, and five `gpt-6-astra`/low workers before `--start`. The launcher bootstraps the board and seeds the rocket goal and five actor tasks using the coordinator identity, then starts exactly six participants. The registration cap defaults to eight and is hard-limited to eight; operators can set it between one and eight with `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token.
 
 For a production rehearsal, use a **fresh** world and run ID, then set `FACTORIO_DEMO_MODE=production`, `FACTORIO_MAX_CALLS=12` and `FACTORIO_RUN_MS=900000` before the same dry-run/start commands. This caps five actors at 60 calls and the orchestrator at 12 calls, 72 total. After the run, record each worker journal's actual `calls`, coordinator call count, terminal supervisor status and game receipts. These planning limits are not a measured cost or proof of task completion. A budget-exhausted worker is an incomplete run.
 

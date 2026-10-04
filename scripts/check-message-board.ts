@@ -73,12 +73,13 @@ try {
   const publisher = await (await fetch(`${origin}/v1/identity`, { method: 'POST' })).json() as { token: string };
   await run(cli, [...cliArgs, 'login', '--token', publisher.token], true);
   const publish = (module: string, database: string) => run(cli, [...cliArgs, 'publish', '--module-path', module, '--server', origin, '--no-config', '--yes', database]);
-  await publish('message-board', 'board-one'); await publish('message-board', 'board-two'); await publish('coord', 'board-development');
+  await publish('message-board', 'board-one'); await publish('message-board', 'board-two');
+  await publish('message-board', 'board-limited'); await publish('coord', 'board-development');
   function client(database: string, options: { historyWindowMs?: number; historyRefreshMs?: number } = {}) {
     const result = new MessageBoardClient({ uri, database, ...options }); clients.push(result); result.start(); return result;
   }
   const alice = client('board-one'), bob = client('board-one'), intruder = client('board-one');
-  const other = client('board-two'), dev = client('board-development'), devIntruder = client('board-development');
+  const other = client('board-two'), limited = client('board-limited'), dev = client('board-development'), devIntruder = client('board-development');
   await wait(() => clients.every(c => c.ready), 'all subscription snapshots');
   await alice.register('alice', 'valuation-analyst', 'Generic participant type');
   await bob.register('bob', 'miner', 'Another generic participant type');
@@ -95,6 +96,7 @@ try {
   await alice.bootstrapOperator();
   await dev.bootstrapOperator();
   await assert.rejects(intruder.bootstrapOperator(), /already configured/);
+  await assert.rejects(intruder.setParticipantLimit(4), /Board operator identity required/);
   await assert.rejects(bob.cleanup('bob'), /operator identity required/);
   await assert.rejects(devIntruder.cleanup('remote'), /operator identity required/);
   await assert.rejects(intruder.assignSessionIdentity('alice', intruder.identity), /operator identity required/);
@@ -103,6 +105,18 @@ try {
   await intruder.register('alice', 'valuation-analyst');
   await alice.assignSessionIdentity('alice', alice.identity);
   await alice.register('alice', 'valuation-analyst');
+  for (let index = 1; index <= 5; index++) await alice.register(`extra-${index}`, 'test-participant');
+  await assert.rejects(alice.register('extra-6', 'test-participant'), /Participant limit reached \(8\/8\)/);
+  assert.equal(alice.snapshot().participants.length, 8, 'default registration cap is eight and counts names even under one identity');
+  await limited.bootstrapOperator();
+  await limited.setParticipantLimit(2);
+  await limited.register('limited-one', 'miner');
+  await limited.register('limited-two', 'planner');
+  await assert.rejects(limited.register('limited-three', 'scout'), /Participant limit reached \(2\/2\)/);
+  await assert.rejects(limited.setParticipantLimit(1), /cannot be lower than the current participant count \(2\)/);
+  assert.throws(() => limited.setParticipantLimit(9), /participantLimit must be an integer from 1 to 8/);
+  assert.equal(limited.snapshot().participants.length, 2, 'hard registration cap is enforced in the reducer');
+  console.log('PASS configurable hard participant cap, operator-only changes, and registration rejection');
   await alice.createTask('alice', { id: 'same-id', title: 'Independent task', details: 'No development instructions here.' });
   await other.createTask('alice', { id: 'same-id', title: 'Separate board task', priority: 'high' });
   await dev.createTask('developer', { id: 'same-id', title: 'Development task' });

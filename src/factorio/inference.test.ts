@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Ask } from '../agents/llm.ts';
-import { buildFactorioPrompt, decideFactorio, selectPeerMessages, validateFactorioDecision, type FactorioContext } from './inference.ts';
+import { buildFactorioPrompt, decideFactorio, FACTORIO_SYSTEM, InvalidFactorioDecisionError, selectPeerMessages, validateFactorioDecision, type FactorioContext } from './inference.ts';
 
 const context: FactorioContext = { runId: 'run', worldId: 'world', historyId: 'history', actorId: 7, sender: 'agent-7',
   objective: 'Produce five plates', operatorPrompt: 'Cooperate', observation: { inventory: {}, nearby: [] }, status: { paused: false }, reservations: [], messages: [], lastResult: null };
@@ -18,6 +18,7 @@ test('strict decisions reject unsupported commands and inconsistent fields', () 
   assert.throws(() => validateFactorioDecision({ ...wait, extra: true }));
 });
 test('freeplay actions and scoped task decisions remain bounded', () => {
+  assert.match(FACTORIO_SYSTEM, /details to at most 1000 characters/);
   for (const command of [{ kind: 'mine', name: 'tree-02-red', x: 3, y: 4, quantity: 1 },
     { kind: 'craft', recipe: 'wooden-chest', quantity: 1 }, { kind: 'place', item: 'wooden-chest', x: 3, y: 4 }]) {
     assert.equal(validateFactorioDecision({ ...wait, kind: 'action', command, waitMs: 0 }).kind, 'action');
@@ -55,7 +56,7 @@ test('inference consumes observation and peer context with structured output', a
 });
 test('invalid provider output is rejected without scripted fallback', async () => {
   const ask = (async () => ({ ...wait, kind: 'action' })) as Ask;
-  await assert.rejects(decideFactorio(ask, context), /requires command/);
+  await assert.rejects(decideFactorio(ask, context), InvalidFactorioDecisionError);
 });
 test('abort ends inference even if a provider ignores cancellation', async () => {
   const controller = new AbortController();

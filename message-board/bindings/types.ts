@@ -25,6 +25,12 @@ export const ArchivedTask = __t.object("ArchivedTask", {
 });
 export type ArchivedTask = __Infer<typeof ArchivedTask>;
 
+export const BoardConfig = __t.object("BoardConfig", {
+  key: __t.string(),
+  participantLimit: __t.u32(),
+});
+export type BoardConfig = __Infer<typeof BoardConfig>;
+
 export const BoardOperator = __t.object("BoardOperator", {
   key: __t.string(),
   identity: __t.identity(),

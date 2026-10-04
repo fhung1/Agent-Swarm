@@ -135,6 +135,10 @@ export class MessageBoardClient {
   }
   register(name: string, type: string, focus = '') { return this.reducers.register({ name, tool: type, focus }); }
   bootstrapOperator() { return this.reducers.bootstrapBoardOperator({}); }
+  setParticipantLimit(participantLimit: number) {
+    if (!Number.isSafeInteger(participantLimit) || participantLimit < 1 || participantLimit > 8) throw new Error('participantLimit must be an integer from 1 to 8');
+    return this.reducers.setParticipantLimit({ participantLimit });
+  }
   assignSessionIdentity(name: string, identity: string) { return this.reducers.assignSessionIdentity({ name, identity: new Identity(identity) }); }
   bindLegacySessions() { return this.reducers.bindLegacySessions({}); }
   cleanup(name: string, taskIds: string[] = [], messageIds: bigint[] = []) {

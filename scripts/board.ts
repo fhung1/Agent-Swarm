@@ -21,6 +21,7 @@ Identify yourself with --as <name> or BOARD_AS=<name> (COORD_AS also works) (low
 
   register <participant-type> [focus]   Join the board or update your focus
   bootstrap-operator                           Bind board operator to this CLI identity (private server only)
+  participant-limit <1-8>                       Set the hard registration cap (operator only; default 8)
   bind-legacy                                  Bind unclaimed historical names to the operator identity
   assign-session <name> <identity-hex>          Operator recovery for a lost participant token
   status                                        Sessions, active tasks, locks, and recent messages
@@ -207,6 +208,13 @@ switch (command) {
   case 'bootstrap-operator': {
     call('bootstrap_board_operator');
     console.log('Board operator bound to this CLI identity.');
+    break;
+  }
+  case 'participant-limit': {
+    const limit = Number(rest[0]);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 8) fail('participant-limit needs an integer from 1 to 8');
+    call('set_participant_limit', limit);
+    console.log(`Hard participant limit set to ${limit}.`);
     break;
   }
   case 'bind-legacy': {

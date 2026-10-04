@@ -67,6 +67,19 @@ test('peer chat is posted and becomes a new inference turn', async () => {
   await runInferenceWorker(f.options);
   assert.equal(f.events.filter(e => e.kind === 'chat').length, 1); assert.equal(calls, 2);
 });
+test('oversized model subtasks get bounded feedback and the worker retries without a game mutation', async () => {
+  const f = fixture(); let calls = 0;
+  f.options.ask = (async (_schema, _system, prompt) => {
+    calls++;
+    if (calls === 1) return { kind: 'subtask', command: null,
+      message: JSON.stringify({ title: 'Research next step', details: 'x'.repeat(1001), dependsOn: '' }), recipient: '', waitMs: 0 };
+    assert.equal(JSON.parse(prompt).lastResult.kind, 'invalid_model_output');
+    return { kind: 'complete', command: null, message: 'Five plates observed', recipient: '', waitMs: 0 };
+  }) as Ask;
+  await runInferenceWorker(f.options);
+  assert.equal(calls, 2); assert.equal(f.options.state.calls, 2); assert.equal(f.mutations(), 0);
+  assert.equal(f.events.filter(e => e.kind === 'decision_rejected').length, 1);
+});
 test('recovered unknown game outcome is quarantined rather than replayed', async () => {
   const f = fixture(); f.options.state.pending = { id: 'pending', command: { kind: 'move', x: 0, y: 0, maxTicks: 10 }, digest: 'a'.repeat(64) };
   await assert.rejects(runInferenceWorker(f.options), /Unknown game outcome/);
