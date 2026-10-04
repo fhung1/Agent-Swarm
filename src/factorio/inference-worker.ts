@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, fsyncSync, unlinkSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask } from '../agents/llm.ts';
 import { decideFactorio, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
@@ -47,7 +47,7 @@ function checkReceipt(value: unknown, pending: NonNullable<InferenceState['pendi
  * mutation is journaled before submission. Recovered missing receipts stop the worker. */
 export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<void> {
   const { board, scope, state } = o;
-  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 1 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
+  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 1 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
   if (state.version !== 1 || JSON.stringify(state.scope) !== JSON.stringify(scope) || !Number.isSafeInteger(state.calls) || state.calls < 0 || !Number.isSafeInteger(state.tick) || state.tick < 0) throw Error('Foreign or corrupt inference journal');
   const sleep = o.sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
   const withinRun = () => { o.signal?.throwIfAborted(); if (Date.now() >= o.deadline) throw Error('Run deadline reached'); };
@@ -66,7 +66,11 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
   await board.register(scope.sender, 'inference-worker', `actor ${scope.actorId}; run ${scope.runId}`);
   const initial = board.snapshot().tasks.find(t => t.id === o.taskId);
   if (!initial) throw Error('Missing actor task');
-  if (initial.status === 'done' && initial.assignee === scope.sender) return;
+  if (initial.status === 'done' && initial.assignee === scope.sender) {
+    const observed = observe();
+    if (state.pending || (observed.inventory.ironPlate ?? 0) < o.requiredPlates) throw Error('Completed task disagrees with live actor state');
+    return;
+  }
   if (initial.status === 'open') await board.claimTask(scope.sender, o.taskId);
   // Reducer completion precedes local subscription callbacks.
   for (let i = 0; i < 40; i++) {
@@ -159,6 +163,8 @@ function atomicSave(path: string, value: unknown): void {
   const temporary = `${path}.tmp`; const fd = openSync(temporary, 'w', 0o600);
   try { writeFileSync(fd, JSON.stringify(value)); fsyncSync(fd); } finally { closeSync(fd); }
   renameSync(temporary, path);
+  const directoryFd = openSync(dirname(path), 'r');
+  try { fsyncSync(directoryFd); } finally { closeSync(directoryFd); }
 }
 export async function inferenceWorkerMain(): Promise<void> {
   const [worldText, indexText, actorText, runId] = process.argv.slice(2);
@@ -167,7 +173,8 @@ export async function inferenceWorkerMain(): Promise<void> {
   const world = resolve(worldText), manifest = JSON.parse(readFileSync(join(world, 'manifest.json'), 'utf8'));
   const scope: FactorioScope = { runId, worldId: manifest.worldId, historyId: manifest.historyId, actorId, sender: `${runId}-agent-${index}` };
   const directory = join(world, 'inference', scope.sender); mkdirSync(directory, { recursive: true, mode: 0o700 });
-  const processPath = join(directory, 'process.pid');
+  // All runs sharing this world use the same lock for a given physical actor.
+  const processPath = join(world, 'inference', `actor-${actorId}.pid`);
   if (existsSync(processPath)) {
     const pid = Number(readFileSync(processPath, 'utf8'));
     if (!Number.isSafeInteger(pid) || pid < 1) throw Error('Corrupt worker process lock');
