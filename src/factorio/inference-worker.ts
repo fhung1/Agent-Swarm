@@ -215,12 +215,12 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
         const currentObjective = assignment ? [assignment.title, assignment.details].filter(Boolean).join('\n')
-          : o.goal === 'rocket' ? o.objective : assignedObjective || o.objective;
+          : assignedObjective || 'Wait for Astra to assign a concrete next task.';
         const context = { ...scope, objective: currentObjective, operatorPrompt: o.operatorPrompt(), observation: observed,
           status: await o.game({ kind: 'status' }), reservations: board.snapshot().reservations
             .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
             .map(r => ({ path: r.path, holder: r.holder })),
-          tasks: board.snapshot().tasks.filter(t => t.id.startsWith(`${scope.runId}.`)).slice(0, 40).map(t => ({ id: t.id, title: t.title, details: t.details, status: t.status, assignee: t.assignee, dependsOn: t.dependsOn })),
+          tasks: [],
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
           budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: o.deadline === 0 ? null : remainingRunMs(o.deadline) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;

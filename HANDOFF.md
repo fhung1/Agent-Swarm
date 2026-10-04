@@ -569,3 +569,28 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   the live count. No board data, game state or inference process was changed.
   The existing Zen tab may need a reload to fetch the rebuilt dashboard script.
 - The operator prioritized the live demo; no test suite was run for this edit.
+
+## codex — Lean worker prompts and live fluid evidence (2026-10-04)
+
+- The repeated worker stop was an oversized prompt: actors received the global
+  generated-resource survey, up to 40 board tasks, 100 detailed nearby entities,
+  and a long manual on every call. Reduced the worker prompt to Astra's current
+  assignment, local inventory and 20 nearby entities, compact status, relevant
+  Astra messages, and the last action result. Shortened the fixed model rules
+  and removed the root rocket objective from actor prompts when they have an
+  assigned task.
+- Kept global map and exact pipe-port inspection with Astra. Worker observations
+  retain fluid amounts; the live layout view retains exact pipe ports. Stale
+  machine IDs now return a concise current-world error rather than an RCON stack
+  trace.
+- Deployed the matching bridge to the same saved world and GUI client, preserving
+  world `c5aea3c1-c983-48c4-9c62-e18bd2fae286`, history
+  `57b5a5e7-a13a-42e8-a518-c28df3036770`, board and $100 ledger. Live
+  Astra/Luna calls now reserve about 8.7–9.1 KB each; immediately before the
+  change, worker calls were at 39.8–40.0 KB and exceeded the spend guard. The
+  invalid-machine lookup returned a scoped stale-ID message. Same-run inference
+  is active, the game is unpaused, dashboard port 4193 is HTTP 200, and the
+  engine still reports zero rocket launches.
+- esbuild bundle and Python syntax compile succeeded. No test suite was run per
+  operator request. Continue monitoring the same run and let Astra decide all
+  gameplay actions.
