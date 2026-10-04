@@ -15,6 +15,7 @@ async function main() {
   if (status.world?.worldId !== manifest.worldId || status.world?.historyId !== manifest.historyId) throw Error('Game world differs from manifest');
   const plan = inferenceLaunchPlan({ runId, actorIds: status.actors.map((a: { unit: number }) => a.unit),
     provider: process.env.AGENT_BRAIN ?? '', model: process.env.AGENT_MODEL ?? '',
+    ...(process.env.FACTORIO_ACTOR_MODEL ? { actorModel: process.env.FACTORIO_ACTOR_MODEL } : {}),
     maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS),
     ...(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS ? { orchestratorMaxCalls: Number(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS) } : {}),
     mode: process.env.FACTORIO_DEMO_MODE as 'smoke' | 'production' | undefined });

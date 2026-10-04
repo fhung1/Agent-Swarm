@@ -27,13 +27,15 @@ Keep that terminal running. In the worker terminal, set `RUN_ID` and `WORLD` to 
 
 ## 3. Configure and launch
 
-Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` and `AGENT_MODEL=gpt-6-astra`. Five game actors use Astra Low; a sixth board-only orchestrator uses Astra High to direct them through board messages and subtasks. The smoke check permits three calls per actor and three orchestrator calls over five minutes:
+Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` and `AGENT_MODEL=gpt-6-astra`. Set `FACTORIO_ACTOR_MODEL=gpt-6-luna` to run five Luna Low game actors under one Astra High board-only orchestrator. Keep the smoke run to three calls per actor and one overseer call over five minutes:
 
 ```sh
 export BOARD_URI=ws://127.0.0.1:3004
 export BOARD_DATABASE=quant-swarm-factorio-coord
 export FACTORIO_DEMO_MODE=smoke
 export FACTORIO_MAX_CALLS=3
+export FACTORIO_ACTOR_MODEL=gpt-6-luna
+export FACTORIO_ORCHESTRATOR_MAX_CALLS=1
 export FACTORIO_RUN_MS=300000
 export FACTORIO_ORCHESTRATOR_INTERVAL_MS=30000
 export FACTORIO_INFERENCE_TIMEOUT_MS=30000

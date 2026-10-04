@@ -1,6 +1,6 @@
 # Five Astra Low actors and an Astra High orchestrator
 
-Each game actor has an independent process, prompt, board identity and restart journal. All five actors use `gpt-6-astra` at low effort. A separate `gpt-6-astra` high-effort process has no game-action interface and directs the actors only through board messages and run-scoped subtasks. Workers choose a validated action, chat, wait or completion; there is no rules fallback. Supported game actions include movement, mining, hand crafting, building and chest/furnace transfers.
+Each game actor has an independent process, prompt, board identity and restart journal. All five actors use a selected model at low effort; set `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors. A separate `gpt-6-astra` high-effort process has no game-action interface and directs the actors only through board messages and run-scoped subtasks. Workers choose a validated action, chat, wait or completion; there is no rules fallback. Supported game actions include movement, mining, hand crafting, building and chest/furnace transfers.
 
 ## Prepare
 
@@ -13,7 +13,7 @@ npx esbuild scripts/factorio-inference-orchestrator.ts --bundle --platform=node 
 npx esbuild scripts/factorio-inference-swarm.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-swarm.mjs
 ```
 
-Set `AGENT_BRAIN=claude` or `codex`, `AGENT_MODEL=gpt-6-astra`, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap that defaults to eight; the operator can set a limit from one to eight using `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token. The Factorio launcher configures eight before starting workers. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` for the coordinator. The total ceiling is five times the actor limit plus the coordinator limit; a call cap is not a dollar cap. Keep credentials private.
+Set `AGENT_BRAIN=claude` or `codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, optional `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap that defaults to eight; the operator can set a limit from one to eight using `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token. The Factorio launcher configures eight before starting workers. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` for the coordinator. The total ceiling is five times the actor limit plus the coordinator limit; a call cap is not a dollar cap. Keep credentials private.
 
 ## Launch and stop
 
