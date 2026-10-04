@@ -24,31 +24,39 @@ let messageAgent = stored(`${storagePrefix}:message-agent`) ?? '';
 let messageDirection = stored(`${storagePrefix}:message-direction`) ?? 'sent';
 if (!['sent', 'received', 'either'].includes(messageDirection)) messageDirection = 'sent';
 let queued = false;
-let interactingSelect: HTMLSelectElement | null = null;
+let interactingControl: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null = null;
 let deferredRender = false;
-// Native select popups disappear when their DOM node is replaced. Coalesce
-// live updates while a selector is being used, then render the newest state.
-function finishSelectInteraction(): void {
-  interactingSelect = null;
+let interactionTimer: number | undefined;
+// The live board changes several times per second. Preserve an active form
+// control until its change or submit click has finished.
+function finishControlInteraction(): void {
+  window.clearTimeout(interactionTimer); interactionTimer = undefined;
+  interactingControl = null;
   if (deferredRender) { deferredRender = false; queueRender(); }
 }
+function finishControlSoon(): void {
+  window.clearTimeout(interactionTimer);
+  interactionTimer = window.setTimeout(finishControlInteraction, 250);
+}
 root.addEventListener('focusin', event => {
-  if (event.target instanceof HTMLSelectElement) interactingSelect = event.target;
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) {
+    window.clearTimeout(interactionTimer); interactionTimer = undefined;
+    interactingControl = event.target;
+  }
 });
 root.addEventListener('pointerdown', event => {
-  if (event.target instanceof HTMLSelectElement) interactingSelect = event.target;
-  else finishSelectInteraction();
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) interactingControl = event.target;
+  else if (interactingControl) finishControlSoon();
 }, true);
 root.addEventListener('keydown', event => {
-  if (!(event.target instanceof HTMLSelectElement)) return;
-  if (event.key === 'Escape' || event.key === 'Tab') finishSelectInteraction();
-  else if (['ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Enter'].includes(event.key)) interactingSelect = event.target;
+  if (event.target !== interactingControl) return;
+  if (event.key === 'Escape' || event.key === 'Tab') finishControlSoon();
 }, true);
 root.addEventListener('change', event => {
-  if (event.target instanceof HTMLSelectElement) finishSelectInteraction();
+  if (event.target instanceof HTMLSelectElement) finishControlSoon();
 }, true);
 root.addEventListener('focusout', event => {
-  if (event.target === interactingSelect) finishSelectInteraction();
+  if (event.target === interactingControl) finishControlSoon();
 });
 let sessionName = stored(NAME_KEY) ?? '';
 let draftBody = '';
@@ -57,6 +65,9 @@ let draftTask = '';
 let sending = false;
 let creatingTask = false;
 let taskCreatedNotice = '';
+let taskError = '';
+let messageError = '';
+let messageSentNotice = '';
 let newTaskTitle = '';
 let newTaskDetails = '';
 let newTaskArea = 'general';
@@ -164,7 +175,7 @@ function queueRender(): void {
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
-    if (interactingSelect?.isConnected) { deferredRender = true; return; }
+    if (interactingControl?.isConnected) { deferredRender = true; return; }
     const active = document.activeElement;
     const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
     const label = editing ? active.dataset.field : undefined;
@@ -174,7 +185,6 @@ function queueRender(): void {
       const control = Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-field]'))
         .find(element => element.dataset.field === label);
       control?.focus({ preventScroll: true });
-      if (control instanceof HTMLSelectElement) interactingSelect = null;
       if ((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && selection) control.setSelectionRange(selection[0], selection[1]);
     }
   });
@@ -211,25 +221,26 @@ function select(label: string, value: string, options: Array<[string, string]>, 
 }
 async function createBoardTask(): Promise<void> {
   if (creatingTask) return;
-  creatingTask = true; error = ''; taskCreatedNotice = ''; queueRender();
+  creatingTask = true; error = ''; taskError = ''; taskCreatedNotice = ''; queueRender();
   try {
     const title = newTaskTitle.trim();
     if (!title) throw Error('Enter a task title.');
     const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 72) || 'task';
     const name = await asParticipant();
-    const id = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
+    const runId = board.id === 'factorio' ? factorioSnapshot?.run?.runId : undefined;
+    const id = `${runId ? `${runId}.operator-` : ''}${slug}-${crypto.randomUUID().slice(0, 8)}`;
     await client.createTask(name, { id, title, details: newTaskDetails.trim(), area: newTaskArea.trim() || 'general',
       dependsOn: newTaskDependency, priority: newTaskPriority });
     newTaskTitle = ''; newTaskDetails = ''; newTaskArea = 'general'; newTaskPriority = 'normal'; newTaskDependency = '';
     taskCreatedNotice = `Created “${title}” (${id}).`;
-  } catch (reason) { error = String(reason); }
-  finally { creatingTask = false; queueRender(); }
+  } catch (reason) { taskError = String(reason); }
+  finally { creatingTask = false; finishControlInteraction(); queueRender(); }
 }
 async function asParticipant(): Promise<string> {
   const name = participantName(sessionName, client.identity);
   sessionName = name;
   save(NAME_KEY, name);
-  if (!client.snapshot().participants.some(participant => participant.name === name)) await client.register(name, 'human', `${board.label} dashboard`);
+  await client.register(name, 'human', `${board.label} dashboard`);
   return name;
 }
 async function taskAction(task: BoardTask, status: string): Promise<void> {
@@ -453,6 +464,11 @@ function render(): void {
     put(navigation, nav);
   }
   put(sidebar, navigation, node('div', 'side-spacer'));
+  const composeLinks = node('nav', 'run-list');
+  const taskLink = node('a', 'run-item', 'Create a task'); taskLink.href = '#create-task';
+  const messageLink = node('a', 'run-item', 'Send a message'); messageLink.href = '#send-message';
+  put(composeLinks, taskLink, messageLink);
+  put(sidebar, node('div', 'side-label', 'QUICK ACTIONS'), composeLinks);
   const footer = node('div', 'side-footer');
   put(footer, node('span', client.ready ? 'online-dot' : 'offline-dot'), node('span', '', client.ready ? 'LIVE · LOCAL' : 'CONNECTING'), node('small', '', `${board.label} board`));
   put(sidebar, footer);
@@ -484,6 +500,7 @@ function render(): void {
   const taskPanel = panel('Task board', `${shownTasks.length} tasks · ${filter} · highest priority first`);
   put(taskPanel, input('Your participant name', sessionName, value => { sessionName = value; save(NAME_KEY, value); queueRender(); }));
   const createForm = node('form', 'board-form task-create-form');
+  createForm.id = 'create-task';
   put(createForm, node('h3', '', 'Create a task'),
     input('Title', newTaskTitle, value => { newTaskTitle = value; }),
     input('Details', newTaskDetails, value => { newTaskDetails = value; }, true),
@@ -495,7 +512,11 @@ function render(): void {
   put(createForm, createButton);
   createForm.addEventListener('submit', event => { event.preventDefault(); void createBoardTask(); });
   put(taskPanel, createForm);
+  const completedRun = factorioSnapshot?.run;
+  if (completedRun && tasks.some(task => task.id === `${completedRun.runId}.goal-${completedRun.goal}` && task.status === 'done'))
+    put(taskPanel, node('p', 'muted small', 'This inference run has completed. New board tasks are saved, but they do not restart its agents.'));
   if (taskCreatedNotice) put(taskPanel, node('p', 'task-created-notice', taskCreatedNotice));
+  if (taskError) put(taskPanel, node('p', 'error', taskError));
   if (!shownTasks.length) empty(taskPanel, 'No tasks in this view.');
   const cards = node('div', 'cards');
   for (const task of shownTasks) {
@@ -599,6 +620,41 @@ function render(): void {
   download.disabled = displayedMessages.length === 0;
   put(messageControls, channelLabel, agentLabel, directionLabel, download);
   put(messagePanel, messageControls, node('p', 'muted small', 'Download exports exactly the displayed messages as JSON, including full bodies and timestamps. Load older messages to include more. Addressed-to filtering matches direct recipients; broadcasts are included under All agents.'));
+  const form = node('form', 'board-form message-compose'); form.id = 'send-message';
+  const recipientOptions: Array<[string, string]> = [['', 'Everyone'], ...sessions.map(session =>
+    [session.name, session.name === `${factorioSnapshot?.run?.runId}-orchestrator` ? `${session.name} (overseer)` : session.name] as [string, string])];
+  if (draftRecipient && !recipientOptions.some(([value]) => value === draftRecipient)) recipientOptions.push([draftRecipient, `${draftRecipient} (unavailable)`]);
+  const taskOptions: Array<[string, string]> = [['', 'No task'], ...tasks.map(task => [task.id, task.title] as [string, string])];
+  put(form, node('h3', '', 'Send a message'),
+    select('Recipient', draftRecipient, recipientOptions, value => { draftRecipient = value; }),
+    select('Related task (optional)', draftTask, taskOptions, value => { draftTask = value; }),
+    input('Message', draftBody, value => { draftBody = value; }, true));
+  const send = node('button', 'primary-button', sending ? 'Sending…' : 'Send message');
+  send.type = 'submit'; send.disabled = sending;
+  put(form, send);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (sending) return;
+    sending = true; error = ''; messageError = ''; messageSentNotice = ''; send.disabled = true;
+    void (async () => {
+      const name = await asParticipant();
+      const text = draftBody.trim();
+      if (!text) throw Error('Enter a message.');
+      const run = board.id === 'factorio' ? factorioSnapshot?.run : null;
+      const game = factorioSnapshot?.game;
+      const body = run && game ? JSON.stringify({ version: 1, runId: run.runId, worldId: game.world.worldId,
+        historyId: game.world.historyId, sender: name, kind: 'chat', payload: {text, operator: true} }) : text;
+      if (body.length > 8000) throw Error('Message is too long for the board (8,000 characters including run metadata).');
+      await client.post(name, body, draftRecipient.trim(), draftTask.trim());
+      draftBody = '';
+      messageSentNotice = 'Message sent to the board.';
+    })().catch(reason => { messageError = String(reason); }).finally(() => { sending = false; finishControlInteraction(); queueRender(); });
+  });
+  put(messagePanel, form);
+  if (completedRun && tasks.some(task => task.id === `${completedRun.runId}.goal-${completedRun.goal}` && task.status === 'done'))
+    put(messagePanel, node('p', 'muted small', 'The completed run has no active overseer to receive this message.'));
+  if (messageError) put(messagePanel, node('p', 'error', messageError));
+  if (messageSentNotice) put(messagePanel, node('p', 'task-created-notice', messageSentNotice));
   const stream = node('div', 'timeline');
   if (!displayedMessages.length) empty(stream, messageAgent ? 'No messages match this agent filter.' : 'No messages yet.');
   for (const message of displayedMessages) {
@@ -609,28 +665,9 @@ function render(): void {
     put(content, top, node('p', 'board-copy', message.body));
     if (message.taskId) put(content, node('small', 'muted mono', message.taskId));
     put(event, node('span', 'event-mark decision'), content);
-    put(stream, event);
   }
   put(messagePanel, stream);
   if (matchingMessages.length > messageLimit) put(messagePanel, button('Load older messages', () => { messageLimit += 100; queueRender(); }));
-  const form = node('form', 'board-form');
-  put(form, input('Recipient (blank = everyone)', draftRecipient, value => { draftRecipient = value; }),
-    input('Task ID (optional)', draftTask, value => { draftTask = value; }),
-    input('Message', draftBody, value => { draftBody = value; }, true));
-  const send = node('button', 'primary-button', sending ? 'Sending…' : 'Send message');
-  send.type = 'submit'; send.disabled = sending;
-  put(form, send);
-  form.addEventListener('submit', event => {
-    event.preventDefault();
-    if (sending) return;
-    sending = true; error = ''; send.disabled = true;
-    void (async () => {
-      const name = await asParticipant();
-      await client.post(name, draftBody, draftRecipient.trim(), draftTask.trim());
-      draftBody = '';
-    })().catch(reason => { error = String(reason); }).finally(() => { sending = false; queueRender(); });
-  });
-  put(messagePanel, form);
   put(secondary, messagePanel);
   const sessionPanel = panel('Participants', 'Most recently seen first');
   for (const session of sessions) {

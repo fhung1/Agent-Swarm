@@ -457,3 +457,20 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   exactly. Checked both saved blocks byte-for-byte against their sources.
 - No game, board, model or budget state changed. Private artifact stays
   ignored and is not pushed; this handoff records its location.
+
+## codex — Dashboard task/message controls (2026-10-04)
+
+- The real board contains operator-created open task
+  `factorio-launch-a-rocket-d57692ee`; the iron goal is done and all six
+  inference roles exited. The dashboard's task form did persist the task, but
+  its unscoped ID and completed run mean Astra cannot claim it automatically.
+- Fixed frequent live rerenders interrupting focused form controls and submit
+  clicks. Added sidebar links, local action errors/success notices, visible
+  recipient/task dropdowns, and moved compose above the message history.
+  Factorio human messages are now scoped protocol chat for the current run;
+  newly created tasks receive a run-scoped ID. Completed-run notice explains
+  that board writes do not restart agents.
+- Dashboard typecheck passes. Real browser against disposable board created one
+  task and one message; both were confirmed in SpacetimeDB. Live 4193 bundle
+  updated. Disposable server/browser stopped. Rocket continuation on same save
+  is the next task; do not reset world or board.
