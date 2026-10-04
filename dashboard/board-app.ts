@@ -27,6 +27,25 @@ let queued = false;
 let interactingControl: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null = null;
 let deferredRender = false;
 let interactionTimer: number | undefined;
+let scrolling = false;
+let scrollTimer: number | undefined;
+let restoringScroll = false;
+function finishScrolling(): void {
+  window.clearTimeout(scrollTimer); scrollTimer = undefined;
+  scrolling = false;
+  if (deferredRender && !interactingControl?.isConnected) { deferredRender = false; queueRender(); }
+}
+function noteScrollActivity(): void {
+  scrolling = true;
+  window.clearTimeout(scrollTimer);
+  scrollTimer = window.setTimeout(finishScrolling, 180);
+}
+window.addEventListener('scroll', () => {
+  if (restoringScroll) return;
+  noteScrollActivity();
+}, { capture: true, passive: true });
+window.addEventListener('wheel', noteScrollActivity, { capture: true, passive: true });
+window.addEventListener('touchmove', noteScrollActivity, { capture: true, passive: true });
 // The live board changes several times per second. Preserve an active form
 // control until its change or submit click has finished.
 function finishControlInteraction(): void {
@@ -166,16 +185,20 @@ function showLayout(layout: HTMLElement, sidebar: HTMLElement): void {
   const previous = root.querySelector<HTMLElement>('.message-board-layout');
   const sidebarScrollTop = previous?.querySelector<HTMLElement>('.sidebar')?.scrollTop ?? 0;
   const mainScrollTop = previous?.querySelector<HTMLElement>('.main')?.scrollTop ?? 0;
+  const timelineScrollTop = previous?.querySelector<HTMLElement>('.timeline')?.scrollTop ?? 0;
+  restoringScroll = true;
   root.replaceChildren(layout);
   sidebar.scrollTop = sidebarScrollTop;
   layout.querySelector<HTMLElement>('.main')!.scrollTop = mainScrollTop;
+  layout.querySelector<HTMLElement>('.timeline')?.scrollTo({ top: timelineScrollTop });
+  requestAnimationFrame(() => { restoringScroll = false; });
 }
 function queueRender(): void {
   if (queued) return;
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
-    if (interactingControl?.isConnected) { deferredRender = true; return; }
+    if (scrolling || interactingControl?.isConnected) { deferredRender = true; return; }
     const active = document.activeElement;
     const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
     const label = editing ? active.dataset.field : undefined;

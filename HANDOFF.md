@@ -765,3 +765,14 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   processes keep the old Lua in memory; the saved world will use the fix on its
   next load. Keep current research running instead of restarting just to apply
   the fix. Push the source and handoff when finished.
+
+## codex — Keep live dashboard redraws from interrupting scroll (2026-10-04)
+
+- The message-board dashboard replaces its full DOM on every subscription
+  update. While the user scrolls, this can interrupt input and stall movement;
+  the nested message timeline also lost its offset on redraw.
+- Dashboard redraws now wait until scrolling has been quiet for 180 ms, then
+  coalesce to the latest board state. Sidebar, main, and message timeline
+  positions are restored. Dashboard TypeScript check and `git diff --check`
+  pass; no browser tests run.
+- Push when finished. Refresh the dashboard tab to load the updated bundle.
