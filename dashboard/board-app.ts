@@ -17,6 +17,9 @@ const client = new MessageBoardClient({ uri: host, database: board.database, tok
 let filter = 'active';
 let selectedTask = '';
 let messageLimit = 100;
+let messageAgent = stored(`${storagePrefix}:message-agent`) ?? '';
+let messageDirection = stored(`${storagePrefix}:message-direction`) ?? 'sent';
+if (!['sent', 'received', 'either'].includes(messageDirection)) messageDirection = 'sent';
 let queued = false;
 let sessionName = stored(NAME_KEY) ?? '';
 let draftBody = '';
@@ -459,10 +462,61 @@ function render(): void {
   }
   put(taskPanel, cards);
   put(primary, taskPanel);
-  const messagePanel = panel('Live messages', `${board.label} · ${messages.length} messages`);
+  const matchingMessages = messages.filter(message => !messageAgent ||
+    (messageDirection !== 'received' && message.sender === messageAgent) ||
+    (messageDirection !== 'sent' && message.recipient === messageAgent));
+  const displayedMessages = matchingMessages.slice(0, messageLimit);
+  const messagePanel = panel('Live messages', `${displayedMessages.length} displayed · ${matchingMessages.length} matching · ${messages.length} total`);
+  const messageControls = node('div', 'controls message-controls');
+  const agentLabel = node('label', 'board-input');
+  const agentSelect = node('select');
+  agentSelect.dataset.field = 'Message agent ID';
+  const allAgents = node('option', '', 'All agents'); allAgents.value = ''; put(agentSelect, allAgents);
+  const workers = factorioSnapshot?.run?.workers ?? [];
+  const agentNames = new Set([...sessions.map(session => session.name), ...messages.flatMap(message => [message.sender, message.recipient]), ...workers.map(worker => worker.sender), messageAgent]);
+  for (const name of [...agentNames].filter(Boolean).sort()) {
+    const worker = workers.find(candidate => candidate.sender === name);
+    const option = node('option', '', worker ? `Agent ${worker.index} · actor ${worker.actorId} · ${name}` : name);
+    option.value = name; put(agentSelect, option);
+  }
+  agentSelect.value = messageAgent;
+  agentSelect.addEventListener('change', () => {
+    messageAgent = agentSelect.value; messageLimit = 100;
+    save(`${storagePrefix}:message-agent`, messageAgent); queueRender();
+  });
+  put(agentLabel, node('span', 'muted small', 'Agent ID'), agentSelect);
+  const directionLabel = node('label', 'board-input');
+  const directionSelect = node('select'); directionSelect.dataset.field = 'Message direction';
+  for (const [value, label] of [['sent', 'Sent by agent'], ['received', 'Addressed to agent'], ['either', 'Sent or addressed to agent']]) {
+    const option = node('option', '', label); option.value = value; put(directionSelect, option);
+  }
+  directionSelect.value = messageDirection; directionSelect.disabled = !messageAgent;
+  directionSelect.addEventListener('change', () => {
+    messageDirection = directionSelect.value; messageLimit = 100;
+    save(`${storagePrefix}:message-direction`, messageDirection); queueRender();
+  });
+  put(directionLabel, node('span', 'muted small', 'Messages'), directionSelect);
+  const download = button(`Download displayed logs (${displayedMessages.length})`, () => {
+    const exportedAt = new Date().toISOString();
+    const payload = {
+      version: 1, exportedAt, board: {id: board.id, label: board.label, database: board.database},
+      filter: {agentId: messageAgent || null, direction: messageAgent ? messageDirection : 'all'},
+      order: 'newest-first', displayedCount: displayedMessages.length, matchingCount: matchingMessages.length,
+      messages: displayedMessages.map(message => ({id: String(message.id), createdAt: message.createdAt.toDate().toISOString(),
+        sender: message.sender, recipient: message.recipient, taskId: message.taskId, body: message.body})),
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2) + '\n'], {type: 'application/json;charset=utf-8'}));
+    const link = node('a'); link.href = url;
+    link.download = `${board.id.replace(/[^a-z0-9_-]/gi, '_')}-messages-${exportedAt.replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  });
+  download.disabled = displayedMessages.length === 0;
+  put(messageControls, agentLabel, directionLabel, download);
+  put(messagePanel, messageControls, node('p', 'muted small', 'Download exports exactly the displayed messages as JSON, including full bodies and timestamps. Load older messages to include more. Addressed-to filtering matches direct recipients; broadcasts are included under All agents.'));
   const stream = node('div', 'timeline');
-  if (!messages.length) empty(stream, 'No messages yet.');
-  for (const message of messages.slice(0, messageLimit)) {
+  if (!displayedMessages.length) empty(stream, messageAgent ? 'No messages match this agent filter.' : 'No messages yet.');
+  for (const message of displayedMessages) {
     const event = node('article', 'event');
     const content = node('div', 'event-body');
     const top = node('div', 'event-top');
@@ -473,7 +527,7 @@ function render(): void {
     put(stream, event);
   }
   put(messagePanel, stream);
-  if (messages.length > messageLimit) put(messagePanel, button('Load older messages', () => { messageLimit += 100; queueRender(); }));
+  if (matchingMessages.length > messageLimit) put(messagePanel, button('Load older messages', () => { messageLimit += 100; queueRender(); }));
   const form = node('form', 'board-form');
   put(form, input('Recipient (blank = everyone)', draftRecipient, value => { draftRecipient = value; }),
     input('Task ID (optional)', draftTask, value => { draftTask = value; }),

@@ -1,5 +1,9 @@
 # Factorio handoff
 
+## Dashboard agent filter and displayed-message export — codex, 2026-10-04
+
+Added an Agent ID selector to Live messages, with Factorio worker index/physical actor ID labels and sent/addressed-to/either routing filters. Selection persists per board across reloads. Filtering happens before the visible message limit; Load older messages expands the filtered stream. Download displayed logs exports precisely the rendered message array in newest-first JSON, with full body, string ID, ISO timestamp, sender, recipient, task ID and filter metadata. Empty exports are disabled. Scoped responsive controls handle long IDs. Dashboard TypeScript check and live esbuild watch compilation pass; no tests added or run. Refresh the existing port-4193 dashboard to load the controls. Gameplay processes/save/budget are untouched.
+
 ## Actor context overflow recovery — codex, 2026-10-04
 
 All five `iron-zero-20261004` actors exited when dense nearby-entity observations plus duplicated task details exceeded the 24,000-character required prompt limit. At diagnosis they had moved toward resources; actor 12 had gathered wood/crafted a chest, with $1.45 charged. Stopped the launcher, compacted optional nearby/production listings and repeated task descriptions with explicit omission counts, preserving scope, objective, own inventory, reservations and last outcome. Root typecheck and worker bundle pass; no additional tests run. Resumed the SAME save, task identities, journals, deadline and $100 ledger. At tick 23151 all five positions advanced, actor 14 had two iron ore and actor 12 had 14 wood plus a chest; 107 calls, $1.652329 charged, ledger not halted. Some mining attempts return failed receipts and are handled by the worker; no new context-overflow exits observed. Live factory construction remains in progress.
