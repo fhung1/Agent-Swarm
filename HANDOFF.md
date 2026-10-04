@@ -203,3 +203,5 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   Rejected placements/transfers alone are game outcomes, not evidence of a bridge
   bug. Existing fixed deadline is still present; operator wanted spend-only runs,
   so do not mistake a deadline stop for a $100 budget exhaustion.
+
+- Follow-up: clarified persistent initial-assignment semantics in both role prompts; later coordinator subtasks remain claimable/completable. Typecheck passes. This changes API guidance, not gameplay decisions.
