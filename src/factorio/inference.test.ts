@@ -84,3 +84,14 @@ test('research and assembler configuration decisions are bounded', () => {
     assert.throws(() => validateFactorioDecision({...wait, kind: 'action', command, waitMs: 0}));
   }
 });
+
+
+test('large shared task board does not stop an actor while own evidence survives', () => {
+  const own={inventory:{items:{coal:5}},nearby:[]};const receipt={operationId:'op',status:'completed',item:'coal',quantity:5};
+  const prompt=buildFactorioPrompt({...context,observation:own,lastResult:receipt,
+    tasks:Array.from({length:40},(_,i)=>({id:`task-${i}`,title:'assigned task',details:'x'.repeat(1000),status:'claimed'})),
+    status:{paused:false,resourceMap:{deposits:Array.from({length:36},()=>({resource:'iron-ore',note:'x'.repeat(300)}))}}});
+  const parsed=JSON.parse(prompt);assert.ok(prompt.length<=30000);
+  assert.deepEqual(parsed.observation.inventory,own.inventory);assert.deepEqual(parsed.lastResult,receipt);
+  assert.ok(parsed.omittedContext.taskDescriptionCharacters>0);
+});

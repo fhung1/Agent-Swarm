@@ -234,3 +234,11 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Inherited one-hour deadline remains; user was asked whether to remove it because
   local instructions require preserving saved deadlines. Monitoring continues;
   live factory automation is not yet proven.
+
+- Monitor follow-up: Luna workers also exhausted their 24k required-context guard
+  as shared task details grew. Added a pressure fallback to omit redundant task
+  descriptions, then bounded map lists/task headers; preserves own objective,
+  inventory, reservations and last outcome. Ten actor prompt tests pass including
+  a 40-task regression. Reconstructed all five live actor contexts without provider
+  calls: 18,827–19,247 characters with disclosed omissions. Updated worker bundle
+  pending/resuming within the existing authorized deadline.

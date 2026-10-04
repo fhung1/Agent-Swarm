@@ -121,6 +121,26 @@ export function buildFactorioPrompt(context: FactorioContext): string {
     trim(status, 'productionSites', count, 'productionSites');
     base = JSON.stringify(required);
   }
+  if (base.length > 23500 && Array.isArray(required.tasks)) {
+    required.tasks = required.tasks.map(task => {
+      const row = record(task);
+      if (!row || typeof row.details !== 'string') return task;
+      omissions.taskDescriptionCharacters = (omissions.taskDescriptionCharacters ?? 0) + row.details.length;
+      return {...row, details: '', detailsTruncated: true};
+    });
+    base = JSON.stringify(required);
+  }
+  const resourceMap = record(status?.resourceMap);
+  for (const count of [24, 12, 6]) {
+    if (base.length <= 23500) break;
+    trim(resourceMap, 'deposits', count, 'resourceDeposits');
+    trim(resourceMap, 'frontiers', count, 'explorationFrontiers');
+    base = JSON.stringify(required);
+  }
+  if (base.length > 23500) {
+    trim(required as unknown as Record<string, unknown>, 'tasks', 10, 'taskHeaders');
+    base = JSON.stringify(required);
+  }
   const compacted = {...required, omittedContext: omissions};
   base = JSON.stringify(compacted);
   if (base.length > 24000) throw Error('Required Factorio context exceeds 24000 characters');
