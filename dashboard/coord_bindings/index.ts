@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import ApplyPushPolicyReducer from "./apply_push_policy_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
+import CleanupBoardReducer from "./cleanup_board_reducer";
 import CreateTaskReducer from "./create_task_reducer";
 import LockReducer from "./lock_reducer";
 import PostReducer from "./post_reducer";
@@ -46,6 +47,7 @@ import UpdateTaskReducer from "./update_task_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import ArchivedTaskRow from "./archived_task_table";
 import DevMessageRow from "./dev_message_table";
 import DevTaskRow from "./dev_task_table";
 import FileLockRow from "./file_lock_table";
@@ -55,6 +57,20 @@ import SessionRow from "./session_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  archivedTask: __table({
+    name: 'archived_task',
+    indexes: [
+      { accessor: 'id', name: 'archived_task_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'status', name: 'archived_task_status_idx_btree', algorithm: 'btree', columns: [
+        'status',
+      ] },
+    ],
+    constraints: [
+      { name: 'archived_task_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ArchivedTaskRow),
   devMessage: __table({
     name: 'dev_message',
     indexes: [
@@ -108,6 +124,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("apply_push_policy", ApplyPushPolicyReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
+  __reducerSchema("cleanup_board", CleanupBoardReducer),
   __reducerSchema("create_task", CreateTaskReducer),
   __reducerSchema("lock", LockReducer),
   __reducerSchema("post", PostReducer),

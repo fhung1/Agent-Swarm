@@ -10,11 +10,14 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
   const session = table({ name: 'session', public: true }, {
     name: t.string().primaryKey(), tool: t.string(), focus: t.string(), lastSeen: t.timestamp(),
   });
-  const devTask = table({ name: 'dev_task', public: true }, {
+  const taskColumns = () => ({
     id: t.string().primaryKey(), title: t.string(), details: t.string(), area: t.string(),
     status: t.string().index('btree'), createdBy: t.string(), assignee: t.string(), dependsOn: t.string(),
     result: t.string(), createdAt: t.timestamp(), updatedAt: t.timestamp(),
   });
+  const devTask = table({ name: 'dev_task', public: true }, taskColumns());
+  // Preserve dependency outcomes and recovery evidence outside the visible board.
+  const archivedTask = table({ name: 'archived_task', public: true }, taskColumns());
   const devMessage = table({ name: 'dev_message', public: true }, {
     id: t.u64().primaryKey().autoInc(), sender: t.string(), recipient: t.string(), taskId: t.string(),
     body: t.string(), createdAt: t.timestamp(),
@@ -24,7 +27,7 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     acquiredAt: t.timestamp(), expiresAt: t.timestamp(),
   });
 
-  const spacetimedb = schema({ session, devTask, devMessage, fileLock });
+  const spacetimedb = schema({ session, devTask, archivedTask, devMessage, fileLock });
 
   type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
 
@@ -92,7 +95,7 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     (ctx, { sender, recipient, taskId, body }) => {
       requireSession(ctx, sender);
       if (recipient) requireSession(ctx, recipient);
-      if (taskId && !ctx.db.devTask.id.find(taskId)) throw new SenderError(`Unknown task ${taskId}`);
+      if (taskId && !(ctx.db.devTask.id.find(taskId) ?? ctx.db.archivedTask.id.find(taskId))) throw new SenderError(`Unknown task ${taskId}`);
       requireText(body, 'Message', 8000);
       ctx.db.devMessage.insert({ id: 0n, sender, recipient, taskId, body, createdAt: ctx.timestamp });
       touch(ctx, sender);
@@ -105,8 +108,8 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
       requireSession(ctx, name);
       if (!ID.test(id)) throw new SenderError('Invalid task ID');
       requireText(title, 'Title', 200); requireText(details, 'Details', 8000, true); requireText(area, 'Area', 512, true);
-      if (dependsOn && !ctx.db.devTask.id.find(dependsOn)) throw new SenderError(`Unknown dependency ${dependsOn}`);
-      if (ctx.db.devTask.id.find(id)) throw new SenderError(`Task ${id} already exists`);
+      if (dependsOn && !(ctx.db.devTask.id.find(dependsOn) ?? ctx.db.archivedTask.id.find(dependsOn))) throw new SenderError(`Unknown dependency ${dependsOn}`);
+      if (ctx.db.devTask.id.find(id) || ctx.db.archivedTask.id.find(id)) throw new SenderError(`Task ${id} already exists`);
       ctx.db.devTask.insert({ id, title, details: taskDetails(details), area, status: 'open', createdBy: name, assignee: '', dependsOn,
         result: '', createdAt: ctx.timestamp, updatedAt: ctx.timestamp });
       touch(ctx, name);
@@ -130,7 +133,7 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     const task = ctx.db.devTask.id.find(id);
     if (!task) throw new SenderError(`Unknown task ${id}`);
     if (task.status !== 'open') throw new SenderError(`Task ${id} is ${task.status}${task.assignee ? ` (${task.assignee})` : ''}`);
-    if (task.dependsOn && ctx.db.devTask.id.find(task.dependsOn)?.status !== 'done') {
+    if (task.dependsOn && (ctx.db.devTask.id.find(task.dependsOn) ?? ctx.db.archivedTask.id.find(task.dependsOn))?.status !== 'done') {
       throw new SenderError(`Task ${id} waits on ${task.dependsOn}`);
     }
     ctx.db.devTask.id.update({ ...task, status: 'claimed', assignee: name, updatedAt: ctx.timestamp });
@@ -142,13 +145,19 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     { name: t.string(), id: t.string(), status: t.string(), result: t.string() },
     (ctx, { name, id, status, result }) => {
       requireSession(ctx, name);
-      const task = ctx.db.devTask.id.find(id);
+      const archived = ctx.db.archivedTask.id.find(id);
+      const task = ctx.db.devTask.id.find(id) ?? archived;
       if (!task) throw new SenderError(`Unknown task ${id}`);
       if (!TASK_STATUSES.includes(status) || status === 'claimed') throw new SenderError('Status must be open, done, blocked, or cancelled');
       requireText(result, 'Result', 8000, true);
       const cancellingOpen = status === 'cancelled' && task.status === 'open';
       if (!cancellingOpen && task.assignee !== name) throw new SenderError(`Task ${id} is assigned to ${task.assignee || 'nobody'}`);
-      ctx.db.devTask.id.update({ ...task, status, result, assignee: status === 'open' ? '' : task.assignee, updatedAt: ctx.timestamp });
+      const updated = { ...task, status, result, assignee: status === 'open' ? '' : task.assignee, updatedAt: ctx.timestamp };
+      if (archived && status === 'open') {
+        ctx.db.archivedTask.id.delete(id);
+        ctx.db.devTask.insert(updated);
+      } else if (archived) ctx.db.archivedTask.id.update(updated);
+      else ctx.db.devTask.id.update(updated);
       // Finishing or releasing a task frees the locks taken for it.
       if (status !== 'blocked') {
         for (const lock of [...ctx.db.fileLock.iter()]) {
@@ -165,7 +174,7 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     (ctx, { name, path, taskId, reason, minutes }) => {
       requireSession(ctx, name);
       const normalized = normalizePath(path);
-      if (taskId && !ctx.db.devTask.id.find(taskId)) throw new SenderError(`Unknown task ${taskId}`);
+      if (taskId && !(ctx.db.devTask.id.find(taskId) ?? ctx.db.archivedTask.id.find(taskId))) throw new SenderError(`Unknown task ${taskId}`);
       requireText(reason, 'Reason', 512, true);
       if (minutes < 1 || minutes > MAX_LOCK_MINUTES) throw new SenderError(`Minutes must be 1-${MAX_LOCK_MINUTES}`);
       for (const other of [...ctx.db.fileLock.iter()]) {
@@ -191,5 +200,30 @@ export function createMessageBoard(options: { taskInstruction?: string } = {}) {
     touch(ctx, name);
   });
 
-  return { spacetimedb, register, post, createTask, applyPushPolicy, claimTask, updateTask, lock, unlock };
+  // Explicit, bounded maintenance on this trusted-local, self-declared-name board.
+  // Never reset a database to tidy its dashboard. Snapshot before calling this reducer.
+  const cleanupBoard = spacetimedb.reducer(
+    { name: t.string(), taskIds: t.array(t.string()), messageIds: t.array(t.u64()) },
+    (ctx, { name, taskIds, messageIds }) => {
+      requireSession(ctx, name);
+      if (taskIds.length > 500 || messageIds.length > 1000) throw new SenderError('Cleanup batch too large');
+      for (const id of taskIds) {
+        const task = ctx.db.devTask.id.find(id);
+        // Recheck status transactionally: a task reopened since the snapshot is retained.
+        if (!task || !['done', 'blocked', 'cancelled'].includes(task.status)) continue;
+        ctx.db.archivedTask.insert(task);
+        ctx.db.devTask.id.delete(id);
+      }
+      for (const id of messageIds) {
+        const message = ctx.db.devMessage.id.find(id);
+        if (!message) continue;
+        const task = message.taskId ? ctx.db.devTask.id.find(message.taskId) : undefined;
+        if (task && ['open', 'claimed'].includes(task.status)) continue;
+        ctx.db.devMessage.id.delete(id);
+      }
+      touch(ctx, name);
+    }
+  );
+
+  return { cleanupBoard, spacetimedb, register, post, createTask, applyPushPolicy, claimTask, updateTask, lock, unlock };
 }

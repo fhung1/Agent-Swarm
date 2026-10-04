@@ -10,6 +10,21 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const ArchivedTask = __t.object("ArchivedTask", {
+  id: __t.string(),
+  title: __t.string(),
+  details: __t.string(),
+  area: __t.string(),
+  status: __t.string(),
+  createdBy: __t.string(),
+  assignee: __t.string(),
+  dependsOn: __t.string(),
+  result: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type ArchivedTask = __Infer<typeof ArchivedTask>;
+
 export const DevMessage = __t.object("DevMessage", {
   id: __t.u64(),
   sender: __t.string(),

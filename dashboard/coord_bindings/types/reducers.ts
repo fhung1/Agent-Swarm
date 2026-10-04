@@ -8,6 +8,7 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import ApplyPushPolicyReducer from "../apply_push_policy_reducer";
 import ClaimTaskReducer from "../claim_task_reducer";
+import CleanupBoardReducer from "../cleanup_board_reducer";
 import CreateTaskReducer from "../create_task_reducer";
 import LockReducer from "../lock_reducer";
 import PostReducer from "../post_reducer";
@@ -17,6 +18,7 @@ import UpdateTaskReducer from "../update_task_reducer";
 
 export type ApplyPushPolicyParams = __Infer<typeof ApplyPushPolicyReducer>;
 export type ClaimTaskParams = __Infer<typeof ClaimTaskReducer>;
+export type CleanupBoardParams = __Infer<typeof CleanupBoardReducer>;
 export type CreateTaskParams = __Infer<typeof CreateTaskReducer>;
 export type LockParams = __Infer<typeof LockReducer>;
 export type PostParams = __Infer<typeof PostReducer>;
