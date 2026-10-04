@@ -26,7 +26,7 @@ Gameplay records carry version, run/world/history, actor/sender, optional task, 
 
 Current commands are bounded `move`, `take` and `put`. Models cannot submit raw Lua, RCON or shell commands. Validate scope, actor, items, quantity, reach and inventory. Limit local observations and disclose truncation.
 
-Persist a stable operation ID and canonical payload before submission. Exact retries return the original game receipt; changed content is refused. A timeout is unresolved until reconciled. Stop on missing receipts, world/history mismatch or rollback; never infer failure and repeat a transfer under a fresh ID.
+Move coordinates use an exact eight-decimal wire grid, preserving engine positions; both languages serialize decimals without exponent notation and normalize negative zero. Finer coordinates are rejected before dispatch. Persist a stable operation ID and canonical payload before submission. Exact retries return the original game receipt; changed content is refused. A timeout is unresolved until reconciled. Stop on missing receipts, world/history mismatch or rollback; never infer failure and repeat a transfer under a fresh ID.
 
 Check task ownership, reservation expiry and pause immediately before mutation, including after model calls. Pause blocks new actions; an admitted action may finish and must retain its receipt. Resume reconciles first. Stop only owned processes and preserve saves.
 

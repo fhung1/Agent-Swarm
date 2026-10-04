@@ -26,11 +26,13 @@ test('envelopes reject injected identifiers and extra fields', () => {
 });
 test('Python bridge and TypeScript share normalized wire bytes and digest vectors', () => {
   const world = mkdtempSync(resolve(tmpdir(), 'factorio-wire-'));
-  const bridge = resolve(dirname(fileURLToPath(import.meta.url)), '../../factorio/bridge.py');
   try {
     writeFileSync(resolve(world, 'manifest.json'), JSON.stringify({ worldId: 'world-1', historyId: 'history-1' }));
     for (const command of [
       { kind: 'move' as const, x: 0.000001, y: -0, maxTicks: 10 },
+      { kind: 'move' as const, x: 1e-8, y: -1e-7, maxTicks: 10 },
+      { kind: 'move' as const, x: 0.00000029, y: -0.00000057, maxTicks: 10 },
+      { kind: 'move' as const, x: 999999.99999999, y: -1000000, maxTicks: 10 },
       // This is an observed Factorio position, represented exactly by the wire grid.
       { kind: 'move' as const, x: 8.6796875, y: -12.3456789, maxTicks: 600 },
       { kind: 'take' as const, targetId: 20, item: 'iron-ore' as const, quantity: 5 },
