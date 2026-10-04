@@ -647,3 +647,29 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   were present, and no rocket launch was recorded. The ledger showed $62.244
   charged, $19.166 reserved, and $18.590 available. Commit `7b2c846` is pushed
   to `main`; keep monitoring and leave gameplay choices to Astra.
+
+## codex — Keep Luna prompts to Astra's next step (2026-10-04)
+
+- Prompt guidance alone did not prevent Astra's actors from returning six-tick
+  move timeouts. Commit `5993357` validates the requested move bounds, then
+  normalizes `maxTicks` below 120 while preserving the model-selected
+  destination. The six-world-unit destination limit remains enforced.
+- Commit `73a50d3` reduces worker context to Astra's current bounded assignment,
+  local position/inventory, at most five nearby entities (an explicitly named
+  target first), the latest compact result, one short Astra note and directly
+  relevant holds. It removes global map/status and peer history, caps the task
+  text at 720 characters and worker JSON at 3 KB. Astra's prompt now asks for a
+  single bounded next step with its target and completion condition.
+- Both bundles were rebuilt and the same run resumed: world
+  `c5aea3c1-c983-48c4-9c62-e18bd2fae286`, history
+  `57b5a5e7-a13a-42e8-a518-c28df3036770`, board `iron-modular-20261004`, and
+  saved actor journals/plan were preserved. The $100 ledger is intact, with no
+  call-count or run-time limit. First post-restart worker inputs measured
+  2,435–3,184 bytes including system instructions, versus 2,512–3,899 bytes in
+  the prior prompt audit. At game tick 712,796 the world was unpaused with 91
+  production sites; rocket launches remain zero. The ledger had $72.876 charged,
+  $18.024 reserved and $9.100 remaining.
+- `npm run typecheck`, `git diff --check` and esbuild for the worker and
+  orchestrator passed. No tests were run per operator preference. Commits
+  `5993357` and `73a50d3` are pushed to `main`; continue monitoring the same run
+  and leave gameplay choices to Astra.
