@@ -6,4 +6,6 @@ Task: `trading-position-reviews`, claimed as `codex-factor`. Push when finished.
 
 Checks: `npm exec --yes --package=node@24 -- node scripts/check-all.ts` passed using an isolated temporary SpacetimeDB server: generated bindings match, 156/156 unit tests pass, research fixtures pass, Phase 1 worker/recovery/risk acceptance passes, and executor crash/reconciliation acceptance passes. Focused review/role/config tests, TypeScript typecheck, worker build, and `git diff --check` also pass. Live Alpaca/model acceptance remains on dependent board tasks; no credentials were used here. The spend-budget commit by `codex-scout` is still blocked on publication and overlaps some files; coordinate rebase after that task's game lock releases.
 
-Next: Commit and push this task, close the board task, then help publish the completed spend and readiness commits when locks permit.
+Publication: feature commit `bb005da` pushed to `origin/main` after rebasing the board-cleanup commit.
+
+Status: implementation and isolated checks complete. Next: run live paper/model acceptance with configured credentials, and publish the completed spend and readiness commits when their file locks permit.
