@@ -53,14 +53,25 @@ async function main() {
   let stopTimer: NodeJS.Timeout | undefined;
   let spendMonitor: NodeJS.Timeout | undefined;
   let killTimer: NodeJS.Timeout | undefined;
+  const groupAlive = (child: ChildProcess) => {
+    if (!child.pid) return false;
+    if (process.platform === 'win32') return child.exitCode === null && child.signalCode === null;
+    try { process.kill(-child.pid, 0); return true; }
+    catch (error) { return (error as NodeJS.ErrnoException).code !== 'ESRCH'; }
+  };
+  const signalGroup = (child: ChildProcess, signal: NodeJS.Signals) => {
+    if (process.platform !== 'win32' && child.pid) {
+      try { process.kill(-child.pid, signal); return; } catch { /* Fall back to the role process. */ }
+    }
+    if (child.exitCode === null && child.signalCode === null) child.kill(signal);
+  };
   const stop = () => {
     stopping = true;
-    for (const child of children) child.kill('SIGTERM');
-    if (!killTimer && children.some(child => child.exitCode === null && child.signalCode === null)) {
+    for (const child of children) signalGroup(child, 'SIGTERM');
+    if (!killTimer && children.some(groupAlive)) {
       killTimer = setTimeout(() => {
-        for (const child of children) if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        for (const child of children) if (groupAlive(child)) signalGroup(child, 'SIGKILL');
       }, 5000);
-      killTimer.unref();
     }
   };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
@@ -121,6 +132,7 @@ async function main() {
       const promptFile = promptFiles[worker.index - 1];
       const log = openSync(join(directory, `agent-${worker.index}.log`), 'a', 0o600);
       const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
+        detached: process.platform !== 'win32',
         env: { ...baseEnv, AGENT_MODEL: plan.actorModel, AGENT_EFFORT: plan.actorEffort, FACTORIO_TASK_ID: taskId,
           FACTORIO_OBJECTIVE: 'Wait for the Astra overseer to create and announce your run-scoped rocket task before acting.',
           ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
@@ -149,6 +161,7 @@ async function main() {
 
     const coordinatorLog = openSync(join(directory, 'orchestrator.log'), 'a', 0o600);
     const orchestrator = spawn(process.execPath, [orchestratorScript, world, runId], {
+      detached: process.platform !== 'win32',
       env: { ...baseEnv, AGENT_MODEL: plan.orchestrator.model, AGENT_EFFORT: plan.orchestrator.effort,
         FACTORIO_ORCHESTRATOR_MAX_CALLS: String(plan.orchestrator.maxCalls), FACTORIO_RUN_MS: String(plan.runMs) },
       stdio: ['ignore', coordinatorLog, coordinatorLog] });
@@ -191,6 +204,7 @@ async function main() {
     if (stopTimer) clearTimeout(stopTimer);
     if (spendMonitor) clearInterval(spendMonitor);
     stop(); board.stop();
+    if (killTimer && !children.some(groupAlive)) { clearTimeout(killTimer); killTimer = undefined; }
   }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
