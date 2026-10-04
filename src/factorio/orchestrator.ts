@@ -110,7 +110,17 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
     }
     const assignmentTarget = o.requireActorSubtasks
       ? scope.agents.map((actor, index) => ({ actor, taskId: `${scope.runId}.subtask-orchestrator-${index + 1}` }))
-        .find(target => !s.tasks.some(task => task.id === target.taskId))
+        .find(target => {
+          const taskExists = s.tasks.some(task => task.id === target.taskId);
+          const announced = s.messages.some(row => {
+            if (row.sender !== scope.sender || row.recipient !== target.actor) return false;
+            try {
+              const body = JSON.parse(row.body);
+              return body.runId === scope.runId && body.kind === 'orchestrator_task' && body.payload?.taskId === target.taskId;
+            } catch { return false; }
+          });
+          return !taskExists || !announced;
+        })
       : undefined;
     if (state.calls >= o.maxCalls) throw Error('Orchestrator model-call limit exhausted');
     const context: OrchestratorContext = {
@@ -200,7 +210,7 @@ export async function factorioOrchestratorMain(): Promise<void> {
   const spendFile = process.env.FACTORIO_RUN_SPEND_FILE;
   if (!spendFile) throw Error('FACTORIO_RUN_SPEND_FILE is required; refusing uncapped model calls');
   const spend = createFactorioSpendGuard({ path: spendFile, runId, worldId: manifest.worldId, historyId: manifest.historyId,
-    capUsd: process.env.FACTORIO_RUN_BUDGET_USD ?? '500' });
+    capUsd: process.env.FACTORIO_RUN_BUDGET_USD ?? '400' });
   const controller = new AbortController();
   const stop = () => { controller.abort(new Error('Orchestrator stopped')); board.stop(); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);

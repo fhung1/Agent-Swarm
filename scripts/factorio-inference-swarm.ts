@@ -88,7 +88,11 @@ async function main() {
         sender: plan.orchestrator.sender, eventId: `${runId}-budget`, kind: 'run_budget',
         payload: { capUsd: spend.snapshot().capUsd, priceVersion: plan.spendPriceVersion, actors: plan.actorModel, overseer: plan.orchestrator.model } }), '', `${runId}.goal-rocket`);
     }
-    const runDeadline = Date.now() + plan.runMs;
+    const deadlinePath = join(directory, 'orchestrator-deadline.json');
+    const configuredDeadline = Date.now() + plan.runMs;
+    const savedDeadline = existsSync(deadlinePath) ? Number(JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline) : configuredDeadline;
+    if (!Number.isSafeInteger(savedDeadline) || savedDeadline <= Date.now()) throw Error('Persisted run deadline has expired; refusing to extend this run');
+    const runDeadline = Math.min(configuredDeadline, savedDeadline);
     stopTimer = setTimeout(stop, Math.max(0, plan.runMs));
     // A rejected reservation commits halted=true before the requesting worker
     // exits. Watch the atomic ledger so every sibling stops immediately too.
@@ -107,7 +111,42 @@ async function main() {
     spendMonitor.unref();
     const baseEnv = { ...process.env, FACTORIO_RUN_DEADLINE: String(runDeadline), FACTORIO_RUN_SPEND_FILE: spendFile,
       FACTORIO_RUN_BUDGET_USD: plan.maxRunSpendUsd };
-    const results: Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>[] = [];
+    type ChildResult = { role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null };
+    const results: Promise<ChildResult>[] = [];
+    const targets = plan.workers.map(worker => ({ worker, taskId: worker.taskId }));
+    let actorsReady = false, prematureActorExit: string | undefined;
+    // Register each actor identity first. Workers stay idle until their directed
+    // task announcement arrives, allowing the overseer to message real recipients.
+    for (const { worker, taskId } of targets) {
+      const promptFile = promptFiles[worker.index - 1];
+      const log = openSync(join(directory, `agent-${worker.index}.log`), 'a', 0o600);
+      const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
+        env: { ...baseEnv, AGENT_MODEL: plan.actorModel, AGENT_EFFORT: plan.actorEffort, FACTORIO_TASK_ID: taskId,
+          FACTORIO_OBJECTIVE: 'Wait for the Astra overseer to create and announce your run-scoped rocket task before acting.',
+          ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
+      closeSync(log); children.push(child);
+      results.push(new Promise(resolveResult => {
+        let resolved = false;
+        child.once('error', () => {
+          prematureActorExit = `Actor ${worker.actorId} process failed to start`;
+          if (!resolved) { resolved = true; resolveResult({ role: 'actor', actorId: worker.actorId, code: 1 }); }
+        });
+        child.once('exit', (code, signal) => {
+          if (!actorsReady && (code !== null || signal)) prematureActorExit = `Actor ${worker.actorId} exited before overseer assignment`;
+          if (!resolved) { resolved = true; resolveResult({ role: 'actor', actorId: worker.actorId, code, signal }); }
+        });
+      }));
+    }
+    const registrationDeadline = Math.min(runDeadline, Date.now() + 30000);
+    while (!stopping) {
+      const registered = targets.every(({ worker }) => board.snapshot().participants.some(participant => participant.name === worker.sender));
+      if (registered) break;
+      if (prematureActorExit) throw Error(prematureActorExit);
+      if (Date.now() >= registrationDeadline) throw Error('Five Luna actor identities did not register before the startup deadline');
+      await new Promise(r => setTimeout(r, 100));
+    }
+    if (stopping) throw Error('Run stopped before actor registration completed');
+
     const coordinatorLog = openSync(join(directory, 'orchestrator.log'), 'a', 0o600);
     const orchestrator = spawn(process.execPath, [orchestratorScript, world, runId], {
       env: { ...baseEnv, AGENT_MODEL: plan.orchestrator.model, AGENT_EFFORT: plan.orchestrator.effort,
@@ -115,15 +154,14 @@ async function main() {
       stdio: ['ignore', coordinatorLog, coordinatorLog] });
     closeSync(coordinatorLog); children.push(orchestrator);
     let orchestratorExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
-    const orchestratorResult = new Promise<{ role: 'actor' | 'orchestrator'; code: number | null; signal?: string | null }>((resolveResult, reject) => {
-      orchestrator.once('error', reject);
+    const orchestratorResult = new Promise<ChildResult>(resolveResult => {
+      orchestrator.once('error', () => { orchestratorExit = { code: 1, signal: null }; resolveResult({ role: 'orchestrator', code: 1 }); });
       orchestrator.once('exit', (code, signal) => { orchestratorExit = { code, signal }; resolveResult({ role: 'orchestrator', code, signal }); });
     });
     results.push(orchestratorResult);
 
-    // Hold all actor processes until the Astra overseer has created and announced
-    // one specific subtask for every actor. The launcher never creates these tasks.
-    const targets = plan.workers.map(worker => ({ worker, taskId: worker.taskId }));
+    // Hold all actors idle until Astra creates each task and sends its directed
+    // announcement. The launcher never creates these actor tasks.
     const assignmentDeadline = Math.min(runDeadline, Date.now() + plan.orchestrator.maxCalls * Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000) + 10000);
     while (!stopping) {
       const snapshot = board.snapshot();
@@ -139,26 +177,13 @@ async function main() {
         return Boolean(task && announced);
       });
       if (assigned) break;
+      if (prematureActorExit) throw Error(prematureActorExit);
       if (orchestratorExit) throw Error(`Astra overseer exited before creating all five actor subtasks (${orchestratorExit.code ?? orchestratorExit.signal})`);
       if (Date.now() >= assignmentDeadline) throw Error('Astra overseer did not create and announce all five actor subtasks before the startup deadline');
       await new Promise(r => setTimeout(r, 250));
     }
     if (stopping) throw Error('Run stopped before overseer task assignment completed');
-
-    for (const { worker, taskId } of targets) {
-      const task = board.snapshot().tasks.find(row => row.id === taskId);
-      if (!task || (task.assignee && task.assignee !== worker.sender)) throw Error(`Overseer task ${taskId} has unexpected ownership`);
-      const promptFile = promptFiles[worker.index - 1];
-      const log = openSync(join(directory, `agent-${worker.index}.log`), 'a', 0o600);
-      const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
-        env: { ...baseEnv, AGENT_MODEL: plan.actorModel, AGENT_EFFORT: plan.actorEffort, FACTORIO_TASK_ID: taskId,
-          FACTORIO_OBJECTIVE: `${task.title}\n${task.details}`,
-          ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
-      closeSync(log); children.push(child);
-      results.push(new Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>((resolveResult, reject) => {
-        child.once('error', reject); child.once('exit', (code, signal) => resolveResult({ role: 'actor', actorId: worker.actorId, code, signal }));
-      }));
-    }
+    actorsReady = true;
     const completed = await Promise.all(results);
     console.log(JSON.stringify({ runId, results: completed, spend: spend.snapshot(), logs: directory }));
     if (completed.some(r => r.code !== 0)) process.exitCode = 1;

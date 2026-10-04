@@ -88,8 +88,34 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
   try {
     await waitReady();
     await board.register(scope.sender, 'inference-worker', `actor ${scope.actorId}; run ${scope.runId}`);
-    const initial = board.snapshot().tasks.find(t => t.id === o.taskId);
-    if (!initial) throw Error('Missing actor task');
+    let initial: ReturnType<typeof board.snapshot>['tasks'][number] | null = null;
+    while (!initial) {
+      withinRun(); await waitReady();
+      const current = board.snapshot();
+      const candidate = current.tasks.find(t => t.id === o.taskId);
+      const announced = current.messages.some(row => {
+        if (row.sender !== `${scope.runId}-orchestrator` || row.recipient !== scope.sender) return false;
+        try {
+          const body = JSON.parse(row.body);
+          return body.runId === scope.runId && body.kind === 'orchestrator_task' && body.payload?.taskId === o.taskId;
+        } catch { return false; }
+      });
+      const allActorsAssigned = Array.from({ length: 5 }, (_, index) => {
+        const actor = `${scope.runId}-agent-${index + 1}`, taskId = `${scope.runId}.subtask-orchestrator-${index + 1}`;
+        const taskExists = current.tasks.some(task => task.id === taskId && task.area === 'factorio-orchestration');
+        const messageExists = current.messages.some(row => {
+          if (row.sender !== `${scope.runId}-orchestrator` || row.recipient !== actor) return false;
+          try {
+            const body = JSON.parse(row.body);
+            return body.runId === scope.runId && body.kind === 'orchestrator_task' && body.payload?.taskId === taskId;
+          } catch { return false; }
+        });
+        return taskExists && messageExists;
+      }).every(Boolean);
+      if (candidate && announced && allActorsAssigned) { initial = candidate; break; }
+      await sleep(100);
+    }
+    const assignedObjective = [initial.title, initial.details].filter(Boolean).join('\n');
     if (initial.status === 'done' && initial.assignee === scope.sender) {
       const observed = observe();
       const won = o.goal === 'rocket' ? Number((o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches) >= 1 : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates;
@@ -128,7 +154,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         if (state.calls >= o.maxCalls) throw Error('Inference call budget exhausted');
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
-        const context = { ...scope, objective: o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
+        const context = { ...scope, objective: assignedObjective || o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
           status: o.game({ kind: 'status' }), reservations: board.snapshot().reservations
             .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
             .map(r => ({ path: r.path, holder: r.holder })),
@@ -314,7 +340,7 @@ export async function inferenceWorkerMain(): Promise<void> {
   const spendFile = process.env.FACTORIO_RUN_SPEND_FILE;
   if (!spendFile) throw Error('FACTORIO_RUN_SPEND_FILE is required; refusing uncapped model calls');
   const spend = createFactorioSpendGuard({ path: spendFile, runId, worldId: manifest.worldId, historyId: manifest.historyId,
-    capUsd: process.env.FACTORIO_RUN_BUDGET_USD ?? '500' });
+    capUsd: process.env.FACTORIO_RUN_BUDGET_USD ?? '400' });
   const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? manifest.boardHost ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
     token: existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8') : undefined, onToken: token => atomicSaveToken(tokenPath, token) });
   const controller = new AbortController();
