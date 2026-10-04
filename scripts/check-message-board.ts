@@ -74,8 +74,8 @@ try {
   await run(cli, [...cliArgs, 'login', '--token', publisher.token], true);
   const publish = (module: string, database: string) => run(cli, [...cliArgs, 'publish', '--module-path', module, '--server', origin, '--no-config', '--yes', database]);
   await publish('message-board', 'board-one'); await publish('message-board', 'board-two'); await publish('coord', 'board-development');
-  function client(database: string) {
-    const result = new MessageBoardClient({ uri, database }); clients.push(result); result.start(); return result;
+  function client(database: string, options: { historyWindowMs?: number; historyRefreshMs?: number } = {}) {
+    const result = new MessageBoardClient({ uri, database, ...options }); clients.push(result); result.start(); return result;
   }
   const alice = client('board-one'), bob = client('board-one'), intruder = client('board-one');
   const other = client('board-two'), dev = client('board-development'), devIntruder = client('board-development');
@@ -141,9 +141,32 @@ try {
   assert.equal(other.snapshot().messages.length, 0, 'message isolation');
   await assert.rejects(other.post('alice', 'Cross-board recipient must fail', 'bob'));
   assert.equal(other.snapshot().tasks[0].status, 'open', 'task isolation');
+  const bounded = client('board-one', { historyWindowMs: 2000, historyRefreshMs: 100 });
+  await wait(() => bounded.ready || bounded.state.startsWith('Connection unavailable'), 'bounded history subscription');
+  assert.equal(bounded.ready, true, bounded.state);
+  await alice.createTask('alice', { id: 'history-terminal', title: 'Expires from recent task view' });
+  await alice.claimTask('alice', 'history-terminal');
+  await alice.updateTask('alice', 'history-terminal', 'done');
+  await alice.post('alice', 'Expires from recent message view', '', 'history-terminal');
+  await alice.createTask('alice', { id: 'history-active', title: 'Old active task stays visible' });
+  await alice.setTaskPriority('alice', 'history-active', 'urgent');
+  await alice.reserve('alice', 'history/active', 'history-active');
+  await wait(() => bounded.snapshot().tasks.some(task => task.id === 'history-terminal')
+    && bounded.snapshot().tasks.some(task => task.id === 'history-active' && task.priority === 'urgent')
+    && bounded.snapshot().messages.some(message => message.body === 'Expires from recent message view')
+    && bounded.snapshot().reservations.some(lock => lock.path === 'history/active'), 'bounded history receives new rows');
+  await wait(() => !bounded.snapshot().tasks.some(task => task.id === 'history-terminal')
+    && !bounded.snapshot().messages.some(message => message.body === 'Expires from recent message view')
+    && bounded.snapshot().tasks.some(task => task.id === 'history-active' && task.priority === 'urgent')
+    && bounded.snapshot().reservations.some(lock => lock.path === 'history/active'), 'history window advances but keeps active task and lock', 15_000);
+  await alice.setTaskPriority('alice', 'history-terminal', 'high');
+  await wait(() => bounded.snapshot().tasks.some(task => task.id === 'history-terminal' && task.priority === 'high'), 'recent priority change brings its task back into view');
+  await wait(() => !bounded.snapshot().tasks.some(task => task.id === 'history-terminal'), 'old task leaves after its priority update ages out', 15_000);
+  console.log('PASS rolling history subscription drops expired terminal/message rows, shows recent priority changes and keeps active tasks/locks');
   const identity = alice.identity;
   alice.stop(); assert.equal(alice.snapshot().messages.length, 0, 'no stale disconnected snapshot');
-  alice.start(); await wait(() => alice.ready && alice.snapshot().messages.length === 1, 'restart recovery');
+  alice.start(); await wait(() => alice.ready && alice.snapshot().messages.some(message => message.body === 'Shared only inside board one')
+    && alice.snapshot().messages.some(message => message.body === 'Expires from recent message view'), 'restart recovery');
   assert.equal(alice.identity, identity, 'restart retains identity');
   assert.equal(alice.snapshot().tasks.find(t => t.id === 'same-id')!.priority, 'urgent', 'priority survives reconnect');
   // Publishing the shared implementation again preserves compatible development history.
@@ -151,10 +174,11 @@ try {
   await wait(() => dev.ready && dev.snapshot().tasks.length === 1, 'development update preserves history');
   await stop(server); await wait(() => clients.every(c => !c.ready), 'disconnect detection');
   await startServer(); await wait(() => clients.every(c => c.ready), 'automatic reconnect', 40_000);
-  assert.equal(alice.identity, identity); assert.equal(bob.snapshot().messages.length, 1);
+  assert.equal(alice.identity, identity); assert.equal(bob.snapshot().messages.length, 2);
   assert.equal(other.snapshot().messages.length, 0); assert.match(dev.snapshot().tasks[0].details, /push when finished/);
   assert.equal(dev.snapshot().tasks[0].priority, 'low', 'priority survives database restart and module republish');
-  assert.equal(alice.snapshot().tasks[0].id, 'same-id', 'urgent sorts before normal tasks');
+  assert.equal(alice.snapshot().tasks[0].priority, 'urgent', 'urgent tasks sort before lower priorities');
+  assert.equal(alice.snapshot().tasks.find(task => task.id === 'same-id')?.priority, 'urgent');
   const config = JSON.parse(readFileSync(join(root, 'message-board/instances.json'), 'utf8'));
   config.boards.push({ id: 'new-application', label: 'New application', database: 'new-board', modulePath: 'message-board' });
   assert.equal(parseBoardConfig(config).boards.length, 5, 'new application only needs configuration');

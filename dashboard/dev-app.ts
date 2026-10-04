@@ -5,6 +5,10 @@ import { DbConnection } from './coord_bindings/index.js';
 import type { DevTask } from './coord_bindings/types.js';
 import { dashboardConfig, dashboardTokenKey } from './config.js';
 
+const HISTORY_WINDOW_MS = 30 * 24 * 60 * 60_000;
+const HISTORY_REFRESH_MS = 60 * 60_000;
+const MAX_RENDERED_ROWS = 100;
+
 const root = document.querySelector<HTMLElement>('#app')!;
 const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm-coord');
 const TOKEN_KEY = dashboardTokenKey('development', HOST, DATABASE);
@@ -18,6 +22,7 @@ let selectedTask = '';
 let generation = 0;
 let retry = 0;
 let timer: number | undefined;
+let historyTimer: number | undefined;
 let queued = false;
 let sessionName = stored(NAME_KEY) ?? '';
 let sessionToken = stored(TOKEN_KEY);
@@ -28,6 +33,7 @@ let draftTask = '';
 let sending = false;
 let actionPending = false;
 let error = '';
+let historySubscription: { isActive(): boolean; unsubscribe(): void } | undefined;
 
 function stored(key: string): string | undefined {
   try { return localStorage.getItem(key) ?? undefined; } catch { return undefined; }
@@ -57,6 +63,21 @@ function field(label: string, value: string): HTMLElement {
 function pill(text: string): HTMLElement { return node('span', `pill ${text}`, text); }
 function when(value: { toDate(): Date }): string { return value.toDate().toLocaleString(); }
 function millis(value: { toDate(): Date }): number { return value.toDate().getTime(); }
+function takeTop<T>(rows: Iterable<T>, limit: number, compare: (a: T, b: T) => number): T[] {
+  const result: T[] = [];
+  for (const row of rows) {
+    let low = 0; let high = result.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (compare(result[middle], row) <= 0) low = middle + 1;
+      else high = middle;
+    }
+    if (low >= limit) continue;
+    result.splice(low, 0, row);
+    if (result.length > limit) result.pop();
+  }
+  return result;
+}
 function queueRender(): void {
   if (queued) return;
   queued = true;
@@ -123,18 +144,33 @@ function render(): void {
     return;
   }
   const conn = connection;
-  const tasks = [...conn.db.devTask.iter()].map(task => ({ ...task, priority: conn.db.taskPriority.taskId.find(task.id)?.priority ?? 'normal' })).sort(comparePriority);
-  const sessions = [...conn.db.session.iter()].sort((a, b) => millis(b.lastSeen) - millis(a.lastSeen));
-  const messages = [...conn.db.devMessage.iter()].sort((a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
-  const locks = [...conn.db.fileLock.iter()].filter(lock => millis(lock.expiresAt) > Date.now()).sort((a, b) => a.path.localeCompare(b.path));
-  const shownTasks = tasks.filter(task => filter === 'all' || (filter === 'active' ? ['open', 'claimed', 'blocked'].includes(task.status) : task.status === filter));
+  const taskCounts = { open: 0, claimed: 0, blocked: 0 };
+  let filteredTaskCount = 0;
+  const taskRows = function* () {
+    for (const task of conn.db.devTask.iter()) {
+      if (task.status in taskCounts) taskCounts[task.status as keyof typeof taskCounts]++;
+      if (!(filter === 'all' || (filter === 'active' ? ['open', 'claimed', 'blocked'].includes(task.status) : task.status === filter))) continue;
+      filteredTaskCount++;
+      yield { ...task, priority: conn.db.taskPriority.taskId.find(task.id)?.priority ?? 'normal' };
+    }
+  };
+  const shownTasks = takeTop(taskRows(), MAX_RENDERED_ROWS, comparePriority);
+  let sessionCount = 0;
+  const sessionRows = function* () { for (const session of conn.db.session.iter()) { sessionCount++; yield session; } };
+  const sessions = takeTop(sessionRows(), MAX_RENDERED_ROWS, (a, b) => millis(b.lastSeen) - millis(a.lastSeen));
+  let messageCount = 0;
+  const messageRows = function* () { for (const message of conn.db.devMessage.iter()) { messageCount++; yield message; } };
+  const messages = takeTop(messageRows(), MAX_RENDERED_ROWS, (a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
+  const activeLocks = function* () { for (const lock of conn.db.fileLock.iter()) if (millis(lock.expiresAt) > Date.now()) yield lock; };
+  let lockCount = 0;
+  const locks = takeTop((function* () { for (const lock of activeLocks()) { lockCount++; yield lock; } })(), MAX_RENDERED_ROWS, (a, b) => a.path.localeCompare(b.path));
   const layout = node('div', 'layout board-layout');
   const sidebar = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
   put(brand, node('div', 'brand-mark', 'AS'), 'AGENT SWARM');
   put(sidebar, brand, node('div', 'side-label', 'DEVELOPMENT BOARD'));
   const navigation = node('div', 'run-list');
-  for (const [value, label] of [['active', 'Active tasks'], ['open', 'Open'], ['claimed', 'In progress'], ['blocked', 'Blocked'], ['done', 'Completed'], ['all', 'All tasks']]) {
+  for (const [value, label] of [['active', 'Active tasks'], ['open', 'Open'], ['claimed', 'In progress'], ['blocked', 'Blocked'], ['done', 'Recently completed'], ['all', 'Recent & active']]) {
     const nav = node('button', `run-item ${filter === value ? 'selected' : ''}`, label);
     nav.type = 'button';
     nav.addEventListener('click', () => { filter = value; queueRender(); });
@@ -156,7 +192,7 @@ function render(): void {
   put(header, title, controls);
   put(main, header);
   const stats = node('div', 'stats');
-  for (const [label, count] of [['Sessions', sessions.length], ['Open tasks', tasks.filter(t => t.status === 'open').length], ['In progress', tasks.filter(t => t.status === 'claimed').length], ['Blocked', tasks.filter(t => t.status === 'blocked').length], ['File locks', locks.length], ['Messages', messages.length]]) {
+  for (const [label, count] of [['Sessions · 30 days', sessionCount], ['Open tasks', taskCounts.open], ['In progress', taskCounts.claimed], ['Blocked', taskCounts.blocked], ['Active file locks', lockCount], ['Messages · 30 days', messageCount]]) {
     const stat = node('div', 'stat');
     put(stat, node('span', 'stat-label', String(label)), node('strong', '', String(count)));
     put(stats, stat);
@@ -166,7 +202,8 @@ function render(): void {
   const columns = node('div', 'columns');
   const primary = node('div', 'column');
   const secondary = node('div', 'column');
-  const taskPanel = panel('Task board', `${shownTasks.length} tasks · ${filter} · highest priority first`);
+  const visibleCount = Math.min(filteredTaskCount, MAX_RENDERED_ROWS);
+  const taskPanel = panel('Task board', `Showing ${visibleCount} of ${filteredTaskCount} recent/active tasks · ${filter} · highest priority first`);
   put(taskPanel, input('Your session name', sessionName, value => { sessionName = value; save(NAME_KEY, value); queueRender(); }));
   if (!shownTasks.length) empty(taskPanel, 'No tasks in this view.');
   const cards = node('div', 'cards');
@@ -202,10 +239,10 @@ function render(): void {
   }
   put(taskPanel, cards);
   put(primary, taskPanel);
-  const messagePanel = panel('Live messages', 'Development coordination history');
+  const messagePanel = panel('Live messages', `Last 30 days · showing newest ${messages.length} of ${messageCount}`);
   const stream = node('div', 'timeline');
   if (!messages.length) empty(stream, 'No messages yet.');
-  for (const message of messages.slice(0, 100)) {
+  for (const message of messages) {
     const event = node('article', 'event');
     const content = node('div', 'event-body');
     const top = node('div', 'event-top');
@@ -235,7 +272,7 @@ function render(): void {
   });
   put(messagePanel, form);
   put(secondary, messagePanel);
-  const sessionPanel = panel('Sessions', 'Most recently seen first');
+  const sessionPanel = panel('Sessions', `Last 30 days · showing ${sessions.length} of ${sessionCount}, most recently seen first`);
   for (const session of sessions) {
     const card = node('article', 'order-card');
     const head = node('div', 'card-head');
@@ -245,7 +282,7 @@ function render(): void {
   }
   if (!sessions.length) empty(sessionPanel, 'No registered sessions.');
   put(primary, sessionPanel);
-  const lockPanel = panel('File locks', 'Active reservations');
+  const lockPanel = panel('File locks', `Active reservations · showing ${locks.length} of ${lockCount}`);
   for (const lock of locks) {
     const card = node('article', 'order-card');
     put(card, node('strong', 'mono', lock.path), field('Held by', lock.holder), field('Task', lock.taskId), field('Expires', when(lock.expiresAt)));
@@ -269,11 +306,51 @@ function reconnect(reason: unknown, current: number): void {
     try { localStorage.removeItem(TOKEN_KEY); } catch { /* In-memory reset still works. */ }
   }
   if (timer !== undefined) return;
+  if (historyTimer !== undefined) window.clearTimeout(historyTimer);
+  historyTimer = undefined;
+  historySubscription = undefined;
   ready = false;
   connection = undefined;
   state = `Development connection interrupted: ${String(reason)}. Reconnecting…`;
   queueRender();
   timer = window.setTimeout(() => { timer = undefined; connect(); }, Math.min(30_000, 1000 * 2 ** Math.min(retry++, 5)));
+}
+function boardQueries(now: number): string[] {
+  const cutoff = new Date(now - HISTORY_WINDOW_MS).toISOString();
+  const current = new Date(now).toISOString();
+  const visibleTask = `(dev_task.updated_at >= '${cutoff}' OR dev_task.status = 'open' OR dev_task.status = 'claimed' OR dev_task.status = 'blocked')`;
+  return [
+    `SELECT * FROM session WHERE last_seen >= '${cutoff}'`,
+    `SELECT * FROM dev_task WHERE updated_at >= '${cutoff}' OR status = 'open' OR status = 'claimed' OR status = 'blocked'`,
+    `SELECT * FROM dev_message WHERE created_at >= '${cutoff}'`,
+    `SELECT * FROM file_lock WHERE expires_at > '${current}'`,
+    `SELECT task_priority.* FROM task_priority JOIN dev_task ON task_priority.task_id = dev_task.id WHERE ${visibleTask} OR task_priority.updated_at >= '${cutoff}'`,
+    `SELECT dev_task.* FROM dev_task JOIN task_priority ON task_priority.task_id = dev_task.id WHERE task_priority.updated_at >= '${cutoff}'`,
+  ];
+}
+function subscribeBoard(current: number, conn: DbConnection): void {
+  const previous = historySubscription;
+  let next: { isActive(): boolean; unsubscribe(): void } | undefined;
+  next = conn.subscriptionBuilder()
+    .onApplied(() => {
+      if (current !== generation || connection !== conn) {
+        if (next?.isActive()) next.unsubscribe();
+        return;
+      }
+      historySubscription = next;
+      ready = true;
+      retry = 0;
+      if (previous && previous !== next && previous.isActive()) previous.unsubscribe();
+      queueRender();
+      if (historyTimer !== undefined) window.clearTimeout(historyTimer);
+      historyTimer = window.setTimeout(() => {
+        historyTimer = undefined;
+        if (current === generation && connection === conn) subscribeBoard(current, conn);
+      }, HISTORY_REFRESH_MS);
+    })
+    .onError(reason => { if (current === generation && connection === conn) { conn.disconnect(); reconnect(reason, current); } })
+    .subscribe(boardQueries(Date.now()));
+  historySubscription = next;
 }
 function connect(): void {
   const current = ++generation;
@@ -292,10 +369,7 @@ function connect(): void {
       for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock, conn.db.taskPriority]) {
         table.onInsert(queueRender); table.onUpdate(queueRender); table.onDelete(queueRender);
       }
-      conn.subscriptionBuilder()
-        .onApplied(() => { if (current === generation) { ready = true; queueRender(); } })
-        .onError(reason => { conn.disconnect(); reconnect(reason, current); })
-        .subscribe(['SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock', 'SELECT * FROM task_priority']);
+      subscribeBoard(current, conn);
     })
     .onConnectError((_ctx, reason) => reconnect(reason, current))
     .onDisconnect((_ctx, reason) => reconnect(reason, current))

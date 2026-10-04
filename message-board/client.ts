@@ -13,32 +13,97 @@ export type BoardClientOptions = {
   uri: string; database: string; token?: string;
   onToken?: (token: string) => void;
   onChange?: () => void;
+  /** Restrict browser snapshots to recent history while keeping active tasks visible. */
+  historyWindowMs?: number;
+  /** Reapply the moving history window without reconnecting the database connection. */
+  historyRefreshMs?: number;
 };
 
 /** Shared Node/browser client. It contains no application names, DOM, or storage policy. */
 export class MessageBoardClient {
   private connection?: DbConnection;
+  private subscription?: { isActive(): boolean; unsubscribe(): void };
   private generation = 0;
   private retry = 0;
   private timer?: ReturnType<typeof setTimeout>;
+  private historyTimer?: ReturnType<typeof setTimeout>;
   private token?: string;
   ready = false;
   state = 'Disconnected';
   identity = '';
-  constructor(private options: BoardClientOptions) { this.token = options.token; }
+  constructor(private options: BoardClientOptions) {
+    this.token = options.token;
+    if (options.historyWindowMs !== undefined && (!Number.isSafeInteger(options.historyWindowMs) || options.historyWindowMs <= 0)) {
+      throw new Error('historyWindowMs must be a positive safe integer');
+    }
+    if (options.historyRefreshMs !== undefined && (!Number.isSafeInteger(options.historyRefreshMs) || options.historyRefreshMs <= 0)) {
+      throw new Error('historyRefreshMs must be a positive safe integer');
+    }
+  }
   private changed = (): void => { this.options.onChange?.(); };
+  private historyQueries(now: number): string[] {
+    const windowMs = this.options.historyWindowMs;
+    if (windowMs === undefined) return [
+      'SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock', 'SELECT * FROM task_priority',
+    ];
+    if (!Number.isSafeInteger(windowMs) || windowMs <= 0) throw new Error('historyWindowMs must be a positive safe integer');
+    const cutoff = new Date(now - windowMs).toISOString();
+    const current = new Date(now).toISOString();
+    const taskScope = `(dev_task.updated_at >= '${cutoff}' OR dev_task.status = 'open' OR dev_task.status = 'claimed' OR dev_task.status = 'blocked')`;
+    return [
+      `SELECT * FROM session WHERE last_seen >= '${cutoff}'`,
+      `SELECT * FROM dev_task WHERE updated_at >= '${cutoff}' OR status = 'open' OR status = 'claimed' OR status = 'blocked'`,
+      `SELECT * FROM dev_message WHERE created_at >= '${cutoff}'`,
+      `SELECT * FROM file_lock WHERE expires_at > '${current}'`,
+      `SELECT task_priority.* FROM task_priority JOIN dev_task ON task_priority.task_id = dev_task.id WHERE ${taskScope} OR task_priority.updated_at >= '${cutoff}'`,
+      `SELECT dev_task.* FROM dev_task JOIN task_priority ON task_priority.task_id = dev_task.id WHERE task_priority.updated_at >= '${cutoff}'`,
+    ];
+  }
+  private subscribe(current: number, connection: DbConnection): void {
+    const previous = this.subscription;
+    let next: { isActive(): boolean; unsubscribe(): void } | undefined;
+    next = connection.subscriptionBuilder()
+      .onApplied(() => {
+        if (current !== this.generation || this.connection !== connection) {
+          if (next?.isActive()) next.unsubscribe();
+          return;
+        }
+        this.subscription = next;
+        this.ready = true;
+        this.retry = 0;
+        this.state = 'Live';
+        if (previous && previous !== next && previous.isActive()) previous.unsubscribe();
+        this.changed();
+        if (this.options.historyWindowMs !== undefined) {
+          clearTimeout(this.historyTimer);
+          const refreshMs = this.options.historyRefreshMs ?? 60 * 60_000;
+          this.historyTimer = setTimeout(() => {
+            this.historyTimer = undefined;
+            if (current === this.generation && this.connection === connection) this.subscribe(current, connection);
+          }, refreshMs);
+        }
+      })
+      .onError(ctx => {
+        if (current === this.generation && this.connection === connection) this.failed(current, ctx.event ?? 'Subscription failed');
+      })
+      .subscribe(this.historyQueries(Date.now()));
+    this.subscription = next;
+  }
+  private failed(current: number, reason: unknown): void {
+    if (current !== this.generation) return;
+    ++this.generation;
+    this.ready = false;
+    clearTimeout(this.historyTimer);
+    this.historyTimer = undefined;
+    this.subscription = undefined;
+    const old = this.connection; this.connection = undefined; old?.disconnect();
+    this.state = `Connection unavailable: ${String(reason)}. Retrying…`; this.changed();
+    this.timer = setTimeout(() => { this.timer = undefined; this.start(); }, Math.min(30_000, 1000 * 2 ** Math.min(this.retry++, 5)));
+  }
   start(): void {
     this.stop();
     const current = ++this.generation;
     this.state = 'Connecting…'; this.changed();
-    const failed = (reason: unknown) => {
-      if (current !== this.generation) return;
-      ++this.generation;
-      this.ready = false;
-      const old = this.connection; this.connection = undefined; old?.disconnect();
-      this.state = `Connection unavailable: ${String(reason)}. Retrying…`; this.changed();
-      this.timer = setTimeout(() => { this.timer = undefined; this.start(); }, Math.min(30_000, 1000 * 2 ** Math.min(this.retry++, 5)));
-    };
     this.connection = DbConnection.builder().withUri(this.options.uri).withDatabaseName(this.options.database).withToken(this.token)
       .onConnect((conn, identity, token) => {
         if (current !== this.generation) { conn.disconnect(); return; }
@@ -47,21 +112,22 @@ export class MessageBoardClient {
         for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock, conn.db.taskPriority]) {
           table.onInsert(this.changed); table.onUpdate(this.changed); table.onDelete(this.changed);
         }
-        conn.subscriptionBuilder()
-          .onApplied(() => { if (current === this.generation) { this.ready = true; this.retry = 0; this.state = 'Live'; this.changed(); } })
-          .onError(ctx => failed(ctx.event ?? 'Subscription failed'))
-          .subscribe(['SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock', 'SELECT * FROM task_priority']);
-      }).onConnectError((_ctx, error) => failed(error)).onDisconnect((_ctx, error) => failed(error)).build();
+        this.connection = conn;
+        this.subscribe(current, conn);
+      }).onConnectError((_ctx, error) => this.failed(current, error)).onDisconnect((_ctx, error) => this.failed(current, error)).build();
   }
   stop(): void {
     ++this.generation; clearTimeout(this.timer); this.timer = undefined;
+    clearTimeout(this.historyTimer); this.historyTimer = undefined; this.subscription = undefined;
     this.ready = false; this.connection?.disconnect(); this.connection = undefined;
     this.state = 'Disconnected';
   }
   snapshot(): BoardSnapshot {
     if (!this.ready || !this.connection) return emptySnapshot();
     const db = this.connection.db;
-    return { tasks: [...db.devTask.iter()].map(task => ({ ...task, priority: (db.taskPriority.taskId.find(task.id)?.priority ?? 'normal') as TaskPriority })).sort(comparePriority), participants: [...db.session.iter()], messages: [...db.devMessage.iter()], reservations: [...db.fileLock.iter()] };
+    const tasks = [...db.devTask.iter()].map(task => ({ ...task, priority: (db.taskPriority.taskId.find(task.id)?.priority ?? 'normal') as TaskPriority }));
+    tasks.sort(comparePriority);
+    return { tasks, participants: [...db.session.iter()], messages: [...db.devMessage.iter()], reservations: [...db.fileLock.iter()] };
   }
   private get reducers() {
     if (!this.ready || !this.connection) throw new Error('Board is disconnected; wait for the subscription snapshot');

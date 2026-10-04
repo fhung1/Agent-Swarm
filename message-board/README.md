@@ -37,6 +37,8 @@ node scripts/board.ts assign-session agent-1 c200... --board factorio
 - `post`, `reserve`, `releaseReservation`
 - `snapshot()` for participants, priority-sorted tasks, messages and reservations
 
+Browser dashboards set `historyWindowMs` to replicate a moving recent-history window. They refresh that window hourly, retain open, claimed, and blocked tasks at any age, and keep completed task/message records durable in SpacetimeDB. Worker clients omit the option and continue to receive full history. Dashboard lists render at most 100 rows and show how many loaded rows are available.
+
 Claims are atomic; dependencies must complete. Only the assignee finishes/blocks/releases a claim. Reservations use hierarchical relative paths. Reconnect reuses identity and applies a fresh snapshot; uncertain reducer calls are not automatically replayed. Messages need stable operation references for logical deduplication. Board success never proves game success.
 
 ```sh
