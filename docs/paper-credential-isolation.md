@@ -1,0 +1,9 @@
+# Paper credential boundary
+
+The paper executor is the only long-lived worker given `ALPACA_API_KEY` and `ALPACA_API_SECRET`. The risk worker and market-data adapter require `ALPACA_READ_API_KEY` and `ALPACA_READ_API_SECRET`; `pilot:prepare` and swarm account discovery also use the read pair. The supervisor removes both pairs from unrelated child environments and rejects a read key ID that equals the order key ID. The preflight reports missing variables and the same-key mistake without printing values.
+
+Provision the read pair with provider-enforced permission to read paper account, positions, orders, market clock and selected market data, and **no permission to submit, cancel or modify orders**. Check the permission grant in Alpaca's account management before operating the swarm. The variable name and a different key ID alone do not make a credential read-only. If this paper account cannot issue such a credential, keep the risk and market-data workers stopped; add a read service or supported read-only OAuth flow before paper execution.
+
+Alpaca documents [read-only OAuth access for its Trading API](https://docs.alpaca.markets/us/docs/using-oauth2-and-trading-api). Its [fine-grained key controls](https://docs.alpaca.markets/us/docs/credential-management) are documented for the **Broker API**, so their availability should not be assumed for a Trading API paper account. The current adapter uses API-key headers, not OAuth. No live-trading endpoint or credential is supported.
+
+The local supervisor process inherits the operator shell's environment while it launches children. Keep that shell and host restricted; child-process isolation does not remove credentials from the parent. Run `npm run pilot:preflight` after setting both pairs, then inspect `npm run swarm -- plan` before starting. The preflight confirms names and distinct key IDs; it cannot verify Alpaca's actual permission grant or market-data entitlement.

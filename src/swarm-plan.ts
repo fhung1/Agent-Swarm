@@ -176,7 +176,7 @@ export function planProcesses(config: SwarmConfig): ProcessSpec[] {
   }
   if (config.agents.risk.count) processes.push({
     name: `${config.namePrefix}-risk-1`, role: 'risk', script: 'risk-worker.js', args: [],
-    env: { ...base, ALPACA_DATA_FEED: config.feed }, secrets: ['ALPACA_API_KEY', 'ALPACA_API_SECRET'],
+    env: { ...base, ALPACA_DATA_FEED: config.feed }, secrets: ['ALPACA_READ_API_KEY', 'ALPACA_READ_API_SECRET'],
     accountAccess: true, tokenFileEnv: 'AGENT_TOKEN_FILE',
   });
   if (config.agents.executor.count) processes.push({
@@ -186,7 +186,7 @@ export function planProcesses(config: SwarmConfig): ProcessSpec[] {
   if (config.marketData) processes.push({
     name: `${config.namePrefix}-market-data`, role: 'market_data', script: 'alpaca-paper-adapter.js', args: [],
     env: { ...base, ALPACA_DATA_FEED: config.feed, ALPACA_SYMBOLS: config.marketData.symbols.join(',') },
-    secrets: ['ALPACA_API_KEY', 'ALPACA_API_SECRET'], periodicSeconds: config.marketData.everySeconds,
+    secrets: ['ALPACA_READ_API_KEY', 'ALPACA_READ_API_SECRET'], periodicSeconds: config.marketData.everySeconds,
     accountAccess: true, tokenFileEnv: 'SPACETIMEDB_TOKEN_FILE',
   });
   if (config.research && config.research.evidence !== 'none') processes.push({
@@ -218,8 +218,11 @@ export function researchSymbolEnv(ingestor: ProcessSpec, symbol: string): Record
 }
 
 export function scopedProcessEnv(process:ProcessSpec,base:Record<string,string|undefined>):Record<string,string|undefined>{
+  if (base.ALPACA_API_KEY?.trim() && base.ALPACA_READ_API_KEY?.trim() && base.ALPACA_API_KEY === base.ALPACA_READ_API_KEY) {
+    throw new Error('Paper order and read credentials must use different Alpaca key IDs');
+  }
   const env={...base};
-  for(const key of ['ALPACA_API_KEY','ALPACA_API_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','ANTHROPIC_AUTH_TOKEN','SEC_USER_AGENT']){
+  for(const key of ['ALPACA_API_KEY','ALPACA_API_SECRET','ALPACA_READ_API_KEY','ALPACA_READ_API_SECRET','OPENAI_API_KEY','ANTHROPIC_API_KEY','ANTHROPIC_AUTH_TOKEN','SEC_USER_AGENT']){
     if(!process.secrets.includes(key)&&!(key==='ANTHROPIC_AUTH_TOKEN'&&process.secrets.includes('ANTHROPIC_API_KEY')))delete env[key];
   }
   return env;

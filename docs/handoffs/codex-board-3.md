@@ -19,4 +19,11 @@
 ## Factorio publication queue
 
 - `factorio-inference-supervision-publication`: replayed source commit `f6e5991` as `3d752ef` on current main. Root typecheck, the supervisor and launcher bundles, and four supervisor tests passed; pushing directly to main.
-- `factorio-production-demo-call-budget-publication`: replayed source `f6afec9` as `ba2f15c`, resolved the prompt conflict by keeping the current coordinate precision, and updated the runbooks with paid smoke and bounded production examples plus the supervisor build step. Root typecheck and 19 focused tests passed; direct main push is next.
+- `factorio-production-demo-call-budget-publication`: source `f6afec9` landed as `ba2f15c`; the runbook update was pushed as `2d41f0e`, and the board task is done. The prompt keeps the current coordinate precision. Root typecheck and 19 focused tests passed.
+
+## Paper credential publication
+
+- Status: implementation and isolated acceptance passed; rebase/push pending.
+- Source commits: `b65337e` and `60b6978` added dedicated read-key access to the adapter and risk worker. The source launcher still supplied order keys to both, so this publication also updates process planning, environment filtering, account discovery and preflight to use `ALPACA_READ_API_KEY`/`ALPACA_READ_API_SECRET` for reads. Same key IDs fail closed.
+- Checks: `npm run typecheck`, `npm run build`, focused plan/pilot tests, distinct/same-key preflight fixtures, and full Node 24 `scripts/check-all.ts` passed (198 unit tests plus isolated research, Phase 1 and executor acceptance).
+- Limit: this code cannot verify the provider's actual permission grant. The operator must confirm the read pair cannot place/cancel orders; if a restricted Trading API credential is unavailable, keep paper workers stopped and add a read service or supported OAuth read path. See `docs/paper-credential-isolation.md`.

@@ -42,8 +42,8 @@ test('pilot refuses incomplete sample and inconsistent executable plans', () => 
 });
 test('missing environment reports names only and supports explicit Anthropic auth token', () => {
   const c = parsePilotConfig(JSON.stringify(fixture()));
-  assert.deepEqual(missingPilotEnvironment(c, {}), ['ALPACA_API_KEY', 'ALPACA_API_SECRET', 'ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'SEC_USER_AGENT']);
-  const env = { ALPACA_API_KEY: 'sensitive', ALPACA_API_SECRET: 'sensitive', ANTHROPIC_AUTH_TOKEN: 'sensitive', OPENAI_API_KEY: 'sensitive', SEC_USER_AGENT: 'team contact@example.com' };
+  assert.deepEqual(missingPilotEnvironment(c, {}), ['ALPACA_API_KEY', 'ALPACA_API_SECRET', 'ALPACA_READ_API_KEY', 'ALPACA_READ_API_SECRET', 'ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN', 'OPENAI_API_KEY', 'SEC_USER_AGENT']);
+  const env = { ALPACA_API_KEY: 'sensitive', ALPACA_API_SECRET: 'sensitive', ALPACA_READ_API_KEY: 'read-only', ALPACA_READ_API_SECRET: 'read-only', ANTHROPIC_AUTH_TOKEN: 'sensitive', OPENAI_API_KEY: 'sensitive', SEC_USER_AGENT: 'team contact@example.com' };
   assert.deepEqual(missingPilotEnvironment(c, env), []);
   assert.deepEqual(missingPilotEnvironment(c, { ...env, ALPACA_API_SECRET: ' ' }), ['ALPACA_API_SECRET']);
 });

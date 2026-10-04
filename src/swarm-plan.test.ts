@@ -8,14 +8,20 @@ const config = (agents: object, extra: object = {}) => parseSwarmConfig(JSON.str
 const testSpend = (models: string[]) => ({pricingVersion:'unit-test-rates',models:models.map(model=>({model,
   inputUsdPerMillion:'1',cacheReadUsdPerMillion:'1',cacheWriteUsdPerMillion:'1',outputUsdPerMillion:'2'})),maxRunUsd:'10',maxWorkerUsd:'5'});
 
-test('research workers receive model secrets while broker services receive paper secrets',()=>{
-  const env={PATH:'/bin',ALPACA_API_KEY:'fake-paper',ALPACA_API_SECRET:'fake-secret',OPENAI_API_KEY:'fake-model',SEC_USER_AGENT:'fake-contact'};
+test('only the executor receives order credentials; read workers receive separate read credentials',()=>{
+  const env={PATH:'/bin',ALPACA_API_KEY:'fake-paper',ALPACA_API_SECRET:'fake-secret',ALPACA_READ_API_KEY:'fake-read',ALPACA_READ_API_SECRET:'fake-read-secret',OPENAI_API_KEY:'fake-model',SEC_USER_AGENT:'fake-contact'};
   const processes=planProcesses(config({coordinator:{count:1,brain:'codex'},analyst:{count:1,brain:'codex'},skeptic:{count:0},risk:{count:1},executor:{count:1}},
-    {spend:testSpend(['gpt-5.3-codex'])}));
+    {spend:testSpend(['gpt-5.3-codex']),marketData:{everySeconds:60,symbols:['AAPL']}}));
   const analyst=scopedProcessEnv(processes.find(p=>p.role==='analyst')!,env);
-  assert.equal(analyst.OPENAI_API_KEY,'fake-model');assert.equal(analyst.ALPACA_API_KEY,undefined);assert.equal(analyst.ALPACA_API_SECRET,undefined);assert.equal(analyst.SEC_USER_AGENT,undefined);
+  assert.equal(analyst.OPENAI_API_KEY,'fake-model');assert.equal(analyst.ALPACA_API_KEY,undefined);assert.equal(analyst.ALPACA_API_SECRET,undefined);assert.equal(analyst.ALPACA_READ_API_KEY,undefined);assert.equal(analyst.SEC_USER_AGENT,undefined);
   const executor=scopedProcessEnv(processes.find(p=>p.role==='executor')!,env);
-  assert.equal(executor.ALPACA_API_KEY,'fake-paper');assert.equal(executor.OPENAI_API_KEY,undefined);assert.equal(executor.PATH,'/bin');
+  assert.equal(executor.ALPACA_API_KEY,'fake-paper');assert.equal(executor.ALPACA_READ_API_KEY,undefined);assert.equal(executor.OPENAI_API_KEY,undefined);assert.equal(executor.PATH,'/bin');
+  for (const role of ['risk','market_data']) {
+    const reader=scopedProcessEnv(processes.find(p=>p.role===role)!,env);
+    assert.equal(reader.ALPACA_READ_API_KEY,'fake-read');assert.equal(reader.ALPACA_READ_API_SECRET,'fake-read-secret');
+    assert.equal(reader.ALPACA_API_KEY,undefined);assert.equal(reader.ALPACA_API_SECRET,undefined);
+  }
+  assert.throws(() => scopedProcessEnv(processes.find(p=>p.role==='risk')!,{...env,ALPACA_READ_API_KEY:env.ALPACA_API_KEY}),/different Alpaca key IDs/);
 });
 
 test('the shipped example fails closed until its model prices and ceilings are configured', () => {
@@ -37,7 +43,7 @@ test('agent counts expand into numbered processes per role', () => {
   assert.equal(analyst.env.RUN_ID, 'pilot-1');
   assert.deepEqual(analyst.secrets, ['OPENAI_API_KEY']);
   assert.equal(processes.find(p => p.role === 'skeptic')!.env.AGENT_BRAIN, 'rules');
-  assert.deepEqual(processes.find(p => p.role === 'risk')!.secrets, ['ALPACA_API_KEY', 'ALPACA_API_SECRET']);
+  assert.deepEqual(processes.find(p => p.role === 'risk')!.secrets, ['ALPACA_READ_API_KEY', 'ALPACA_READ_API_SECRET']);
 });
 
 test('optional specialists receive scoped access and coordinator routing flags', () => {

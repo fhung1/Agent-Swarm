@@ -15,7 +15,7 @@ import { deliverResearchCycle, planResearchCycle, type ScheduleSnapshot } from '
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CLI = process.env.SPACETIME_CLI ?? 'spacetime';
 const ENV: NodeJS.ProcessEnv = { ...process.env, PATH: `${process.env.PATH ?? ''}:${path.join(os.homedir(), '.local', 'bin')}` };
-const credentialName = /^(?:ALPACA_API_KEY|ALPACA_API_SECRET|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|SEC_USER_AGENT)$/;
+const credentialName = /^(?:ALPACA_API_KEY|ALPACA_API_SECRET|ALPACA_READ_API_KEY|ALPACA_READ_API_SECRET|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|OPENAI_API_KEY|SEC_USER_AGENT)$/;
 const LOG_DIR = process.env.AGENT_SWARM_LOG_DIR
   ? path.resolve(process.env.AGENT_SWARM_LOG_DIR)
   : path.join(ROOT, 'logs');
@@ -160,9 +160,9 @@ async function register(): Promise<void> {
 
 async function accountIdFor(config: SwarmConfig, needed: boolean): Promise<string> {
   if (config.accountId || !needed) return config.accountId;
-  if (!process.env.ALPACA_API_KEY || !process.env.ALPACA_API_SECRET) return '';
-  const { credentialsFromEnv, getAccount, object, textField } = await import('../src/alpaca-client.ts');
-  return textField(object(await getAccount(credentialsFromEnv()), 'account'), 'id', 'account ID');
+  if (!process.env.ALPACA_READ_API_KEY || !process.env.ALPACA_READ_API_SECRET) return '';
+  const { readCredentialsFromEnv, getAccount, object, textField } = await import('../src/alpaca-client.ts');
+  return textField(object(await getAccount(readCredentialsFromEnv()), 'account'), 'id', 'account ID');
 }
 
 function shellQuote(value: string | number): string {

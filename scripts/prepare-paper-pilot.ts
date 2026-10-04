@@ -1,12 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { credentialsFromEnv, getAccount, object, textField } from '../src/alpaca-client.ts';
+import { readCredentialsFromEnv, getAccount, object, textField } from '../src/alpaca-client.ts';
 import { parseSwarmConfig, SwarmConfigSchema } from '../src/swarm-plan.ts';
 
 // A single paper-only GET discovers the account ID; keys remain in the launching environment.
 const file=resolve('config/swarm.json');const exists=existsSync(file);
 const config=JSON.parse(readFileSync(exists?file:resolve('config/swarm.example.json'),'utf8'));
-const account=object(await getAccount(credentialsFromEnv()),'paper account');const accountId=textField(account,'id');
+const account=object(await getAccount(readCredentialsFromEnv()),'paper account');const accountId=textField(account,'id');
 if(account.status!=='ACTIVE'||account.trading_blocked===true)throw new Error('Paper account is inactive or trading blocked');
 if(config.accountId&&config.accountId!==accountId)throw new Error('Existing config targets another account; inspect it before changing accounts');
 config.accountId=accountId;
