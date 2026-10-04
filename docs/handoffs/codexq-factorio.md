@@ -49,3 +49,13 @@
 - Resolution: gracefully saved/stopped run4, created declared fixture run5 under user service agent-swarm-factorio-demo5; directory /home/cig/.local/share/agent-swarm/live-demo-5, run demo-mut03ct1. Active until00:05:58UTC October4 /20:05:58Eastern October3.
 - Checks: fresh run5 independently PASS: ten live workers/distinct recorded identities/tasks/avatars, fifty actual plates and fifty matched engine/board receipts, source depletion, sharing contention and development isolation. Evidence /tmp/factorio-live5-independent-evidence/verification.json. Actual server bound100.107.208.76:34198; board4175, relay3001 and public artifacts4180 active under user services.
 - Follow-up: factorio-board-outage-recovery records missing prolonged-disconnect restart/phase reconciliation; graphical client join remains unverified. Launcher/dashboard source publication remains with merge-fix; generic framework now pulled from main. No claims of model-driven behavior or natural-map progression.
+
+## Continued outage recovery implementation
+
+- Task: factorio-board-outage-recovery; push when finished.
+- Pulled main9079d9e and claimed recovery. Current demo5 has reached its deadline; dashboard4175 and relay3001 remain active.
+- Implementing durable bounded supervisor: only explicit board-outage exit75 restarts; unknown outcomes78 quarantine persistently; deadline and restart budget survive supervisor restarts.
+- Integration pending: canonical demo-worker.ts remains locked by merge-fix; requested handoff on board. Production phase and viewing checkpoint recovery must be integrated before this task is complete.
+- Added worker-checkpoint.ts: durable scope/history/avatar, tick floor, viewing sequence and irreversible production-to-viewing phase; recovery refuses absent board, ownership changes, missing production receipts and inventory mismatch.
+- Checks: six focused tests PASS, including real child retry/quarantine, supervisor restart persistence, viewing recovery and rollback refusal; git diff --check PASS. One initial Node strip-mode parameter-property failure was fixed with explicit fields.
+- Still required: integrate checkpoint/supervisor with canonical worker and run a real prolonged outage. No claim that live recovery is complete; merge-fix lock remains active and two handoff requests were posted.
