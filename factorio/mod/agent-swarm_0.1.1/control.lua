@@ -90,13 +90,31 @@ local function belt_contents(e)
   end
   return {lanes=lanes,items=totals}
 end
+local function fluid_state(e)
+  local fluidbox=e.fluidbox
+  if not fluidbox or #fluidbox==0 then return nil end
+  local boxes={}
+  for i=1,math.min(#fluidbox,8) do
+    local fluid=fluidbox[i]
+    local connections=fluidbox.get_pipe_connections(i)
+    local ports={}
+    for j=1,math.min(#connections,12) do
+      local connection=connections[j]
+      ports[#ports+1]={position=connection.position,targetPosition=connection.target_position,
+        flowDirection=connection.flow_direction,connectionType=connection.connection_type,connected=connection.target~=nil}
+    end
+    boxes[#boxes+1]={index=i,fluid=fluid and {name=fluid.name,amount=fluid.amount,temperature=fluid.temperature} or nil,
+      ports=ports,omittedPorts=math.max(0,#connections-12)}
+  end
+  return {boxes=boxes,omittedBoxes=math.max(0,#fluidbox-8)}
+end
 local function machine_state(e)
   local fuel=e.get_fuel_inventory();local burner=e.burner;local fuel_items={}
   if fuel then for _,entry in pairs(fuel.get_contents()) do fuel_items[entry.name]=(fuel_items[entry.name] or 0)+entry.count end end
   return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,statusName=status_names[e.status],energy=e.energy,
     fuel=fuel and {items=fuel_items,burning=burner and burner.currently_burning and burner.currently_burning.name or nil,remainingEnergy=burner and burner.remaining_burning_fuel or 0} or nil,
     items=(e.type=="container" or e.type=="furnace" or e.type=="assembling-machine" or e.type=="lab" or fuel) and contents(e) or nil,
-    miningArea=mining_area(e),belt=belt_contents(e),
+    miningArea=mining_area(e),belt=belt_contents(e),fluidboxes=fluid_state(e),
     recipe=e.type=="assembling-machine" and recipe_info(e.get_recipe()) or nil,
     craftingProgress=e.type=="assembling-machine" and e.crafting_progress or nil,
     input=e.type=="assembling-machine" and inventory_items(e.get_inventory(defines.inventory.assembling_machine_input)) or nil,
@@ -654,12 +672,12 @@ remote.add_interface("agent_swarm", {
     local entities={}
     for i=query.offset+1,math.min(#candidates,query.offset+40) do
       local e=candidates[i];entities[#entities+1]={id=e.unit_number or 0,name=e.name,x=e.position.x,y=e.position.y,direction=e.direction,
-        box=e.bounding_box,status=status_names[e.status],type=e.type,belt=belt_contents(e),groundItem=e.type=="item-entity" and {name=e.stack.name,count=e.stack.count} or nil,pickup=e.type=="inserter" and e.pickup_position or nil,
+        box=e.bounding_box,status=status_names[e.status],type=e.type,belt=belt_contents(e),fluidboxes=fluid_state(e),groundItem=e.type=="item-entity" and {name=e.stack.name,count=e.stack.count} or nil,pickup=e.type=="inserter" and e.pickup_position or nil,
         drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
     end
     return {world=world(),tick=game.tick,area=area,terrain=terrain_sample(game.surfaces[1],query.x,query.y,query.radius),entities=entities,total=#candidates,offset=query.offset,
       nextOffset=query.offset+40<#candidates and query.offset+40 or nil,
-      note="Read-only layout, not a screenshot. Directions: 0 north,4 east,8 south,12 west. Belt direction is travel; inserter direction is pickup side; use actual pickup/drop coordinates. Bounding boxes show footprints. No automatic judgment of aesthetics or design."}
+      note="Read-only layout, not a screenshot. Directions: 0 north,4 east,8 south,12 west. Belt direction is travel; inserter direction is pickup side; use actual pickup/drop coordinates. Fluid ports show exact position, intended target position and whether connected; fluid amounts are per box. Bounding boxes show footprints. No automatic judgment of aesthetics or design."}
   end,
   submit=submit,
   receipt=function(id) return (storage.qs_receipts or {})[id] end,
