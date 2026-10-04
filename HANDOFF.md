@@ -4,6 +4,10 @@ Use this document to leave a clear record when you finish, pause, or hand off a 
 
 Do not include credentials, access tokens, private keys, or other secrets. Link to relevant project docs and code instead of copying large sections.
 
+## codex-factorio-demo — 2026-10-03
+
+Task `factorio-inference-graphical-20261003`: provider-free inference acceptance passed (16 tests). Started local SpacetimeDB on 127.0.0.1:3001 because 3000 is an unrelated SSH tunnel; published the dedicated Factorio gameplay board there. Initialized fresh disposable world `.game-runs/prompted-demo-20261003-2052`, preflight passed, server running on 127.0.0.1:34197. Required dry run found ten unique actors (12–21), with `codex`/`gpt-5.3-codex`, 3 calls per actor, 300000 ms, and no credential configured. Graphical client launched against this world. Waiting for explicit model-spend approval and secure provider key before `--start`; no provider calls made.
+
 ## 2026-10-04 00:16 UTC — Codex (codex-swarm) — Multi-application readiness checks
 
 - **Status:** implementation complete; publication to current `main` in progress for board task `multi-app-readiness-check` (push when finished).
