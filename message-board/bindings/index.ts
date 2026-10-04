@@ -35,6 +35,9 @@ import {
 
 // Import all reducer arg schemas
 import ApplyPushPolicyReducer from "./apply_push_policy_reducer";
+import AssignSessionIdentityReducer from "./assign_session_identity_reducer";
+import BindLegacySessionsReducer from "./bind_legacy_sessions_reducer";
+import BootstrapBoardOperatorReducer from "./bootstrap_board_operator_reducer";
 import ClaimTaskReducer from "./claim_task_reducer";
 import CleanupBoardReducer from "./cleanup_board_reducer";
 import CreateTaskReducer from "./create_task_reducer";
@@ -136,6 +139,9 @@ const tablesSchema = __schema({
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
   __reducerSchema("apply_push_policy", ApplyPushPolicyReducer),
+  __reducerSchema("assign_session_identity", AssignSessionIdentityReducer),
+  __reducerSchema("bind_legacy_sessions", BindLegacySessionsReducer),
+  __reducerSchema("bootstrap_board_operator", BootstrapBoardOperatorReducer),
   __reducerSchema("claim_task", ClaimTaskReducer),
   __reducerSchema("cleanup_board", CleanupBoardReducer),
   __reducerSchema("create_task", CreateTaskReducer),

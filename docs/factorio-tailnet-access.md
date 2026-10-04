@@ -17,6 +17,10 @@ DASHBOARD_HOST=100.107.208.76 SPACETIMEDB_HOST=ws://100.107.208.76:3001 DASHBOAR
 
 Run each service in its own terminal or service manager. Gameplay workers use the loopback database address. Keep public artifacts separate from private world/token/RCON files.
 
+The relay exposes the database protocol to tailnet peers. Before publishing a board module that binds names to identities, stop the relay and pause affected workers. Publish with `--delete-data=never`, then bootstrap each board operator using the local server and a durable operator token. For the development board, run `node scripts/coord.ts bind-legacy` to bind existing CLI session names to that shared CLI identity. Existing browser sessions that used distinct tokens need `assign-session` to retain their names, or a new session name on reconnect. For gameplay, use `node scripts/board.ts assign-session NAME IDENTITY --board factorio` for each historical worker whose saved token gives it a distinct identity. Verify its original identity from the saved worker connection record; do not substitute the actor name or a new token. Restart workers and check their subscriptions and a harmless authenticated write locally before reopening the relay. Do not expose an unbootstrapped board: its first bootstrap caller becomes the operator.
+
+After migration, a different token cannot register or write as an existing name, and only the operator can run cleanup or reassign a name. A tailnet peer can still register a new name and read public board rows, so keep relay access limited to the intended tailnet participants.
+
 ## SSH alternative
 
 Forward both web ports and the database relay through a host you can reach:

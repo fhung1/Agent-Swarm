@@ -51,6 +51,7 @@ with tempfile.TemporaryDirectory(prefix='board-cleanup-check-') as directory:
                 assert module in ['coord', 'message-board']
                 db = 'cleanup-' + module
                 command('publish', '--module-path', module, '--server', origin, '--no-config', '--delete-data=never', '--yes', db)
+                call(db, 'bootstrap_board_operator')
                 call(db, 'register', 'tester', 'codex', 'isolated cleanup acceptance')
                 for id, dependency in [('done', ''), ('blocked', ''), ('cancelled', ''), ('open', 'done'), ('wait', 'blocked'), ('active', ''), ('reopened', '')]:
                     call(db, 'create_task', 'tester', id, id, '', '', dependency)

@@ -3,11 +3,17 @@ import { SenderError, schema, table, t, type InferSchema, type ReducerCtx } from
 
 // Development coordination board for the coding sessions (Claude Code, Codex, people) working on this repo.
 // It is separate from the trading module so dev chatter never mixes with the trading audit trail.
-// Every local CLI call shares one SpacetimeDB identity, so callers name themselves; the board trusts those
-// names and is meant only for a localhost server.
+// Local CLI calls can share one token, but names are always bound to the authenticated caller identity.
 
 const session = table({ name: 'session', public: true }, {
   name: t.string().primaryKey(), tool: t.string(), focus: t.string(), lastSeen: t.timestamp(),
+});
+// Separate tables allow existing session rows to survive the authorization migration.
+const sessionIdentity = table({ name: 'session_identity' }, {
+  name: t.string().primaryKey(), identity: t.identity(),
+});
+const boardOperator = table({ name: 'board_operator' }, {
+  key: t.string().primaryKey(), identity: t.identity(),
 });
 const taskColumns = () => ({
   id: t.string().primaryKey(), title: t.string(), details: t.string(), area: t.string(),
@@ -30,7 +36,7 @@ const taskPriority = table({ name: 'task_priority', public: true }, {
   taskId: t.string().primaryKey(), priority: t.string(), updatedBy: t.string(), updatedAt: t.timestamp(),
 });
 
-const spacetimedb = schema({ session, devTask, archivedTask, devMessage, fileLock, taskPriority });
+const spacetimedb = schema({ session, sessionIdentity, boardOperator, devTask, archivedTask, devMessage, fileLock, taskPriority });
 export default spacetimedb;
 type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
 
@@ -58,6 +64,14 @@ function requireText(value: string, label: string, max: number, allowEmpty = fal
 
 function requireSession(ctx: Ctx, name: string): void {
   if (!ctx.db.session.name.find(name)) throw new SenderError(`Unknown session ${name}; register it first`);
+  const binding = ctx.db.sessionIdentity.name.find(name);
+  if (!binding) throw new SenderError(`Session ${name} needs operator identity migration`);
+  if (!binding.identity.equals(ctx.sender)) throw new SenderError(`Session ${name} belongs to another identity`);
+}
+
+function requireOperator(ctx: Ctx): void {
+  const operator = ctx.db.boardOperator.key.find('operator');
+  if (!operator || !operator.identity.equals(ctx.sender)) throw new SenderError('Board operator identity required');
 }
 
 function touch(ctx: Ctx, name: string): void {
@@ -90,16 +104,47 @@ export const register = spacetimedb.reducer(
     if (!TOOLS.includes(tool)) throw new SenderError(`Tool must be one of: ${TOOLS.join(', ')}`);
     requireText(focus, 'Focus', 512, true);
     const row = { name, tool, focus, lastSeen: ctx.timestamp };
-    if (ctx.db.session.name.find(name)) ctx.db.session.name.update(row);
-    else ctx.db.session.insert(row);
+    if (ctx.db.session.name.find(name)) {
+      requireSession(ctx, name);
+      ctx.db.session.name.update(row);
+    } else {
+      ctx.db.session.insert(row);
+      ctx.db.sessionIdentity.insert({ name, identity: ctx.sender });
+    }
   }
 );
+
+// Bootstrap on a private loopback server before exposing a new or migrated board remotely.
+// The operator can recover legacy names and lost participant tokens without resetting history.
+export const bootstrapBoardOperator = spacetimedb.reducer({}, ctx => {
+  if (ctx.db.boardOperator.key.find('operator')) throw new SenderError('Board operator is already configured');
+  ctx.db.boardOperator.insert({ key: 'operator', identity: ctx.sender });
+});
+
+export const assignSessionIdentity = spacetimedb.reducer(
+  { name: t.string(), identity: t.identity() }, (ctx, { name, identity }) => {
+    requireOperator(ctx);
+    if (!ctx.db.session.name.find(name)) throw new SenderError(`Unknown session ${name}`);
+    const row = { name, identity };
+    if (ctx.db.sessionIdentity.name.find(name)) ctx.db.sessionIdentity.name.update(row);
+    else ctx.db.sessionIdentity.insert(row);
+  }
+);
+
+export const bindLegacySessions = spacetimedb.reducer({}, ctx => {
+  requireOperator(ctx);
+  for (const session of ctx.db.session.iter()) {
+    if (!ctx.db.sessionIdentity.name.find(session.name)) {
+      ctx.db.sessionIdentity.insert({ name: session.name, identity: ctx.sender });
+    }
+  }
+});
 
 export const post = spacetimedb.reducer(
   { sender: t.string(), recipient: t.string(), taskId: t.string(), body: t.string() },
   (ctx, { sender, recipient, taskId, body }) => {
     requireSession(ctx, sender);
-    if (recipient) requireSession(ctx, recipient);
+    if (recipient && !ctx.db.session.name.find(recipient)) throw new SenderError(`Unknown recipient ${recipient}`);
     if (taskId && !(ctx.db.devTask.id.find(taskId) ?? ctx.db.archivedTask.id.find(taskId))) throw new SenderError(`Unknown task ${taskId}`);
     requireText(body, 'Message', 8000);
     ctx.db.devMessage.insert({ id: 0n, sender, recipient, taskId, body, createdAt: ctx.timestamp });
@@ -210,6 +255,7 @@ export const cleanupBoard = spacetimedb.reducer(
   { name: t.string(), taskIds: t.array(t.string()), messageIds: t.array(t.u64()) },
   (ctx, { name, taskIds, messageIds }) => {
     requireSession(ctx, name);
+    requireOperator(ctx);
     if (taskIds.length > 500 || messageIds.length > 1000) throw new SenderError('Cleanup batch too large');
     for (const id of taskIds) {
       const task = ctx.db.devTask.id.find(id);

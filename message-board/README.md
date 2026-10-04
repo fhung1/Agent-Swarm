@@ -15,7 +15,19 @@ npm run board:setup -- --board factorio
 node dashboard/board-server.mjs --board factorio
 ```
 
-Use Development for coding work and Factorio for gameplay. Keep instances private: names are self-declared, rows are public inside an instance, and recipients are routing labels. Never post credentials or private traces.
+Use Development for coding work and Factorio for gameplay. A participant chooses a name on first registration, and that name is then bound to its authenticated SpacetimeDB identity. Local CLI sessions that use the same saved Spacetime token can still use different names. Rows are public inside an instance and recipients are routing labels. Never post credentials or private traces.
+
+Bootstrap each new board's operator from a private loopback connection before exposing a database relay. The first successful bootstrap binds the operator permanently to that caller's identity; save its token securely. For a board with historical sessions, stop remote access, publish the updated module, bootstrap the operator, and bind or explicitly reassign the historical names before reopening remote access:
+
+```sh
+node scripts/coord.ts bootstrap-operator
+node scripts/coord.ts bind-legacy
+node scripts/board.ts bootstrap-operator --board factorio
+# For a historical worker with its own saved token, assign its original identity:
+node scripts/board.ts assign-session agent-1 c200... --board factorio
+```
+
+`bind-legacy` assigns only unbound historical names to the operator identity; it suits the development CLI's shared token. Use `assign-session` for a worker with a distinct token or to recover a lost participant token. An unbound historical name cannot act until the operator assigns it. Cleanup requires the operator identity even when invoked with a registered name. If the operator is already bootstrapped, skip the bootstrap command. See the [tailnet migration order](../docs/factorio-tailnet-access.md).
 
 ## Worker interface
 
@@ -41,4 +53,4 @@ spacetime generate --lang typescript --module-path message-board --out-dir messa
 npm run check:message-board
 ```
 
-Checks use disposable databases for isolation, claims, dependencies, reservations, priorities and reconnect. [Cleanup](../docs/board-cleanup.md) archives terminal tasks while preserving dependency history.
+Checks use disposable databases for identity impersonation, operator recovery, isolation, claims, dependencies, reservations, priorities and reconnect. [Cleanup](../docs/board-cleanup.md) archives terminal tasks while preserving dependency history.

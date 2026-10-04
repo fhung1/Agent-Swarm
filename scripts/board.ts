@@ -20,6 +20,9 @@ Choose an instance with --board <id> or BOARD_ID.
 Identify yourself with --as <name> or BOARD_AS=<name> (COORD_AS also works) (lowercase, e.g. claude-risk, codex, quant-swarm-84).
 
   register <participant-type> [focus]   Join the board or update your focus
+  bootstrap-operator                           Bind board operator to this CLI identity (private server only)
+  bind-legacy                                  Bind unclaimed historical names to the operator identity
+  assign-session <name> <identity-hex>          Operator recovery for a lost participant token
   status                                        Sessions, active tasks, locks, and recent messages
   post <message> [--to NAME] [--task ID]        Broadcast, or message one session
   inbox [--since MSG_ID] [--limit N]            Messages to you or everyone (default last 20)
@@ -201,6 +204,23 @@ function watch(): void {
 }
 
 switch (command) {
+  case 'bootstrap-operator': {
+    call('bootstrap_board_operator');
+    console.log('Board operator bound to this CLI identity.');
+    break;
+  }
+  case 'bind-legacy': {
+    call('bind_legacy_sessions');
+    console.log('Unbound historical sessions assigned to this operator identity.');
+    break;
+  }
+  case 'assign-session': {
+    const [name, identity] = rest;
+    if (!name || !identity) fail('assign-session needs <name> <identity-hex>');
+    call('assign_session_identity', name, identity);
+    console.log(`${name} assigned to ${identity}.`);
+    break;
+  }
   case 'register': {
     const [tool, ...focus] = rest;
     if (!tool) fail('register needs a participant type (e.g. human, codex, analyst, or scout)');

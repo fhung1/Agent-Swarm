@@ -77,15 +77,38 @@ try {
   function client(database: string) {
     const result = new MessageBoardClient({ uri, database }); clients.push(result); result.start(); return result;
   }
-  const alice = client('board-one'), bob = client('board-one'), other = client('board-two'), dev = client('board-development');
+  const alice = client('board-one'), bob = client('board-one'), intruder = client('board-one');
+  const other = client('board-two'), dev = client('board-development'), devIntruder = client('board-development');
   await wait(() => clients.every(c => c.ready), 'all subscription snapshots');
   await alice.register('alice', 'valuation-analyst', 'Generic participant type');
   await bob.register('bob', 'miner', 'Another generic participant type');
+  await intruder.register('mallory', 'miner');
   await other.register('alice', 'factory-planner');
   await dev.register('developer', 'codex');
+  await devIntruder.register('remote', 'codex');
+  await assert.rejects(intruder.register('alice', 'miner'), /another identity/);
+  await assert.rejects(intruder.post('alice', 'Forged message'), /another identity/);
+  await assert.rejects(intruder.createTask('alice', { id: 'forged', title: 'Forged task' }), /another identity/);
+  await assert.rejects(intruder.reserve('alice', 'world/forged'), /another identity/);
+  await assert.rejects(devIntruder.register('developer', 'codex'), /another identity/);
+  await assert.rejects(devIntruder.post('developer', 'Forged development message'), /another identity/);
+  await alice.bootstrapOperator();
+  await dev.bootstrapOperator();
+  await assert.rejects(intruder.bootstrapOperator(), /already configured/);
+  await assert.rejects(bob.cleanup('bob'), /operator identity required/);
+  await assert.rejects(devIntruder.cleanup('remote'), /operator identity required/);
+  await assert.rejects(intruder.assignSessionIdentity('alice', intruder.identity), /operator identity required/);
+  await alice.assignSessionIdentity('alice', intruder.identity);
+  await assert.rejects(alice.post('alice', 'Old token after operator recovery'), /another identity/);
+  await intruder.register('alice', 'valuation-analyst');
+  await alice.assignSessionIdentity('alice', alice.identity);
+  await alice.register('alice', 'valuation-analyst');
   await alice.createTask('alice', { id: 'same-id', title: 'Independent task', details: 'No development instructions here.' });
   await other.createTask('alice', { id: 'same-id', title: 'Separate board task', priority: 'high' });
   await dev.createTask('developer', { id: 'same-id', title: 'Development task' });
+  await assert.rejects(intruder.claimTask('alice', 'same-id'), /another identity/);
+  await assert.rejects(intruder.setTaskPriority('alice', 'same-id', 'high'), /another identity/);
+  await assert.rejects(intruder.updateTask('alice', 'same-id', 'cancelled'), /another identity/);
   await wait(() => dev.snapshot().tasks.length === 1 && other.snapshot().tasks.length === 1, 'task snapshots');
   assert.match(dev.snapshot().tasks[0].details, /push when finished/);
   assert.doesNotMatch(alice.snapshot().tasks[0].details, /push when finished/);
@@ -137,7 +160,7 @@ try {
   assert.equal(parseBoardConfig(config).boards.length, 5, 'new application only needs configuration');
   assert.throws(() => parseBoardConfig({ ...config, defaultBoard: 'unknown' }));
   assert.throws(() => parseBoardConfig({ ...config, boards: [...config.boards, config.boards[0]] }));
-  console.log('PASS: shared API, arbitrary participant types, board isolation, atomic claims, dependency checks, reservations, development-only policy, history preservation, identity recovery, automatic reconnect, extensible configuration.');
+  console.log('PASS: shared API, authenticated participant names, operator recovery and cleanup, cross-board isolation, atomic claims, dependency checks, reservations, development-only policy, history preservation, identity recovery, automatic reconnect, extensible configuration.');
 } finally {
   clients.forEach(client => client.stop());
   await Promise.all([...processes].map(stop));

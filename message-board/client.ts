@@ -1,4 +1,5 @@
 import { PRIORITIES, comparePriority, type TaskPriority } from './priority.js';
+import { Identity } from 'spacetimedb';
 import { DbConnection } from './bindings/index.js';
 import type { DevTask, Session, DevMessage, FileLock } from './bindings/types.js';
 
@@ -67,6 +68,12 @@ export class MessageBoardClient {
     return this.connection.reducers;
   }
   register(name: string, type: string, focus = '') { return this.reducers.register({ name, tool: type, focus }); }
+  bootstrapOperator() { return this.reducers.bootstrapBoardOperator({}); }
+  assignSessionIdentity(name: string, identity: string) { return this.reducers.assignSessionIdentity({ name, identity: new Identity(identity) }); }
+  bindLegacySessions() { return this.reducers.bindLegacySessions({}); }
+  cleanup(name: string, taskIds: string[] = [], messageIds: bigint[] = []) {
+    return this.reducers.cleanupBoard({ name, taskIds, messageIds });
+  }
   post(sender: string, body: string, recipient = '', taskId = '') { return this.reducers.post({ sender, body, recipient, taskId }); }
   async createTask(name: string, task: { id: string; title: string; details?: string; area?: string; dependsOn?: string; priority?: TaskPriority }) {
     const { priority, ...fields } = task;

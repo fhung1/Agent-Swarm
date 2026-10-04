@@ -25,6 +25,12 @@ export const ArchivedTask = __t.object("ArchivedTask", {
 });
 export type ArchivedTask = __Infer<typeof ArchivedTask>;
 
+export const BoardOperator = __t.object("BoardOperator", {
+  key: __t.string(),
+  identity: __t.identity(),
+});
+export type BoardOperator = __Infer<typeof BoardOperator>;
+
 export const DevMessage = __t.object("DevMessage", {
   id: __t.u64(),
   sender: __t.string(),
@@ -67,6 +73,12 @@ export const Session = __t.object("Session", {
   lastSeen: __t.timestamp(),
 });
 export type Session = __Infer<typeof Session>;
+
+export const SessionIdentity = __t.object("SessionIdentity", {
+  name: __t.string(),
+  identity: __t.identity(),
+});
+export type SessionIdentity = __Infer<typeof SessionIdentity>;
 
 export const TaskPriority = __t.object("TaskPriority", {
   taskId: __t.string(),
