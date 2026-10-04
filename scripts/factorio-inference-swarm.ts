@@ -31,8 +31,9 @@ async function main() {
   if (status.paused) throw Error('Game world is paused');
   const workerScript = resolve('dist/factorio-inference-worker.mjs');
   const supervisorScript = resolve('dist/factorio-inference-supervisor.mjs');
+  const orchestratorSupervisorScript = resolve('dist/factorio-inference-orchestrator-supervisor.mjs');
   const orchestratorScript = resolve('dist/factorio-inference-orchestrator.mjs');
-  if (!existsSync(workerScript) || !existsSync(supervisorScript) || !existsSync(orchestratorScript)) throw Error('Build the Factorio worker, supervisor and orchestrator bundles first');
+  if (!existsSync(workerScript) || !existsSync(supervisorScript) || !existsSync(orchestratorSupervisorScript) || !existsSync(orchestratorScript)) throw Error('Build the Factorio worker, both supervisors and orchestrator bundles first');
   const promptFiles = plan.workers.map(worker => {
     const file = process.env.FACTORIO_PROMPT_DIR ? resolve(process.env.FACTORIO_PROMPT_DIR, `agent-${worker.index}.txt`) : process.env.FACTORIO_PROMPT_FILE;
     if (file && !existsSync(file)) throw Error(`Missing prompt file for actor ${worker.actorId}`);
@@ -211,7 +212,7 @@ async function main() {
     if (stopping) throw Error('Run stopped before actor registration completed');
 
     const coordinatorLog = openSync(join(directory, 'orchestrator.log'), 'a', 0o600);
-    const orchestrator = spawn(process.execPath, [orchestratorScript, world, runId], {
+    const orchestrator = spawn(process.execPath, [orchestratorSupervisorScript, world, runId, orchestratorScript], {
       detached: process.platform !== 'win32',
       env: { ...baseEnv, AGENT_MODEL: plan.orchestrator.model, AGENT_EFFORT: plan.orchestrator.effort,
       FACTORIO_ORCHESTRATOR_MAX_CALLS: String(plan.orchestrator.maxCalls ?? 0), FACTORIO_RUN_MS: String(plan.runMs) },
@@ -219,8 +220,8 @@ async function main() {
     closeSync(coordinatorLog); children.push(orchestrator);
     let orchestratorExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
     const orchestratorResult = new Promise<ChildResult>(resolveResult => {
-      orchestrator.once('error', () => { orchestratorExit = { code: 1, signal: null }; stopForRoleExit('Astra failed to start; stopping team'); resolveResult({ role: 'orchestrator', code: 1 }); });
-      orchestrator.once('exit', (code, signal) => { orchestratorExit = { code, signal }; stopForRoleExit(`Astra exited (${code ?? signal}); stopping team`); resolveResult({ role: 'orchestrator', code, signal }); });
+      orchestrator.once('error', () => { orchestratorExit = { code: 1, signal: null }; stopForRoleExit('Astra supervisor failed to start; stopping team'); resolveResult({ role: 'orchestrator', code: 1 }); });
+      orchestrator.once('exit', (code, signal) => { orchestratorExit = { code, signal }; stopForRoleExit(`Astra supervisor exited (${code ?? signal}); stopping team`); resolveResult({ role: 'orchestrator', code, signal }); });
     });
     results.push(orchestratorResult);
 

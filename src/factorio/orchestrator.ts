@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask, type AskUsage } from '../agents/llm.ts';
 import type { FactorioScope } from './inference.ts';
-import { createFactorioSpendGuard } from './run-spend.ts';
+import { createFactorioSpendGuard, FACTORIO_MAX_OUTPUT_TOKENS } from './run-spend.ts';
 
 export const OrchestratorDecisionSchema = z.object({
   kind: z.enum(['direct', 'subtask', 'wait', 'lookup', 'read_plan', 'write_plan', 'inspect']), recipient: z.string(), message: z.string().max(2000),
@@ -230,7 +230,8 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
     let actualModel = o.ask.model ?? 'configured';
     let spend = { reservedUsd: '', chargedUsd: '' };
     const callId = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
-    const reservedUsd = o.spend?.reserve(callId, o.ask.model ?? '', ORCHESTRATOR_SYSTEM, prompt);
+    const reservedUsd = o.spend?.reserve(callId, o.ask.model ?? '', ORCHESTRATOR_SYSTEM, prompt,
+      o.ask.maxOutputTokens ?? FACTORIO_MAX_OUTPUT_TOKENS);
     if (reservedUsd) spend.reservedUsd = reservedUsd;
     const modelSignal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, remainingRunMs(o.deadline))))])
       : AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, remainingRunMs(o.deadline))));
@@ -406,7 +407,8 @@ export async function factorioOrchestratorMain(): Promise<void> {
         { input: '{"kind":"status"}', encoding: 'utf8', timeout: 25000 })),
       inspectGame: query => JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], {
         input: JSON.stringify(query.kind === 'receipt' ? {kind:'receipt',operation:query.id} : {kind:'inspect',query}), encoding:'utf8',timeout:25000})),
-      requireActorSubtasks: true, spend, ask: createAsker(provider), board, state, save: value => { saveState(statePath, value); if (value.plan) saveState(join(directory, 'overseer-plan.json'), value.plan); }, signal: controller.signal,
+      requireActorSubtasks: true, spend, ask: createAsker(provider, FACTORIO_MAX_OUTPUT_TOKENS), board, state,
+      save: value => { saveState(statePath, value); if (value.plan) saveState(join(directory, 'overseer-plan.json'), value.plan); }, signal: controller.signal,
     });
   } finally { board.stop(); }
 }

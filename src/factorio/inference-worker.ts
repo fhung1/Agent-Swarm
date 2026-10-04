@@ -8,7 +8,7 @@ import { createAsker, type Ask } from '../agents/llm.ts';
 import { buildFactorioPrompt, decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases, ResourceRenewalUncertain } from './resource-leases.ts';
-import { createFactorioSpendGuard, type FactorioSpendGuard } from './run-spend.ts';
+import { createFactorioSpendGuard, FACTORIO_MAX_OUTPUT_TOKENS, type FactorioSpendGuard } from './run-spend.ts';
 import { isTransientTransportFailure, RETRYABLE_TRANSPORT_FAILURE } from './transient-errors.ts';
 
 export interface Observation {
@@ -449,7 +449,8 @@ export async function inferenceWorkerMain(): Promise<void> {
         : 'Start empty, gather natural materials, craft and assemble an automated iron factory: automatic ore and fuel acquisition, smelting and plate delivery into storage. Manual bootstrap work is allowed; no ongoing actor feeding or hauling after commissioning. Completion requires status.automation.verified.'),
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,
-      timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000), ask: createAsker(provider), board,
+      timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000),
+      ask: createAsker(provider, FACTORIO_MAX_OUTPUT_TOKENS), board,
       spend, game: request => new Promise((resolve, reject) => {
         const child = execFile('python3', ['factorio/worker-bridge.py', world], {encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024}, (error, stdout) => {
           if (error) { reject(error); return; }

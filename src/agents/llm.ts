@@ -19,24 +19,28 @@ const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 type Effort = typeof EFFORTS[number];
 export const MAX_OUTPUT_TOKENS = 16_000;
 
-export function createAsker(provider: Provider): Ask {
+export function createAsker(provider: Provider, maxOutputTokens = MAX_OUTPUT_TOKENS): Ask {
+  if (!Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > MAX_OUTPUT_TOKENS) {
+    throw new Error(`maxOutputTokens must be an integer from 1 to ${MAX_OUTPUT_TOKENS}`);
+  }
   const model = process.env.AGENT_MODEL ?? DEFAULT_MODELS[provider];
   const effort = (process.env.AGENT_EFFORT ?? 'high') as Effort;
   if (!EFFORTS.includes(effort)) throw new Error(`AGENT_EFFORT must be one of: ${EFFORTS.join(', ')}`);
   console.log(`Model brain: ${provider} (${model}, effort ${effort})`);
-  const ask = provider === 'claude' ? claudeAsker(model, effort) : codexAsker(model, effort);
+  const ask = provider === 'claude' ? claudeAsker(model, effort, maxOutputTokens) : codexAsker(model, effort, maxOutputTokens);
   ask.model = model;
+  ask.maxOutputTokens = maxOutputTokens;
   return ask;
 }
 
 // Credentials: ANTHROPIC_API_KEY or an `ant auth login` profile.
-function claudeAsker(model: string, effort: Effort): Ask {
+function claudeAsker(model: string, effort: Effort, maxOutputTokens: number): Ask {
   let client: Anthropic | undefined;
   return async (schema, system, prompt, options) => {
     client ??= new Anthropic({ maxRetries: 0, timeout: 120_000 });
     const response = await client.beta.messages.parse({
       model,
-      max_tokens: MAX_OUTPUT_TOKENS,
+      max_tokens: maxOutputTokens,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: [],
       output_config: { effort, format: betaZodOutputFormat(schema) },
@@ -57,7 +61,7 @@ function claudeAsker(model: string, effort: Effort): Ask {
 }
 
 // Credentials: OPENAI_API_KEY. Plain inference with no tools, so prompt data cannot trigger commands or file reads.
-function codexAsker(model: string, effort: Effort): Ask {
+function codexAsker(model: string, effort: Effort, maxOutputTokens: number): Ask {
   let client: OpenAI | undefined;
   return async (schema, system, prompt, options) => {
     client ??= new OpenAI({ maxRetries: 0, timeout: 120_000 });
@@ -66,7 +70,7 @@ function codexAsker(model: string, effort: Effort): Ask {
       instructions: system,
       input: prompt,
       reasoning: { effort },
-      max_output_tokens: MAX_OUTPUT_TOKENS,
+      max_output_tokens: maxOutputTokens,
       text: { format: zodTextFormat(schema, 'output') },
       store: false,
     }, { signal: options?.signal });

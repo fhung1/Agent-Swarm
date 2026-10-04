@@ -9,9 +9,12 @@ Use Node 24+, installed dependencies, a running disposable [cooperative world](.
 ```sh
 npx esbuild scripts/factorio-inference-worker.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-worker.mjs
 npx esbuild scripts/factorio-inference-supervisor.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-supervisor.mjs
+npx esbuild scripts/factorio-inference-orchestrator-supervisor.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-orchestrator-supervisor.mjs
 npx esbuild scripts/factorio-inference-orchestrator.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-orchestrator.mjs
 npx esbuild scripts/factorio-inference-swarm.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-swarm.mjs
 ```
+
+Factorio structured model responses are capped at 4,096 output tokens, and the spend ledger reserves that same ceiling. The Astra supervisor retries transient transport failures with bounded backoff while preserving its state and the original run deadline; exhausted retries stop the run.
 
 Set `AGENT_BRAIN=codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap of eight. Production mode requires `FACTORIO_MAX_CALLS=0` and `FACTORIO_ORCHESTRATOR_MAX_CALLS=0`, meaning unlimited model-call counts. Smoke mode supports one to three calls per actor. The overseer must create and announce one task for each actor. The shared spend cap stops all six agents when a new worst-case reservation would exceed the run budget. The default run dollar limit is $400; `FACTORIO_RUN_BUDGET_USD` can lower it but values above $400 are rejected. If a worst-case pre-call reservation would exceed the cap, the shared ledger halts and the launcher terminates the overseer and all workers.
 

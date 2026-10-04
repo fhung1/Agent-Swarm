@@ -5,7 +5,7 @@ import { microsToUsd, quoteUsageMicros, reserveUsageMicros, usdToMicros, type Mo
 export const FACTORIO_RUN_SPEND_CAP_USD = '400';
 export const FACTORIO_SPEND_PRICE_VERSION = 'openai-standard-2026-10-03-plus-10pct';
 export const FACTORIO_MAX_INPUT_BYTES = 40_000;
-export const FACTORIO_MAX_OUTPUT_TOKENS = 16_000;
+export const FACTORIO_MAX_OUTPUT_TOKENS = 4_096;
 const SAFETY_NUMERATOR = 110n;
 const SAFETY_DENOMINATOR = 100n;
 
