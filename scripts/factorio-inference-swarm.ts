@@ -9,6 +9,8 @@ async function main() {
   const [worldText, runId] = args.filter(a => a !== '--start');
   if (!worldText || !runId) throw Error('Usage: factorio-inference-swarm WORLD RUN [--start] (dry-run is default)');
   const world = resolve(worldText), manifest = JSON.parse(readFileSync(join(world, 'manifest.json'), 'utf8'));
+  const goal = process.env.FACTORIO_GOAL ?? 'plates';
+  if (!['plates', 'rocket'].includes(goal) || (goal === 'rocket' && manifest.scenario !== 'freeplay')) throw Error('Rocket goal requires a declared freeplay world');
   const status = JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], { input: '{"kind":"status"}', encoding: 'utf8', timeout: 25000 }));
   if (status.world?.worldId !== manifest.worldId || status.world?.historyId !== manifest.historyId) throw Error('Game world differs from manifest');
   const plan = inferenceLaunchPlan({ runId, actorIds: status.actors.map((a: { unit: number }) => a.unit),
@@ -16,7 +18,7 @@ async function main() {
     maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS),
     mode: process.env.FACTORIO_DEMO_MODE as 'smoke' | 'production' | undefined });
   const providerKey = plan.provider === 'codex' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
-  console.log(JSON.stringify({ mode: start ? 'start' : 'dry-run', worldId: manifest.worldId, historyId: manifest.historyId,
+  console.log(JSON.stringify({ mode: start ? 'start' : 'dry-run', goal, worldId: manifest.worldId, historyId: manifest.historyId,
     ...plan, credentialConfigured: Boolean(process.env[providerKey]), paused: status.paused }, null, 2));
   if (!start) return;
   if (!process.env[providerKey]) throw Error(`Configure ${providerKey} securely in the worker environment before --start`);
@@ -31,7 +33,7 @@ async function main() {
   });
   const directory = join(world, 'inference', runId); mkdirSync(directory, { recursive: true, mode: 0o700 });
   const planPath = join(directory, 'plan.json');
-  const savedPlan = { worldId: manifest.worldId, historyId: manifest.historyId, ...plan };
+  const savedPlan = { worldId: manifest.worldId, historyId: manifest.historyId, goal, ...plan };
   if (existsSync(planPath) && JSON.stringify(JSON.parse(readFileSync(planPath, 'utf8'))) !== JSON.stringify(savedPlan)) throw Error('Run ID already has a different actor/model/budget mapping; choose a new run ID');
   if (!existsSync(planPath)) writeFileSync(planPath, JSON.stringify(savedPlan, null, 2), { flag: 'wx', mode: 0o600 });
   const tokenPath = join(directory, 'operator.token');
@@ -49,11 +51,15 @@ async function main() {
     if (stopping) return;
     const operator = `${runId}-operator`;
     await board.register(operator, 'operator', `Ten inference actors; ${plan.provider}/${plan.model}`);
+    if (goal === 'rocket' && !board.snapshot().tasks.some(t => t.id === `${runId}.goal-rocket`)) {
+      await board.createTask(operator, { id: `${runId}.goal-rocket`, title: 'Beat Factorio: launch a rocket', area: 'factorio-goal',
+        details: `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. Agents create subtasks and resource requests. push when finished`, priority: 'high' });
+    }
     for (const worker of plan.workers) {
       const existing = board.snapshot().tasks.find(t => t.id === worker.taskId);
       if (existing && existing.assignee && existing.assignee !== worker.sender) throw Error(`Task ${worker.taskId} belongs to another agent`);
-      if (!existing) await board.createTask(operator, { id: worker.taskId, title: `Actor ${worker.actorId}: collect five iron plates`,
-        area: 'factorio-inference', details: `Run ${runId}; world ${manifest.worldId}; actor ${worker.actorId}. Cooperate through shared peer messages. push when finished` });
+      if (!existing) await board.createTask(operator, { id: worker.taskId, title: goal === 'rocket' ? `Actor ${worker.actorId}: contribute to rocket launch` : `Actor ${worker.actorId}: collect five iron plates`,
+        area: 'factorio-inference', details: `Run ${runId}; world ${manifest.worldId}; actor ${worker.actorId}; parent goal ${runId}.goal-rocket. Cooperate through subtasks, resource requests and peer messages. push when finished` });
     }
     const results = plan.workers.map(worker => {
       const promptFile = promptFiles[worker.index - 1];

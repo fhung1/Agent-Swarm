@@ -2,11 +2,15 @@
 
 ## Current focus
 
-Factorio only: ten individually prompted workers sharing a gameplay board in a private world. The live Development board owns assignments; do not restore cleared historical tasks automatically. This documentation pass changes Markdown only.
+Factorio only: ten individually prompted workers sharing a gameplay board in a private world. The live Development board owns assignments; do not restore cleared historical tasks automatically. Current live world is `.game-runs/freeplay-astra-start-1`, reset to empty-inventory freeplay at the operator's request. The prior progressed save remains at `.game-runs/freeplay-astra-1`.
 
 ## Freeplay work — codex-factorio-demo, 2026-10-03
 
-Started `factorio-freeplay-rocket-subtasks-20261003` after the operator requested a ten-agent freeplay start with no resources, an overarching beat-the-game goal, agent-created subtasks, and shared-container resource requests. Current protocol supports only move/take/put; mine, craft, build, research and rocket-event verification are absent. Next: extend the real-engine action contract and task protocol, verify a zero-grant world, then measure progression. Fixture worlds were saved and stopped.
+`factorio-freeplay-rocket-subtasks-20261003`: added engine mining, queued hand crafting, inventory-backed placement, generalized item transfers, agent-created subtasks and receipt-verified resource requests. Previous run `.game-runs/freeplay-astra-1` is retained as a progressed checkpoint; the active run was reset fresh at `.game-runs/freeplay-astra-start-1`. Research, machine recipes, fluid handling and launch commands remain absent; no rocket victory claimed. See factorio/FREEPLAY_DEMO.md.
+
+## Fresh start and operator view — codex-factorio-demo, 2026-10-03
+
+The current Factorio 2.0.77 world at `127.0.0.1:34197` is fresh freeplay with ten actors and zero fixture inventory. Ten `gpt-6-astra` workers are running from the same world, using gameplay DB `quant-swarm-factorio-coord` at port 3004 (dashboard: http://127.0.0.1:4185/?board=factorio&dbPort=3004). The graphical Factorio client is connected on workspace 3. Verified live board claims and observed agents mining wood/ore and crafting/placing chests. Their task titles appear above them and are added to their moving chart tags. The human player is spawned at world start and receives full Factorio admin on join; `/qs help` lists in-game observe/pause/resume and bounded agent commands. `python3 factorio/check-runtime.py`, `node scripts/check-factorio-inference.ts` (25 tests: 7 decision-contract and 18 worker), `npx tsc --noEmit`, Python compile checks and `git diff --check` passed. The original progressed save is preserved separately. Still no claim of rocket victory; later research/machine progression is missing.
 
 ## Prompted demo checkpoint — codex-factorio-demo, 2026-10-03
 

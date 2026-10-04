@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 
 export type Command =
   | { kind: 'move'; x: number; y: number; maxTicks: number }
-  | { kind: 'take' | 'put'; targetId: number; item: 'iron-ore' | 'coal' | 'iron-plate'; quantity: number };
+  | { kind: 'take' | 'put'; targetId: number; item: string; quantity: number }
+  | { kind: 'mine'; name: string; x: number; y: number; quantity: number }
+  | { kind: 'craft'; recipe: string; quantity: number }
+  | { kind: 'place'; item: string; x: number; y: number };
 export interface Operation {
   version: 1; worldId: string; historyId: string; operationId: string; actorId: number; command: Command;
 }
@@ -41,6 +44,9 @@ function integer(value: unknown, min: number, max: number): asserts value is num
 function exact(value: Record<string, unknown>, keys: string[]): void {
   if (Object.keys(value).length !== keys.length || keys.some(key => !Object.hasOwn(value, key))) throw new Error('Unexpected or missing fields');
 }
+function itemName(value: unknown): asserts value is string {
+  if (typeof value !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(value)) throw new Error('Invalid Factorio item or recipe name');
+}
 export function validateCommand(value: unknown): Command {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Expected command object');
   const c = value as Record<string, unknown>;
@@ -55,8 +61,23 @@ export function validateCommand(value: unknown): Command {
     }
     integer(c.maxTicks, 1, 600);
   } else if (c.kind === 'take' || c.kind === 'put') {
-    exact(c, ['kind', 'targetId', 'item', 'quantity']); integer(c.targetId, 1, 2_147_483_647); integer(c.quantity, 1, 20);
-    if (!['iron-ore', 'coal', 'iron-plate'].includes(String(c.item))) throw new Error('Unsupported item');
+    exact(c, ['kind', 'targetId', 'item', 'quantity']); integer(c.targetId, 1, 2_147_483_647); integer(c.quantity, 1, 100); itemName(c.item);
+  } else if (c.kind === 'mine') {
+    exact(c, ['kind', 'name', 'x', 'y', 'quantity']); itemName(c.name); integer(c.quantity, 1, 20);
+    for (const key of ['x', 'y']) {
+      const coordinate = c[key];
+      if (typeof coordinate !== 'number' || !Number.isFinite(coordinate) || Math.abs(coordinate) > 1_000_000) throw new Error('Invalid position');
+      coordinateUnits(coordinate);
+    }
+  } else if (c.kind === 'craft') {
+    exact(c, ['kind', 'recipe', 'quantity']); itemName(c.recipe); integer(c.quantity, 1, 20);
+  } else if (c.kind === 'place') {
+    exact(c, ['kind', 'item', 'x', 'y']); itemName(c.item);
+    for (const key of ['x', 'y']) {
+      const coordinate = c[key];
+      if (typeof coordinate !== 'number' || !Number.isFinite(coordinate) || Math.abs(coordinate) > 1_000_000) throw new Error('Invalid position');
+      coordinateUnits(coordinate);
+    }
   } else throw new Error('Unsupported command');
   return value as Command;
 }

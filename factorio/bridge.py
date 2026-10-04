@@ -44,8 +44,23 @@ def encode(world,actor,operation,command):
     elif kind in ['take','put']:
         if set(command)!={'kind','targetId','item','quantity'}: raise ValueError('Unexpected transfer fields')
         if type(command['targetId']) is not int or not 1<=command['targetId']<=2147483647: raise ValueError('Invalid target')
+        if type(command['quantity']) is not int or not 1<=command['quantity']<=100: raise ValueError('Invalid quantity')
+        if type(command['item']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['item']): raise ValueError('Invalid item')
+    elif kind=='mine':
+        if set(command)!={'kind','name','x','y','quantity'}: raise ValueError('Unexpected mine fields')
+        if type(command['name']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['name']): raise ValueError('Invalid entity name')
         if type(command['quantity']) is not int or not 1<=command['quantity']<=20: raise ValueError('Invalid quantity')
-        if command['item'] not in ['iron-ore','coal','iron-plate']: raise ValueError('Invalid item')
+        for key in ['x','y']:
+            if type(command[key]) not in [int,float] or not -1000000<=command[key]<=1000000: raise ValueError('Invalid position')
+    elif kind=='craft':
+        if set(command)!={'kind','recipe','quantity'}: raise ValueError('Unexpected craft fields')
+        if type(command['recipe']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['recipe']): raise ValueError('Invalid recipe')
+        if type(command['quantity']) is not int or not 1<=command['quantity']<=20: raise ValueError('Invalid quantity')
+    elif kind=='place':
+        if set(command)!={'kind','item','x','y'}: raise ValueError('Unexpected place fields')
+        if type(command['item']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['item']): raise ValueError('Invalid item')
+        for key in ['x','y']:
+            if type(command[key]) not in [int,float] or not -1000000<=command[key]<=1000000: raise ValueError('Invalid position')
     else: raise ValueError('Unsupported command')
     req={'version':1,'worldId':manifest['worldId'],'historyId':manifest['historyId'],'actorId':actor,'operationId':operation,'command':command}
     req['digest']=hashlib.sha256(canonical(req).encode()).hexdigest()

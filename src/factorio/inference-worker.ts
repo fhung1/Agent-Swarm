@@ -9,17 +9,18 @@ import { ResourceLeases } from './resource-leases.ts';
 
 export interface Observation {
   actorId: number; tick: number; x: number; y: number; world: { worldId: string; historyId: string }; paused: boolean;
-  inventory: { ironPlate?: number }; nearby: { unit: number; type: string; x: number; y: number }[];
+  inventory: { ironPlate?: number; items?: Record<string, number> };
+  nearby: { unit: number; name?: string; type: string; x: number; y: number; amount?: number; items?: { items?: Record<string, number> } }[];
 }
 export interface InferenceState {
   version: 1; scope: FactorioScope; calls: number; tick: number; lastResult: unknown;
   pending: { id: string; command: Command; digest: string } | null;
   decision: { id: string; output: FactorioDecision } | null;
 }
-type WorkerBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'claimTask' | 'updateTask' | 'reserve' | 'releaseReservation'>;
+type WorkerBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'createTask' | 'claimTask' | 'updateTask' | 'reserve' | 'releaseReservation'>;
 export interface InferenceWorkerOptions {
   scope: FactorioScope; taskId: string; objective: string; operatorPrompt: () => string;
-  maxCalls: number; deadline: number; timeoutMs: number; requiredPlates: number;
+  maxCalls: number; deadline: number; timeoutMs: number; requiredPlates: number; goal?: 'plates' | 'rocket';
   ask: Ask; board: WorkerBoard; game: (request: Record<string, unknown>) => unknown;
   state: InferenceState; save: (state: InferenceState) => void; sleep?: (ms: number) => Promise<void>;
   signal?: AbortSignal; leaseRenewalMs?: number;
@@ -27,6 +28,7 @@ export interface InferenceWorkerOptions {
 
 export function validateObservation(value: unknown, scope: FactorioScope, minimumTick: number): Observation {
   const o = value as Observation;
+  if (o && o.nearby && !Array.isArray(o.nearby) && typeof o.nearby === 'object' && Object.keys(o.nearby).length === 0) o.nearby = [];
   if (!o || o.actorId !== scope.actorId || o.world?.worldId !== scope.worldId || o.world?.historyId !== scope.historyId ||
     !Number.isSafeInteger(o.tick) || o.tick < minimumTick || !Number.isFinite(o.x) || !Number.isFinite(o.y) ||
     typeof o.paused !== 'boolean' || !o.inventory || !Array.isArray(o.nearby)) throw Error('Foreign, stale or invalid game observation');
@@ -48,7 +50,7 @@ function checkReceipt(value: unknown, pending: NonNullable<InferenceState['pendi
  * mutation is journaled before submission. Recovered missing receipts stop the worker. */
 export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<void> {
   const { board, scope, state } = o;
-  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 1 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
+  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 1 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 0 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
   if (state.version !== 1 || JSON.stringify(state.scope) !== JSON.stringify(scope) || !Number.isSafeInteger(state.calls) || state.calls < 0 || !Number.isSafeInteger(state.tick) || state.tick < 0) throw Error('Foreign or corrupt inference journal');
   const sleep = o.sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
   const leaseController = new AbortController();
@@ -56,6 +58,18 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
   const withinRun = () => { signal.throwIfAborted(); if (Date.now() >= o.deadline) throw Error('Run deadline reached'); };
   const waitReady = async () => { while (!board.ready) { withinRun(); await sleep(250); } };
   const snapshot = () => { if (!board.ready) throw Error('Board disconnected'); const s = board.snapshot(); assertTaskOwnership(s, o.taskId, scope.sender); return s; };
+  let lastTaskLabel = '';
+  const publishTaskLabel = () => {
+    const tasks = board.snapshot().tasks.filter(t => t.status === 'claimed' && t.assignee === scope.sender);
+    const active = tasks.find(t => t.id.startsWith(`${scope.runId}.subtask-`)) ?? tasks.find(t => t.id === o.taskId);
+    let label = '';
+    for (const character of Array.from((active?.title ?? 'Waiting for task').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim())) {
+      if (Buffer.byteLength(label + character, 'utf8') > 72) break;
+      label += character;
+    }
+    label ||= 'Waiting for task';
+    if (label !== lastTaskLabel) { o.game({ kind: 'task_label', actor: scope.actorId, label }); lastTaskLabel = label; }
+  };
   const observe = () => {
     const observed = validateObservation(o.game({ kind: 'observe', actor: scope.actorId }), scope, state.tick);
     state.tick = observed.tick; o.save(state); return observed;
@@ -76,7 +90,8 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     if (!initial) throw Error('Missing actor task');
     if (initial.status === 'done' && initial.assignee === scope.sender) {
       const observed = observe();
-      if (state.pending || (observed.inventory.ironPlate ?? 0) < o.requiredPlates) throw Error('Completed task disagrees with live actor state');
+      const won = o.goal === 'rocket' ? Number((o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches) >= 1 : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates;
+      if (state.pending || !won) throw Error('Completed task disagrees with live actor state');
       return;
     }
     if (initial.status === 'open') await board.claimTask(scope.sender, o.taskId);
@@ -86,6 +101,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       withinRun(); await sleep(100);
     }
     snapshot();
+    publishTaskLabel();
     for (const reservation of board.snapshot().reservations.filter(r => r.holder === scope.sender &&
       r.taskId === o.taskId && r.path.startsWith(`world/${scope.worldId}/`))) leases.track(reservation.path);
     leases.start();
@@ -102,7 +118,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       await post(previousReceipt.operationId, 'action_result', previousReceipt);
     }
     while (true) {
-      withinRun(); await waitReady(); snapshot();
+      withinRun(); await waitReady(); snapshot(); publishTaskLabel();
       let observed = observe();
       if (observed.paused) { await sleep(500); continue; }
       await leases.refresh();
@@ -111,7 +127,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
         const context = { ...scope, objective: o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
-          status: o.game({ kind: 'status' }), reservations: board.snapshot().reservations.filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n).map(r => ({ path: r.path, holder: r.holder })),
+          status: o.game({ kind: 'status' }), reservations: board.snapshot().reservations
+            .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
+            .map(r => ({ path: r.path, holder: r.holder })),
+          tasks: board.snapshot().tasks.filter(t => t.id.startsWith(`${scope.runId}.`)).slice(0, 40).map(t => ({ id: t.id, title: t.title, details: t.details, status: t.status, assignee: t.assignee, dependsOn: t.dependsOn })),
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
           budget: { remainingCalls: o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
@@ -134,30 +153,87 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.lastResult = { kind: 'wait', reason: output.message }; state.decision = null; o.save(state);
         await sleep(output.waitMs);
       } else if (output.kind === 'complete') {
-        if ((observed.inventory.ironPlate ?? 0) < o.requiredPlates) {
+        const won = o.goal === 'rocket'
+          ? Number((o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches) >= 1
+          : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates;
+        if (!won) {
           state.lastResult = { error: 'Completion rejected: live inventory does not satisfy objective' }; state.decision = null; o.save(state); continue;
         }
-        await post(`${id}-complete`, 'completion', { inventory: observed.inventory, tick: observed.tick });
+        await post(`${id}-complete`, 'completion', { inventory: observed.inventory, tick: observed.tick, rocketLaunches: (o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches });
         leases.stop();
         for (const r of board.snapshot().reservations.filter(r => r.holder === scope.sender && r.taskId === o.taskId)) {
           leases.release(r.path); await board.releaseReservation(scope.sender, r.path);
         }
         snapshot();
-        await board.updateTask(scope.sender, o.taskId, 'done', `Inference actor ${scope.actorId}: ${observed.inventory.ironPlate} plates observed at tick ${observed.tick}`);
+        await board.updateTask(scope.sender, o.taskId, 'done', o.goal === 'rocket'
+          ? `Engine rocket launch observed by actor ${scope.actorId} at tick ${observed.tick}`
+          : `Inference actor ${scope.actorId}: ${observed.inventory.ironPlate} plates observed at tick ${observed.tick}`);
         state.decision = null; o.save(state); return;
+      } else if (output.kind === 'subtask' || output.kind === 'resource_request') {
+        const taskId = `${scope.runId}.subtask-${scope.actorId}-${state.calls}`;
+        const request = JSON.parse(output.message) as Record<string, unknown>;
+        if (output.kind === 'resource_request' && !observed.nearby.some(e => e.unit === request.boxId && e.type === 'container')) {
+          state.lastResult = { error: 'Resource box must be an observed container' }; state.decision = null; o.save(state); continue;
+        }
+        const dependsOn = output.kind === 'subtask' ? String(request.dependsOn ?? '') : '';
+        if (dependsOn && !dependsOn.startsWith(`${scope.runId}.`)) {
+          state.lastResult = { error: 'Subtask dependency must belong to this run' }; state.decision = null; o.save(state); continue;
+        }
+        if (!board.snapshot().tasks.some(t => t.id === taskId)) await board.createTask(scope.sender, {
+          id: taskId,
+          title: output.kind === 'resource_request' ? `Deliver ${request.quantity} ${request.item} to box ${request.boxId}` : String(request.title),
+          details: output.kind === 'resource_request'
+            ? `${JSON.stringify({ runId: scope.runId, worldId: scope.worldId, requestedBy: scope.sender, item: request.item, quantity: request.quantity, boxId: request.boxId })}\npush when finished`
+            : `${String(request.details)}\nParent goal: ${scope.runId}.goal-rocket; world ${scope.worldId}; push when finished`,
+          area: output.kind === 'resource_request' ? 'factorio-resource' : 'factorio-subtask', dependsOn });
+        await post(`${id}-task`, output.kind, { taskId, ...request });
+        state.lastResult = { kind: output.kind, taskId }; state.decision = null; o.save(state);
+      } else if (output.kind === 'claim_subtask' || output.kind === 'finish_subtask') {
+        const task = board.snapshot().tasks.find(t => t.id === output.message && t.id.startsWith(`${scope.runId}.subtask-`));
+        if (!task) { state.lastResult = { error: 'Subtask missing from this run' }; state.decision = null; o.save(state); continue; }
+        if (output.kind === 'claim_subtask') {
+          if (task.status === 'open') await board.claimTask(scope.sender, task.id);
+          else if (task.assignee !== scope.sender) { state.lastResult = { error: 'Subtask already claimed', assignee: task.assignee }; state.decision = null; o.save(state); continue; }
+        } else {
+          if (task.status !== 'claimed' || task.assignee !== scope.sender) { state.lastResult = { error: 'Subtask not held by actor' }; state.decision = null; o.save(state); continue; }
+          const receipt = state.lastResult as Receipt | null;
+          if (!receipt || receipt.status !== 'completed' || receipt.actorId !== scope.actorId) { state.lastResult = { error: 'Subtask needs a completed game receipt' }; state.decision = null; o.save(state); continue; }
+          if (task.area === 'factorio-resource') {
+            const request = JSON.parse(task.details.split('\n')[0]) as { item: string; quantity: number; boxId: number };
+            if (receipt.item !== request.item || receipt.targetId !== request.boxId || (receipt.quantity ?? 0) < request.quantity) {
+              state.lastResult = { error: 'Resource request requires matching box deposit receipt' }; state.decision = null; o.save(state); continue;
+            }
+          }
+          await board.updateTask(scope.sender, task.id, 'done', `Game receipt ${receipt.operationId} by actor ${scope.actorId}`);
+        }
+        await post(`${id}-task`, output.kind, { taskId: task.id });
+        state.lastResult = { kind: output.kind, taskId: task.id }; state.decision = null; o.save(state);
       } else {
         const command = output.command!;
         let reservationPath: string | undefined;
-        if (command.kind !== 'move') {
+        if (command.kind === 'take' || command.kind === 'put') {
           const target = observed.nearby.find(e => e.unit === command.targetId);
           if (!target || Math.hypot(observed.x - target.x, observed.y - target.y) > 5) {
             state.lastResult = { error: 'Target not observed within reach; move closer first' }; state.decision = null; o.save(state); continue;
           }
           reservationPath = `world/${scope.worldId}/entity/${command.targetId}`;
+        } else if (command.kind === 'mine') {
+          const target = observed.nearby.find(e => e.name === command.name && ['tree', 'resource'].includes(e.type) && Math.hypot(e.x - command.x, e.y - command.y) < 0.7);
+          if (!target || Math.hypot(observed.x - target.x, observed.y - target.y) > 5) {
+            state.lastResult = { error: 'Mine target not observed within reach' }; state.decision = null; o.save(state); continue;
+          }
+          reservationPath = `world/${scope.worldId}/resource/${command.name}/${Math.round(command.x * 100)}/${Math.round(command.y * 100)}`;
+        } else if (command.kind === 'place') {
+          if (Math.hypot(observed.x - command.x, observed.y - command.y) > 5 || (observed.inventory.items?.[command.item] ?? 0) < 1) {
+            state.lastResult = { error: 'Place item absent or target out of reach' }; state.decision = null; o.save(state); continue;
+          }
+          reservationPath = `world/${scope.worldId}/tile/${Math.floor(command.x)}/${Math.floor(command.y)}`;
+        }
+        if (reservationPath) {
           const other = board.snapshot().reservations.find(r => r.path === reservationPath && r.holder !== scope.sender &&
             r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n);
           if (other) { state.lastResult = { error: 'Resource held by peer', holder: other.holder }; state.decision = null; o.save(state); continue; }
-          try { await board.reserve(scope.sender, reservationPath, o.taskId, 'Inference transfer resource lease', 1); }
+          try { await board.reserve(scope.sender, reservationPath, o.taskId, 'Inference actor resource lease', 1); }
           catch {
             // Another actor may win between the local snapshot and atomic reducer.
             state.lastResult = { error: 'Resource reservation refused; refresh peer state and choose another step' };
@@ -179,7 +255,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.lastResult = receipt; state.tick = receipt.endTick!; state.pending = null; state.decision = null; o.save(state);
         await post(operationId, 'action_result', receipt);
         // Furnaces stay reserved while smelting. Other resources are shared after each transfer.
-        if (reservationPath && observed.nearby.find(e => e.unit === (command as { targetId: number }).targetId)?.type !== 'furnace') {
+        if (reservationPath && !(command.kind === 'put' && observed.nearby.find(e => e.unit === command.targetId)?.type === 'furnace')) {
           leases.release(reservationPath); await board.releaseReservation(scope.sender, reservationPath);
         }
       }
@@ -227,9 +303,12 @@ export async function inferenceWorkerMain(): Promise<void> {
   board.start();
   try {
     await runInferenceWorker({ scope, state, taskId: process.env.FACTORIO_TASK_ID ?? `${runId}.production-${index}`,
-      objective: process.env.FACTORIO_OBJECTIVE ?? 'Cooperate with peers and collect five iron plates in your own inventory.',
+      objective: process.env.FACTORIO_OBJECTIVE ?? (process.env.FACTORIO_GOAL === 'rocket'
+        ? 'Beat Factorio by launching a rocket from this empty-resource freeplay world. Decompose the goal into board subtasks and cooperate through resource requests and shared chests.'
+        : 'Cooperate with peers and collect five iron plates in your own inventory.'),
       operatorPrompt: () => process.env.FACTORIO_PROMPT_FILE ? readFileSync(process.env.FACTORIO_PROMPT_FILE, 'utf8') : process.env.FACTORIO_PROMPT ?? 'Share plans and observations; avoid resource contention.',
-      maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5), deadline,
+      maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
+      goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,
       timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000), ask: createAsker(provider), board,
       game: request => JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], { input: JSON.stringify(request), encoding: 'utf8', timeout: 25000 })),
       save: value => atomicSave(statePath, value), signal: controller.signal });

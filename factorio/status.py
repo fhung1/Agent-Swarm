@@ -21,7 +21,7 @@ def send(sock,ident,kind,body):
     sock.sendall(struct.pack('<i',len(data))+data)
 
 def call_once(world,method,args=()):
-    if method not in ['status','observe','submit','receipt','control']: raise ValueError('Unsupported bridge method')
+    if method not in ['status','observe','submit','receipt','control','set_task_label']: raise ValueError('Unsupported bridge method')
     manifest=json.loads((world/'manifest.json').read_text())
     with socket.create_connection(('127.0.0.1',manifest['rconPort']),timeout=5) as s:
         s.settimeout(5);send(s,1,3,(world/'rcon.password').read_text().strip())

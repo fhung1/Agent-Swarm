@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real-engine smoke in a disposable directory; no shared boards touched."""
 import json,os,pathlib,signal,socket,subprocess,sys,tempfile,time
-from status import status
+from status import call,status
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 def run(*args,ok=True):
     p=subprocess.run([sys.executable,str(ROOT/'factorio/runtime.py'),*args],capture_output=True,text=True)
@@ -41,6 +41,11 @@ with tempfile.TemporaryDirectory(prefix='qs-factorio-check-') as directory:
             assert sum(c['ironOre'] for c in observed['chests'])==50
             assert sum(c['coal'] for c in observed['chests'])==20
             assert observed['furnaces']==2
+            actor=observed['actors'][0]['unit']
+            label=call(world,'set_task_label',[actor,'Runtime check task'])
+            assert label=={'actorId':actor,'label':'Runtime check task'}
+            try: call(world,'set_task_label',[actor,'invalid\nlabel']);raise AssertionError('unsafe label accepted')
+            except ValueError: pass
             run('preflight','--world',str(world),ok=False)
             time.sleep(.2);assert status(world)['tick']>observed['tick'],'paused without viewer'
         finally:

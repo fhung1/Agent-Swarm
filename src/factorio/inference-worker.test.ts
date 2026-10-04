@@ -8,10 +8,11 @@ const scope = { runId: 'run', worldId: 'world', historyId: 'history', actorId: 7
 function fixture() {
   const state: InferenceState = { version: 1, scope, calls: 0, tick: 0, lastResult: null, pending: null, decision: null };
   const events: { kind: string; payload: unknown }[] = [];
-  const task = { id: 'task', status: 'claimed', assignee: scope.sender };
+  const created: unknown[] = [];
+  const task = { id: 'task', title: 'Contribute to rocket launch', status: 'claimed', assignee: scope.sender };
   const observation = { actorId: 7, tick: 100, x: 0, y: 0, world: { worldId: 'world', historyId: 'history' }, paused: false, inventory: { ironPlate: 5 }, nearby: [] };
   const board = { ready: true, snapshot: () => ({ tasks: [task], messages: [], reservations: [], participants: [] }) as unknown as BoardSnapshot,
-    register: async () => {}, post: async (_sender: string, body: string) => { events.push(JSON.parse(body)); }, claimTask: async () => {},
+    register: async () => {}, post: async (_sender: string, body: string) => { events.push(JSON.parse(body)); }, createTask: async (_name: string, value: unknown) => { created.push(value); }, claimTask: async () => {},
     updateTask: async (_name: string, _id: string, status: string) => { task.status = status; }, reserve: async () => {}, releaseReservation: async () => {} };
   const saves: InferenceState[] = [];
   let mutations = 0;
@@ -20,10 +21,22 @@ function fixture() {
     save: s => saves.push(JSON.parse(JSON.stringify(s))), sleep: async () => {},
     game: request => { if (request.kind === 'execute') mutations++; return observation; },
     ask: (async () => ({ kind: 'complete', command: null, message: 'Five plates observed', recipient: '', waitMs: 0 })) as Ask };
-  return { options, task, observation, events, saves, mutations: () => mutations };
+  return { options, task, observation, events, created, saves, mutations: () => mutations };
 }
+test('actor can create a durable run-scoped subtask before completing', async () => {
+  const f = fixture(); let calls = 0;
+  f.options.ask = (async () => ++calls === 1 ? { kind: 'subtask', command: null,
+    message: JSON.stringify({ title: 'Mine trees', details: 'Gather wood for a shared chest', dependsOn: '' }), recipient: '', waitMs: 0 } :
+    { kind: 'complete', command: null, message: 'Done', recipient: '', waitMs: 0 }) as Ask;
+  await runInferenceWorker(f.options);
+  assert.equal(f.created.length, 1);
+  assert.equal((f.created[0] as { id: string }).id, 'run.subtask-7-1');
+  assert.equal(f.events.filter(e => e.kind === 'subtask').length, 1);
+});
 test('model completion is verified and call charged before dispatch', async () => {
   const f = fixture();
+  const labels: string[] = [];
+  f.options.game = request => { if (request.kind === 'task_label') labels.push(String(request.label)); return f.observation; };
   f.options.ask = (async (_schema, _system, prompt) => {
     assert.equal(f.saves.at(-1)?.calls, 1);
     const budget = JSON.parse(prompt).budget;
@@ -34,6 +47,7 @@ test('model completion is verified and call charged before dispatch', async () =
   assert.equal(f.task.status, 'done'); assert.equal(f.mutations(), 0);
   assert.deepEqual(f.events.map(e => e.kind), ['inference_audit', 'decision', 'completion']);
   assert.equal((f.events[0]!.payload as { usageKnown: boolean }).usageKnown, false);
+  assert.deepEqual(labels, ['Contribute to rocket launch']);
 });
 test('false completion consumes budget and never completes the task', async () => {
   const f = fixture(); f.observation.inventory.ironPlate = 0;
@@ -91,6 +105,17 @@ test('completed task restart checks real inventory before accepting completion',
   const f = fixture(); f.task.status = 'done'; f.observation.inventory.ironPlate = 0;
   await assert.rejects(runInferenceWorker(f.options), /disagrees with live actor/);
   assert.equal(f.options.state.calls, 0);
+});
+test('rocket objective only completes after the game reports a launch event', async () => {
+  const f = fixture(); f.options.goal = 'rocket'; f.options.requiredPlates = 0; f.options.maxCalls = 1;
+  f.options.game = request => request.kind === 'status' ? { rocketLaunches: 0 } : f.observation;
+  await assert.rejects(runInferenceWorker(f.options), /budget exhausted/);
+  assert.equal(f.task.status, 'claimed');
+
+  const launched = fixture(); launched.options.goal = 'rocket'; launched.options.requiredPlates = 0;
+  launched.options.game = request => request.kind === 'status' ? { rocketLaunches: 1 } : launched.observation;
+  await runInferenceWorker(launched.options);
+  assert.equal(launched.task.status, 'done');
 });
 test('losing a resource reservation race becomes model feedback, not a mutation', async () => {
   const f = fixture(); f.options.maxCalls = 1;

@@ -11,11 +11,24 @@ test('strict decisions reject unsupported commands and inconsistent fields', () 
   assert.throws(() => validateFactorioDecision({ ...wait, command: { kind: 'move', x: 0, y: 0, maxTicks: 10 } }));
   assert.throws(() => validateFactorioDecision({ ...wait, waitMs: 0 }));
   assert.throws(() => validateFactorioDecision({ ...wait, kind: 'complete', waitMs: 0, recipient: 'peer' }));
-  const action = { ...wait, kind: 'action', waitMs: 0, command: { kind: 'take', targetId: 1, item: 'iron-ore', quantity: 21 } };
+  const action = { ...wait, kind: 'action', waitMs: 0, command: { kind: 'take', targetId: 1, item: 'iron-ore', quantity: 101 } };
   assert.throws(() => validateFactorioDecision(action));
   assert.throws(() => validateFactorioDecision({ ...action, command: { kind: 'shell', command: 'ls' } }));
   assert.throws(() => validateFactorioDecision({ ...wait, message: 'x'.repeat(2001) }));
   assert.throws(() => validateFactorioDecision({ ...wait, extra: true }));
+});
+test('freeplay actions and scoped task decisions remain bounded', () => {
+  for (const command of [{ kind: 'mine', name: 'tree-02-red', x: 3, y: 4, quantity: 1 },
+    { kind: 'craft', recipe: 'wooden-chest', quantity: 1 }, { kind: 'place', item: 'wooden-chest', x: 3, y: 4 }]) {
+    assert.equal(validateFactorioDecision({ ...wait, kind: 'action', command, waitMs: 0 }).kind, 'action');
+  }
+  assert.throws(() => validateFactorioDecision({ ...wait, kind: 'action', waitMs: 0, command: { kind: 'mine', name: '../ore', x: 1, y: 1, quantity: 1 } }));
+  assert.equal(validateFactorioDecision({ ...wait, kind: 'subtask', waitMs: 0,
+    message: JSON.stringify({ title: 'Mine trees', details: 'Supply wood to the team', dependsOn: '' }) }).kind, 'subtask');
+  assert.equal(validateFactorioDecision({ ...wait, kind: 'resource_request', waitMs: 0,
+    message: JSON.stringify({ item: 'wood', quantity: 2, boxId: 31 }) }).kind, 'resource_request');
+  assert.throws(() => validateFactorioDecision({ ...wait, kind: 'resource_request', waitMs: 0,
+    message: JSON.stringify({ item: 'wood', quantity: 0, boxId: 31 }) }));
 });
 test('peer messages are scoped by run, world, history and recipient and sorted numerically', () => {
   const row = (id: string, patch = {}, recipient = '') => ({ id, sender: 'peer', recipient,
