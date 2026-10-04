@@ -1,4 +1,4 @@
-# Five Astra Low actors and an Astra High orchestrator
+# Five Luna Low actors and an Astra High overseer
 
 Each game actor has an independent process, prompt, board identity and restart journal. All five actors use a selected model at low effort; set `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors. A separate `gpt-6-astra` high-effort process has no game-action interface and directs the actors only through board messages and run-scoped subtasks. Workers choose a validated action, chat, wait or completion; there is no rules fallback. Supported game actions include movement, mining, hand crafting, building and chest/furnace transfers.
 
@@ -13,7 +13,7 @@ npx esbuild scripts/factorio-inference-orchestrator.ts --bundle --platform=node 
 npx esbuild scripts/factorio-inference-swarm.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/factorio-inference-swarm.mjs
 ```
 
-Set `AGENT_BRAIN=claude` or `codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, optional `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap that defaults to eight; the operator can set a limit from one to eight using `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token. The Factorio launcher configures eight before starting workers. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` for the coordinator. The total ceiling is five times the actor limit plus the coordinator limit; a call cap is not a dollar cap. Keep credentials private.
+Set `AGENT_BRAIN=codex`, `AGENT_MODEL=gpt-6-astra` for the overseer, `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors, the provider credential, `BOARD_URI` and `BOARD_DATABASE=quant-swarm-factorio-coord`. Registration has a reducer-enforced cap of eight. Set `FACTORIO_DEMO_MODE=smoke` for at most three calls per actor or `production` for at least eight. Set finite `FACTORIO_MAX_CALLS` per actor and `FACTORIO_ORCHESTRATOR_MAX_CALLS` of at least five; the overseer uses five calls to create one task for each actor. The default run dollar limit is $500; `FACTORIO_RUN_BUDGET_USD` can lower it but values above $500 are rejected.
 
 ## Launch and stop
 
@@ -22,9 +22,9 @@ node dist/factorio-inference-swarm.mjs /absolute/path/to/world prompted-demo
 node dist/factorio-inference-swarm.mjs /absolute/path/to/world prompted-demo --start
 ```
 
-The default dry run reads game status and checks actor/world configuration without model calls or board writes. `--start` bootstraps the board operator under the coordinator's saved identity, sets the participant cap to eight, seeds the rocket goal and five run-scoped actor tasks, then launches five workers and the board-only coordinator. Setup and coordinator reuse one board identity. Ctrl+C stops the launcher and children; stop/save the separately started world afterward.
+The default dry run reads game status and checks actor/world configuration without model calls or board writes. `--start` bootstraps the board operator under the coordinator's saved identity and seeds only the rocket goal. It launches the board-only overseer first, then waits for five run-scoped actor-specific subtasks and matching directed announcements. Only then does it launch the five workers against those overseer-created tasks. Setup and overseer reuse one board identity. Ctrl+C stops the launcher and children; stop/save the separately started world afterward.
 
-The immutable plan/logs are under `WORLD/inference/RUN/`; actor tokens, state and deadlines are under `WORLD/inference/RUN-agent-N/`. Restart retains original call counts/deadlines. Unknown actions without valid engine receipts are quarantined, not replayed. Resource leases renew every 15 seconds independently of model calls and pause. Lost, expired or uncertain renewal cancels inference and stops new actions for reconciliation. Rules and inference workers use `world/WORLD_ID/entity/UNIT_ID` reservations; stop old workers using legacy chest/furnace paths before mixing versions.
+The immutable plan, logs and private run-wide `run-spend.json` ledger are under `WORLD/inference/RUN/`; actor tokens, state and deadlines are under `WORLD/inference/RUN-agent-N/`. The ledger reserves worst-case input and output cost before every provider request, adds a 10% margin to the pinned rate card, and serializes updates across all six processes. It persists across worker restarts; missing ledgers, unknown models, exhausted budget and changed plan/cap fail closed. Uncertain requests retain their full reservation. The model audit messages include reserved and charged estimates. Reconcile these estimates with provider billing after it settles. Restart retains original call counts/deadlines. Unknown actions without valid engine receipts are quarantined, not replayed. Resource leases renew every 15 seconds independently of model calls and pause. Lost, expired or uncertain renewal cancels inference and stops new actions for reconciliation.
 
 ## Prompts and inspection
 

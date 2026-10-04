@@ -27,7 +27,7 @@ Keep that terminal running. In the worker terminal, set `RUN_ID` and `WORLD` to 
 
 ## 3. Configure and launch
 
-Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` and `AGENT_MODEL=gpt-6-astra`. Set `FACTORIO_ACTOR_MODEL=gpt-6-luna` to run five Luna Low game actors under one Astra High board-only orchestrator. Keep the smoke run to three calls per actor and one overseer call over five minutes:
+Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` and `AGENT_MODEL=gpt-6-astra`. Set `FACTORIO_ACTOR_MODEL=gpt-6-luna` to run five Luna Low game actors under one Astra High board-only orchestrator. The shared, durable spend ledger enforces a maximum of $500 per run (or a lower `FACTORIO_RUN_BUDGET_USD`), with pre-call worst-case reservations and a 10% pricing margin. The overseer creates and announces five actor subtasks before any worker starts. Keep a smoke run to at most three calls per actor; the overseer needs at least five calls for these subtasks:
 
 ```sh
 export BOARD_URI=ws://127.0.0.1:3004
@@ -35,23 +35,25 @@ export BOARD_DATABASE=quant-swarm-factorio-coord
 export FACTORIO_DEMO_MODE=smoke
 export FACTORIO_MAX_CALLS=3
 export FACTORIO_ACTOR_MODEL=gpt-6-luna
-export FACTORIO_ORCHESTRATOR_MAX_CALLS=1
+export FACTORIO_ORCHESTRATOR_MAX_CALLS=8
+export FACTORIO_RUN_BUDGET_USD=500
+export FACTORIO_GOAL=rocket
 export FACTORIO_RUN_MS=300000
 export FACTORIO_ORCHESTRATOR_INTERVAL_MS=30000
 export FACTORIO_INFERENCE_TIMEOUT_MS=30000
 export FACTORIO_PROMPT='Coordinate furnace use, share availability, and collect five iron plates.'
 ```
 
-A call ceiling is not a spending ceiling. Confirm the intended provider budget before starting. Build the worker/launcher using [these commands](../docs/factorio-inference.md), then:
+The spend ledger is stored privately at `WORLD/inference/RUN_ID/run-spend.json` and shared by all six processes. Missing pricing, exhausted funds, changed plans, unknown models and missing ledgers block provider calls or restarts. Build the worker/launcher using [these commands](../docs/factorio-inference.md), then:
 
 ```sh
 node dist/factorio-inference-swarm.mjs "$WORLD" "$RUN_ID"
 node dist/factorio-inference-swarm.mjs "$WORLD" "$RUN_ID" --start
 ```
 
-Build the orchestrator bundle alongside the worker, supervisor and launcher. Require a successful dry run with five distinct actors, one `gpt-6-astra`/high orchestrator, and five `gpt-6-astra`/low workers before `--start`. The launcher bootstraps the board and seeds the rocket goal and five actor tasks using the coordinator identity, then starts exactly six participants. The registration cap defaults to eight and is hard-limited to eight; operators can set it between one and eight with `node scripts/board.ts participant-limit 7 --board factorio` while the Spacetime CLI uses the board operator's saved token.
+Build the orchestrator bundle alongside the worker, supervisor and launcher. Require a successful dry run with five distinct actors, one `gpt-6-astra`/high overseer, and five `gpt-6-luna`/low workers before `--start`. The launcher seeds only the rocket goal using the coordinator identity. It starts the overseer first, verifies five actor-specific subtasks and directed announcements on the board, then starts the five workers. The six participants share the board's eight-person hard limit.
 
-For a production rehearsal, use a **fresh** world and run ID, then set `FACTORIO_DEMO_MODE=production`, `FACTORIO_MAX_CALLS=12` and `FACTORIO_RUN_MS=900000` before the same dry-run/start commands. This caps five actors at 60 calls and the orchestrator at 12 calls, 72 total. After the run, record each worker journal's actual `calls`, coordinator call count, terminal supervisor status and game receipts. These planning limits are not a measured cost or proof of task completion. A budget-exhausted worker is an incomplete run.
+For a production rehearsal, use a **fresh** world and run ID, then set `FACTORIO_DEMO_MODE=production`, `FACTORIO_MAX_CALLS=12`, `FACTORIO_ORCHESTRATOR_MAX_CALLS=10` and `FACTORIO_RUN_MS=900000`. The launcher rejects a cap above $500 and reserves cost atomically across all model calls. After the run, record worker `calls`, overseer call count, ledger `chargedUsd`/`reservedUsd`, terminal supervisor status and game receipts. The estimate uses pinned OpenAI Standard rates and a 10% margin; reconcile it against provider billing after it settles. A budget-exhausted worker is an incomplete run.
 
 ## 4. Observe and stop
 

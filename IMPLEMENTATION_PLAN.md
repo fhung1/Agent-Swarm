@@ -26,7 +26,7 @@ Ten independent workers share discoveries, claim work and coordinate production 
 1. Recheck current host prerequisites, configured provider/model/budgets and a disposable world.
 2. Run the [inference acceptance](docs/factorio-inference-acceptance.md), then the [ten-worker launcher](docs/factorio-inference.md).
 3. Record real peer-message use, actions, inventory and graphical observation; investigate failures before calling the demo ready.
-4. Complete end-to-end recovery and dollar-budget evidence; call limits alone do not cap spend.
+4. Complete end-to-end recovery and reconcile the durable per-run $500 inference spend gate against provider billing.
 5. Extend the action vocabulary for mining, building, crafting and research before claiming freeplay readiness.
 
 Use [acceptance work packages](FACTORIO_IMPLEMENTATION_TASKS.md) when creating development tasks. The board has been cleared/replanned; old task IDs are not proof that an assignment still exists. Do not recreate historical queues automatically.

@@ -6,6 +6,7 @@ import { createAsker, type Ask } from '../agents/llm.ts';
 import { decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases } from './resource-leases.ts';
+import { createFactorioSpendGuard, type FactorioSpendGuard } from './run-spend.ts';
 
 export interface Observation {
   actorId: number; tick: number; x: number; y: number; world: { worldId: string; historyId: string }; paused: boolean;
@@ -23,6 +24,7 @@ export interface InferenceWorkerOptions {
   maxCalls: number; deadline: number; timeoutMs: number; requiredPlates: number; goal?: 'plates' | 'rocket';
   ask: Ask; board: WorkerBoard; game: (request: Record<string, unknown>) => unknown;
   state: InferenceState; save: (state: InferenceState) => void; sleep?: (ms: number) => Promise<void>;
+  spend?: FactorioSpendGuard;
   signal?: AbortSignal; leaseRenewalMs?: number;
 }
 
@@ -135,21 +137,25 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           budget: { remainingCalls: o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
+        let spend: { reservedUsd?: string; chargedUsd?: string } = {};
         let output: FactorioDecision;
         try {
           output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())),
+            spend: o.spend, callId: id, onSpend: cost => { spend = { ...spend, ...cost }; },
             onUsage: (reported, model) => { usage = reported; if (model) actualModel = model; } });
         } catch (error) {
           if (!(error instanceof InvalidFactorioDecisionError)) throw error;
           await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-            usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls });
+            usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls,
+            reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
           const reason = 'The previous model response exceeded the decision schema; use shorter bounded fields and retry.';
           await post(`${id}-rejected`, 'decision_rejected', { reason });
           state.lastResult = { kind: 'invalid_model_output', reason }; state.decision = null; o.save(state);
           continue;
         }
         await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-          usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls });
+          usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls,
+          reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
         state.decision = { id, output }; o.save(state);
       }
       const { id, output } = state.decision;
@@ -170,7 +176,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         if (!won) {
           state.lastResult = { error: 'Completion rejected: live inventory does not satisfy objective' }; state.decision = null; o.save(state); continue;
         }
-        await post(`${id}-complete`, 'completion', { inventory: observed.inventory, tick: observed.tick, rocketLaunches: (o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches });
+        await post(`${id}-complete`, 'completion', { taskId: o.taskId, inventory: observed.inventory, tick: observed.tick, rocketLaunches: (o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches });
         leases.stop();
         for (const r of board.snapshot().reservations.filter(r => r.holder === scope.sender && r.taskId === o.taskId)) {
           leases.release(r.path); await board.releaseReservation(scope.sender, r.path);
@@ -200,8 +206,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         await post(`${id}-task`, output.kind, { taskId, ...request });
         state.lastResult = { kind: output.kind, taskId }; state.decision = null; o.save(state);
       } else if (output.kind === 'claim_subtask' || output.kind === 'finish_subtask') {
-        const task = board.snapshot().tasks.find(t => t.id === output.message && t.id.startsWith(`${scope.runId}.subtask-`));
+        const task = board.snapshot().tasks.find(t => t.id === output.message && t.id.startsWith(`${scope.runId}.subtask-`) &&
+          !t.id.startsWith(`${scope.runId}.subtask-orchestrator-`));
         if (!task) { state.lastResult = { error: 'Subtask missing from this run' }; state.decision = null; o.save(state); continue; }
+        if (task.id === o.taskId) { state.lastResult = { error: 'The assigned goal task requires verified objective completion, not finish_subtask' }; state.decision = null; o.save(state); continue; }
         if (output.kind === 'claim_subtask') {
           if (task.status === 'open') await board.claimTask(scope.sender, task.id);
           else if (task.assignee !== scope.sender) { state.lastResult = { error: 'Subtask already claimed', assignee: task.assignee }; state.decision = null; o.save(state); continue; }
@@ -303,13 +311,19 @@ export async function inferenceWorkerMain(): Promise<void> {
   const state: InferenceState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { version: 1, scope, calls: 0, tick: 0, lastResult: null, pending: null, decision: null };
   const provider = process.env.AGENT_BRAIN;
   if (provider !== 'claude' && provider !== 'codex') throw Error('AGENT_BRAIN must explicitly select claude or codex');
+  const spendFile = process.env.FACTORIO_RUN_SPEND_FILE;
+  if (!spendFile) throw Error('FACTORIO_RUN_SPEND_FILE is required; refusing uncapped model calls');
+  const spend = createFactorioSpendGuard({ path: spendFile, runId, worldId: manifest.worldId, historyId: manifest.historyId,
+    capUsd: process.env.FACTORIO_RUN_BUDGET_USD ?? '500' });
   const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? manifest.boardHost ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
     token: existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8') : undefined, onToken: token => atomicSaveToken(tokenPath, token) });
   const controller = new AbortController();
   const stop = () => { controller.abort(new Error('Worker stopped')); board.stop(); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   const deadlinePath = join(directory, 'deadline.json');
-  const deadline = existsSync(deadlinePath) ? JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline : Date.now() + Number(process.env.FACTORIO_RUN_MS ?? 900000);
+  const requestedDeadline = Number(process.env.FACTORIO_RUN_DEADLINE);
+  const deadline = existsSync(deadlinePath) ? JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline
+    : Number.isFinite(requestedDeadline) && requestedDeadline > Date.now() ? requestedDeadline : Date.now() + Number(process.env.FACTORIO_RUN_MS ?? 900000);
   if (!existsSync(deadlinePath)) atomicSave(deadlinePath, { deadline });
   board.start();
   try {
@@ -321,7 +335,7 @@ export async function inferenceWorkerMain(): Promise<void> {
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,
       timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000), ask: createAsker(provider), board,
-      game: request => JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], { input: JSON.stringify(request), encoding: 'utf8', timeout: 25000 })),
+      spend, game: request => JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], { input: JSON.stringify(request), encoding: 'utf8', timeout: 25000 })),
       save: value => atomicSave(statePath, value), signal: controller.signal });
   } finally { board.stop(); unlinkSync(processPath); }
 }

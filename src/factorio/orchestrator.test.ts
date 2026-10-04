@@ -27,7 +27,14 @@ function fixture() {
       const row = { body, recipient, taskId }; posted.push(row);
       messages.push({ id: BigInt(messages.length + 1), sender, recipient, taskId, body,
         createdAt: {} as BoardSnapshot['messages'][number]['createdAt'] });
-      if (JSON.parse(body).kind === 'chat') Object.assign(worker, { status: 'done', result: 'Engine launch receipt verified' });
+      if (JSON.parse(body).kind === 'chat') {
+        Object.assign(worker, { status: 'done', result: 'Engine launch receipt verified' });
+        const actor = agents[0]!;
+        messages.push({ id: BigInt(messages.length + 1), sender: actor, recipient: '', taskId: worker.id,
+          body: JSON.stringify({ version: 1, runId, worldId, historyId, sender: actor, kind: 'completion',
+            payload: { taskId: worker.id, rocketLaunches: 1, tick: 123 } }),
+          createdAt: {} as BoardSnapshot['messages'][number]['createdAt'] });
+      }
     },
   };
   const state = { calls: 0 };
