@@ -17,14 +17,14 @@ function runs(ctx: Context): string[] {
   return [...ctx.db.runAccess.identity.filter(ctx.sender)].map(row => row.runId);
 }
 function accounts(ctx: Context): string[] {
-  if (!['operator', 'risk', 'executor', 'market_data', 'portfolio'].includes(role(ctx) ?? '')) return [];
+  if (!['operator', 'risk', 'executor', 'market_data', 'portfolio', 'coordinator'].includes(role(ctx) ?? '')) return [];
   return [...ctx.db.accountAccess.identity.filter(ctx.sender)].map(row => row.accountId);
 }
 function sources(ctx: Context) { return runs(ctx).flatMap(id => [...ctx.db.source.runId.filter(id)]); }
 function theses(ctx: Context) { return runs(ctx).flatMap(id => [...ctx.db.thesis.runId.filter(id)]); }
 function proposals(ctx: Context) { return runs(ctx).flatMap(id => [...ctx.db.tradeProposal.runId.filter(id)]); }
 function orders(ctx: Context) {
-  if (!['operator', 'risk', 'executor'].includes(role(ctx) ?? '')) return [];
+  if (!['operator', 'risk', 'executor', 'coordinator'].includes(role(ctx) ?? '')) return [];
   const allowed = new Set(accounts(ctx));
   return proposals(ctx).flatMap(p => {
     const reservation = ctx.db.riskReservation.proposalId.find(p.id);

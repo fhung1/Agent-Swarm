@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toCritiqueMessageArgs, toProposalArgs, toPublishThesisArgs, toSpecialistMessageArgs, type CoordinatorOutput, type ThesisView } from './roles.ts';
+import { toCritiqueMessageArgs, toPositionExitArgs, toProposalArgs, toPublishThesisArgs, toSpecialistMessageArgs, type CoordinatorOutput, type ThesisView } from './roles.ts';
 
 const thesis: ThesisView = {
   id: 'th-1', runId: 'demo', symbol: 'AAPL', bullCase: 'b', bearCase: 'b',
@@ -77,4 +77,10 @@ test('valuation scenarios must be ordered, positive, and cited', () => {
     { messageId: 'm', runId: 'demo', taskId: 't', symbol: 'AAPL', thesisId: 'th-1' }, new Set(['obs-1'])), /ordered positive/);
   assert.throws(() => toSpecialistMessageArgs('valuation', { ...output, evidence_ids: ['invented'] },
     { messageId: 'm', runId: 'demo', taskId: 't', symbol: 'AAPL', thesisId: 'th-1' }, new Set(['obs-1'])), /unknown evidence/);
+});
+
+test('position review can hold or propose a sell, never buy', () => {
+  assert.equal(toPositionExitArgs({ ...trade, outcome: 'abstain' }, pids, quote, 1000), undefined);
+  assert.throws(() => toPositionExitArgs(trade, pids, quote, 1000), /sell exit/);
+  assert.equal(toPositionExitArgs({ ...trade, side: 'sell' }, pids, quote, 1000)?.side, 'sell');
 });

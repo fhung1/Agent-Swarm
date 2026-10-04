@@ -11,7 +11,7 @@ import { selectEvidence, assertNarrativeCitations, assertPromptBudget } from './
 import {
   ANALYST_SYSTEM, AnalystOutput, COORDINATOR_SYSTEM, CoordinatorOutput, SKEPTIC_SYSTEM, SkepticOutput,
   VALUATION_SYSTEM, ValuationOutput, PORTFOLIO_SYSTEM, PortfolioOutput, specialistPrompt, toSpecialistMessageArgs,
-  analystPrompt, coordinatorPrompt, skepticPrompt, toCritiqueMessageArgs, toDecisionArgs, toProposalArgs,
+  analystPrompt, coordinatorPrompt, skepticPrompt, toCritiqueMessageArgs, toDecisionArgs, toProposalArgs, toPositionExitArgs,
   toPublishThesisArgs, type FactView, type ObservationView, type SourceView, type ThesisView, type TeamReportView,
 } from './roles.js';
 
@@ -117,7 +117,11 @@ export async function modelWriteThesis(ask: Ask, conn: DbConnection, task: Task,
   if (!conn.db.myThesis.id.find(thesisId)) {
     const { sources, facts, observations, omitted, allowedIds: allowed, refs, narrativeRefs } = evidenceFor(conn, runId, task.symbol);
     if (sources.length === 0) return { ok: false, text: `No stored sources for ${task.symbol} in run ${runId}` };
-    const prompt = analystPrompt(task.symbol, task.objective, sources, facts, observations, omitted);
+    const priorId = task.kind === 'position_review' ? conn.db.myTask.id.find(task.dependsOn)?.result ?? '' : '';
+    const prior = priorId ? conn.db.myThesis.id.find(priorId) : undefined;
+    const reviewContext = prior ? `\nOriginal thesis ${prior.id}: Bull: ${clip(prior.bullCase, 500)}; Bear: ${clip(prior.bearCase, 500)}; ` +
+      `Assumptions: ${clip(prior.assumptions, 500)}; Invalidation: ${clip(prior.invalidation, 500)}.` : '';
+    const prompt = analystPrompt(task.symbol, task.objective + reviewContext, sources, facts, observations, omitted);
     assertPromptBudget(ANALYST_SYSTEM,prompt);
     const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(AnalystOutput, ANALYST_SYSTEM,
       prompt);
@@ -166,6 +170,8 @@ export async function modelDecide(
   if ((decideRetryAt.get(ids.decisionId) ?? 0) > Date.now()) return;
   try {
     const thesis = conn.db.myThesis.id.find(thesisId)!;
+    const positionTask = conn.db.myTask.id.find(thesis.taskId);
+    const exitOnly = positionTask?.kind === 'position_review';
     // A decision recorded before a crash is reused; only its announcement is re-sent.
     const existing = [...conn.db.myDecision.iter()].find(row => row.thesisId === thesisId);
     let summary = existing ? { outcome: existing.outcome, rationale: existing.rationale } : undefined;
@@ -200,7 +206,7 @@ export async function modelDecide(
       const quoteView = quote ? observationView(quote) : undefined;
       const cap = Number(input.maxOrderNotional);
       const output = await accountedAsk(ask, conn, runId, ids.decisionId, ids.decisionId, signal)(CoordinatorOutput, COORDINATOR_SYSTEM,
-        coordinatorPrompt(thesisView(thesis), reviews, quoteView, cap, reports));
+        coordinatorPrompt(thesisView(thesis), reviews, quoteView, cap, reports, exitOnly, exitOnly ? positionTask!.objective : ''));
 
       // Validate the order before recording a trade decision, so an unusable order becomes a revise decision.
       let outcome = output.outcome;
@@ -212,8 +218,9 @@ export async function modelDecide(
             if (required[kind] && !reports.some(report => report.kind === kind)) throw new Error(`Required ${kind} report is missing`);
           }
           if (reports.some(report => JSON.parse(report.body).status !== 'ready')) throw new Error('Specialist report is insufficient');
-          proposal = toProposalArgs(output, { proposalId: recordId('proposal.', thesisId), runId, thesis: thesisView(thesis) },
-            quoteView, cap);
+          const args = { proposalId: recordId('proposal.', thesisId), runId, thesis: thesisView(thesis) };
+          proposal = exitOnly ? toPositionExitArgs(output, args, quoteView, cap)
+            : toProposalArgs(output, args, quoteView, cap);
         } catch (error) {
           outcome = 'revise';
           rationale = `Proposed order was rejected before submission (${(error as Error).message}). ${rationale}`;

@@ -40,6 +40,10 @@ export const SwarmConfigSchema = z.object({
     executor: singleton.default({ count: 0 }),
   }).strict(),
   maxOrderNotional: z.number().positive().optional(),
+  positionReviews: z.object({
+    everyDays: z.number().int().min(1).max(365),
+    priceMovePct: z.number().positive().max(100),
+  }).strict().optional(),
   limits: z.object({
     maxInferences: z.number().int().min(1).max(10_000),
     maxTokens: z.number().int().min(1).max(100_000_000),
@@ -90,6 +94,9 @@ export function parseSwarmConfig(json: string): SwarmConfig {
   if ((config.agents.valuation.count || config.agents.portfolio.count) && !config.agents.analyst.count) {
     throw new Error('Specialist workers need an analyst to produce theses');
   }
+  if (config.positionReviews && (!config.agents.coordinator.count || !config.agents.analyst.count || !config.agents.skeptic.count)) {
+    throw new Error('Position reviews require coordinator, analyst, and skeptic workers');
+  }
   if (config.agents.executor.count && !config.agents.risk.count) {
     throw new Error('An executor needs the risk broker: only fresh risk passes can be submitted');
   }
@@ -124,8 +131,12 @@ export function planProcesses(config: SwarmConfig): ProcessSpec[] {
           ...(spec.model ? { AGENT_MODEL: spec.model } : {}), ...(spec.effort ? { AGENT_EFFORT: spec.effort } : {}),
           ...(role === 'coordinator' && config.maxOrderNotional ? { MAX_ORDER_NOTIONAL: String(config.maxOrderNotional) } : {}),
           ...(role === 'coordinator' ? { TEAM_VALUATION: String(config.agents.valuation.count > 0 ? 1 : 0), TEAM_PORTFOLIO: String(config.agents.portfolio.count > 0 ? 1 : 0) } : {}),
+          ...(role === 'coordinator' && config.positionReviews ? {
+            POSITION_REVIEW_DAYS: String(config.positionReviews.everyDays),
+            POSITION_REVIEW_PRICE_MOVE_PCT: String(config.positionReviews.priceMovePct),
+          } : {}),
         },
-        secrets: brainSecrets(spec.brain), accountAccess: role === 'portfolio', tokenFileEnv: 'AGENT_TOKEN_FILE',
+        secrets: brainSecrets(spec.brain), accountAccess: role === 'portfolio' || (role === 'coordinator' && !!config.positionReviews), tokenFileEnv: 'AGENT_TOKEN_FILE',
       });
     }
   }

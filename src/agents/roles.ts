@@ -207,7 +207,7 @@ ${SHARED_RULES}`;
 
 export function coordinatorPrompt(
   thesis: ThesisView, critiques: CritiqueView[], quote: ObservationView | undefined, maxOrderNotional: number,
-  reports: TeamReportView[] = [],
+  reports: TeamReportView[] = [], exitOnly = false, positionContext = '',
 ): string {
   const reviews = critiques.length
     ? critiques.map(c => `<critique id="${c.id}">${c.body}</critique>`).join('\n')
@@ -216,7 +216,10 @@ export function coordinatorPrompt(
     ? `Latest quote (market observation ${quote.id}): bid ${quote.bidPrice} ask ${quote.askPrice} (${quote.feed}, as of ${quote.asOf})`
     : 'Latest quote: none available; only abstain or revise are possible';
   const specialist = reports.map(report => `<${report.kind} id="${report.id}">${report.body}</${report.kind}>`).join('\n');
-  return `Order notional cap: $${maxOrderNotional}\n${price}\n\n${thesisBlock(thesis)}\n\n${specialist}\n${reviews}`;
+  const positionInstruction = exitOnly
+    ? 'This is a review of an existing paper position. Abstain means hold; any trade must be a sell exit. Never propose a buy here. The risk gate checks current held shares and account state.'
+    : '';
+  return `Order notional cap: $${maxOrderNotional}\n${positionInstruction}\n${positionContext}\n${price}\n\n${thesisBlock(thesis)}\n\n${specialist}\n${reviews}`;
 }
 
 const QUANTITY = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
@@ -254,4 +257,12 @@ export function toProposalArgs(
     id: ids.proposalId, runId: ids.runId, thesisId: ids.thesis.id, symbol: ids.thesis.symbol,
     side, quantity, orderType, limitPrice,
   };
+}
+
+export function toPositionExitArgs(
+  output: CoordinatorOutput, ids: { proposalId: string; runId: string; thesis: ThesisView },
+  quote: ObservationView | undefined, maxOrderNotional: number, now = Date.now(),
+) {
+  if (output.outcome === 'trade' && output.side !== 'sell') throw new Error('Position review can only propose a sell exit');
+  return toProposalArgs(output, ids, quote, maxOrderNotional, now);
 }

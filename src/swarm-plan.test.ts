@@ -58,6 +58,19 @@ test('optional specialists receive scoped access and coordinator routing flags',
   assert.throws(() => config({ coordinator: { count: 1 }, analyst: { count: 0 }, valuation: { count: 1 } }), /need an analyst/);
 });
 
+test('position review cadence gives the coordinator scoped account reads', () => {
+  const parsed = config({ coordinator: { count: 1 }, analyst: { count: 1 }, skeptic: { count: 1 } },
+    { positionReviews: { everyDays: 30, priceMovePct: 10 } });
+  const processes = planProcesses(parsed);
+  const coordinator = processes.find(p => p.role === 'coordinator')!;
+  assert.equal(coordinator.accountAccess, true);
+  assert.equal(coordinator.env.POSITION_REVIEW_DAYS, '30');
+  assert.equal(coordinator.env.POSITION_REVIEW_PRICE_MOVE_PCT, '10');
+  assert.deepEqual(coordinator.secrets, []);
+  assert.throws(() => config({ coordinator: { count: 1 }, analyst: { count: 1 }, skeptic: { count: 0 } },
+    { positionReviews: { everyDays: 30, priceMovePct: 10 } }), /require coordinator, analyst, and skeptic/);
+});
+
 test('roles that act on the whole run or account are limited to one', () => {
   for (const role of ['coordinator', 'risk', 'executor']) {
     assert.throws(() => config({ [role]: { count: 2 }, ...(role === 'executor' ? { risk: { count: 1 } } : {}) }));

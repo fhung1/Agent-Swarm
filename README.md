@@ -297,6 +297,8 @@ The SEC ingestor caches verified ticker/submissions/company-facts responses and 
 
 Optional `valuation` and `portfolio` workers default to zero and are configured like other model roles. They require an analyst and coordinator; portfolio workers get scoped paper-account reads without broker credentials. See [trading team roles](docs/trading-team-roles.md).
 
+Set `positionReviews` in the swarm config to queue held-position reviews after broker fills, SEC filing updates, price moves, policy position drift, and the configured day cadence. The coordinator receives scoped account reads without Alpaca credentials and only queues reviews from fresh snapshots whose positions reconcile with recorded fills. Reviews produce a new evidence-linked thesis and hold or sell-exit decision; sell proposals still require a fresh risk pass. See [position reviews](docs/position-reviews.md).
+
 ## Model-backed roles
 
 Set `AGENT_BRAIN=claude` or `AGENT_BRAIN=codex` on any worker to replace its placeholder logic with a model call. Both use the same prompts, output schemas, and validation:

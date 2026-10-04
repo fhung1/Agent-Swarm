@@ -6,6 +6,8 @@ import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { createAsker } from './agents/llm.js';
 import { evidenceFor, modelDecide, modelReviewThesis, modelSpecialistReport, modelWriteThesis } from './agents/model-handlers.js';
 import { toSpecialistMessageArgs } from './agents/roles.js';
+import { parsePositions } from './agents/risk.js';
+import { planPositionReviews } from './position-reviews.js';
 
 const name = process.env.AGENT_NAME ?? 'analyst-a';
 const runId = process.env.RUN_ID ?? 'demo';
@@ -22,6 +24,12 @@ if (brain !== 'rules' && brain !== 'claude' && brain !== 'codex') throw new Erro
 const ask = brain === 'rules' ? undefined : createAsker(brain);
 const teamValuation = process.env.TEAM_VALUATION === '1';
 const teamPortfolio = process.env.TEAM_PORTFOLIO === '1';
+const positionReviewDays = Number(process.env.POSITION_REVIEW_DAYS ?? '0');
+const positionReviewPriceMovePct = Number(process.env.POSITION_REVIEW_PRICE_MOVE_PCT ?? '0');
+if (positionReviewDays && (!Number.isInteger(positionReviewDays) || positionReviewDays < 1 || positionReviewDays > 365 ||
+    !Number.isFinite(positionReviewPriceMovePct) || positionReviewPriceMovePct <= 0 || positionReviewPriceMovePct > 100)) {
+  throw new Error('Invalid position review configuration');
+}
 
 if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(name) ||
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) {
@@ -73,7 +81,7 @@ function runTasks(conn: DbConnection): Task[] {
 }
 
 function handlerRole(task: Task): string | undefined {
-  if (task.kind === 'thesis') return 'analyst';
+  if (task.kind === 'thesis' || task.kind === 'position_review') return 'analyst';
   if (task.kind === 'valuation' || task.kind === 'portfolio') return task.kind;
   if (task.kind === 'review') return 'skeptic';
   return undefined;
@@ -124,10 +132,10 @@ async function runTask(conn: DbConnection, task: Task, claim: boolean): Promise<
     controller.signal.throwIfAborted();
     if (conn.db.myRun.id.find(runId)?.status !== 'active') return;
     const outcome = ask
-      ? task.kind === 'thesis' ? await modelWriteThesis(ask, conn, task, runId, controller.signal)
+      ? ['thesis', 'position_review'].includes(task.kind) ? await modelWriteThesis(ask, conn, task, runId, controller.signal)
         : task.kind === 'review' ? await modelReviewThesis(ask, conn, task, runId, controller.signal)
         : await modelSpecialistReport(ask, conn, task, runId, controller.signal)
-      : task.kind === 'thesis' ? await writeThesis(conn, task)
+      : ['thesis', 'position_review'].includes(task.kind) ? await writeThesis(conn, task)
         : task.kind === 'review' ? await reviewThesis(conn, task)
         : await rulesSpecialistReport(conn, task);
     controller.signal.throwIfAborted();
@@ -239,9 +247,10 @@ async function reviewThesis(conn: DbConnection, task: Task): Promise<Outcome> {
 
 // Placeholder coordinator: queues a skeptic review for each thesis, then records a decision from the review.
 function coordinate(conn: DbConnection): void {
+  if (positionReviewDays) queuePositionReviews(conn);
   for (const task of runTasks(conn)) {
     if (task.status !== 'completed') continue;
-    if (task.kind === 'thesis') {
+    if (task.kind === 'thesis' || task.kind === 'position_review') {
       const specialists = [teamValuation ? 'valuation' : '', teamPortfolio ? 'portfolio' : ''].filter(Boolean);
       for (const kind of specialists) {
         const id = recordId(`${kind}.`, task.id);
@@ -305,6 +314,41 @@ function coordinate(conn: DbConnection): void {
   }
 }
 
+function queuePositionReviews(conn: DbConnection): void {
+  try {
+    const policyId = conn.db.myRunConfig.runId.find(runId)?.policyId ?? '';
+    const policy = policyId ? conn.db.myRiskPolicy.id.find(policyId) : undefined;
+    if (!policy) return;
+    const snapshot = [...conn.db.myAccountSnapshot.iter()].filter(row => row.accountId === policy.accountId)
+      .sort((a, b) => Number(b.capturedAt.microsSinceUnixEpoch - a.capturedAt.microsSinceUnixEpoch))[0];
+    if (!snapshot || Date.now() - snapshot.capturedAt.toDate().getTime() > 15 * 60_000 ||
+        snapshot.accountStatus !== 'ACTIVE') return;
+    const proposals = [...conn.db.myTradeProposal.iter()].filter(row => row.runId === runId).map(row => ({
+      id: row.id, runId: row.runId, thesisId: row.thesisId, symbol: row.symbol, side: row.side,
+      createdAt: row.createdAt.toDate(), thesisTaskId: conn.db.myThesis.id.find(row.thesisId)?.taskId ?? '',
+    }));
+    const orders = [...conn.db.myPaperOrder.iter()].map(row => ({ id: row.id, proposalId: row.proposalId }));
+    const fills = [...conn.db.myFill.iter()].map(row => ({ id: row.id, orderId: row.orderId,
+      quantity: Number(row.quantity), price: Number(row.price), at: row.filledAt.toDate() }));
+    const markers = [...conn.db.myFact.iter()].filter(row => row.metric === 'filing_update_review' && row.value === 'review_required')
+      .map(row => ({ id: row.id, symbol: row.symbol, asOf: row.createdAt.toDate() }));
+    const quotes = [...conn.db.myMarketObservation.iter()].map(row => ({ id: row.id, symbol: row.symbol,
+      bid: Number(row.bidPrice), asOf: row.asOf.toDate() }));
+    const tasks = runTasks(conn).map(row => ({ id: row.id, status: row.status }));
+    const maxPositionNotional = Number(JSON.parse(policy.policyJson).maxPositionNotional);
+    const planned = planPositionReviews({ runId, now: new Date(), config: {
+      everyDays: positionReviewDays, priceMovePct: positionReviewPriceMovePct,
+    }, proposals, orders, fills, positions: parsePositions(snapshot.positionsJson), markers, quotes, tasks,
+      maxPositionNotional: Number.isFinite(maxPositionNotional) ? maxPositionNotional : undefined });
+    for (const task of planned) void once(`coord:${task.id}`, async () => {
+      await conn.reducers.createTask(task);
+      console.log(`Queued position review ${task.id}`);
+    });
+  } catch (error) {
+    console.error(`Position review scan skipped: ${String(error)}`);
+  }
+}
+
 async function once(key: string, action: () => Promise<void>): Promise<void> {
   if (processing.has(key)) return;
   const conn = connection;
@@ -337,6 +381,10 @@ function connect(): void {
       conn.db.myAgent.onInsert(rescan);
       conn.db.myAgent.onUpdate(rescan);
       conn.db.myThesis.onInsert(rescan);
+      conn.db.myFill.onInsert(rescan);
+      conn.db.myAccountSnapshot.onInsert(rescan);
+      conn.db.myFact.onInsert(rescan);
+      conn.db.myMarketObservation.onInsert(rescan);
       conn.db.myRun.onUpdate(rescan);
       conn.db.myRun.onDelete(rescan);
       conn.db.myAgent.onDelete(rescan);
@@ -367,6 +415,8 @@ function connect(): void {
           'SELECT * FROM my_fact',
           'SELECT * FROM my_decision',
           'SELECT * FROM my_trade_proposal',
+          'SELECT * FROM my_paper_order',
+          'SELECT * FROM my_fill',
           'SELECT * FROM my_market_observation',
           'SELECT * FROM my_decision_input',
           'SELECT * FROM my_run_config',

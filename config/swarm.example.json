@@ -13,6 +13,7 @@
     "executor": { "count": 1 }
   },
   "maxOrderNotional": 1000,
+  "positionReviews": { "everyDays": 30, "priceMovePct": 10 },
   "limits": { "maxInferences": 50, "maxTokens": 1000000, "maxConcurrent": 2, "maxAttempts": 3 },
   "riskPolicyFile": "config/risk-policy.json",
   "feed": "iex",
