@@ -14,6 +14,9 @@ export interface Observation {
   actorId: number; tick: number; x: number; y: number; world: { worldId: string; historyId: string }; paused: boolean;
   inventory: { ironPlate?: number; items?: Record<string, number> };
   nearby: { unit: number; name?: string; type: string; x: number; y: number; amount?: number; items?: { items?: Record<string, number> } }[];
+  terrain?: { area: number[][]; waterTiles: number; landTiles: number; unknownTiles: number;
+    nearestWater?: {x:number;y:number;name:string}; shorelines: {waterX:number;waterY:number;landX:number;landY:number;waterTile:string}[];
+    omittedShorelines: number; note: string };
 }
 export interface InferenceState {
   version: 1; scope: FactorioScope; calls: number; tick: number; lastResult: unknown;

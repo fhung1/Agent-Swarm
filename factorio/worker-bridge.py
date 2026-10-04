@@ -21,4 +21,8 @@ elif kind=='task_label':
     result=call(world,'set_task_label',[request['actor'],request['label']])
 else:
     raise ValueError('Unsupported bridge request')
+if kind in ('observe','inspect') and isinstance(result,dict):
+    terrain=result.get('terrain')
+    # Factorio's JSON helper encodes an empty Lua sequence as an object.
+    if isinstance(terrain,dict) and terrain.get('shorelines')=={}: terrain['shorelines']=[]
 print(json.dumps(result,separators=(',',':')))

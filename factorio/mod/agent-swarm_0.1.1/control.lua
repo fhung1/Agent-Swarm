@@ -103,6 +103,52 @@ local function machine_state(e)
     output=e.type=="assembling-machine" and inventory_items(e.get_inventory(defines.inventory.assembling_machine_output)) or nil,
     pickup=e.type=="inserter" and e.pickup_position or nil,drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
 end
+-- Read only generated tiles. Water/land pairs are geometric shoreline evidence,
+-- not a promise that an offshore pump or adjacent machines can be placed.
+local function terrain_sample(surface,cx,cy,radius)
+  local min_x=math.floor(cx-radius);local max_x=math.floor(cx+radius)
+  local min_y=math.floor(cy-radius);local max_y=math.floor(cy+radius)
+  local chunks={};local cells={};local water_count=0;local land_count=0;local unknown_count=0
+  local shores={};local nearest_water=nil;local nearest_distance=nil
+  local function tile_at(x,y)
+    if x<min_x or x>max_x or y<min_y or y>max_y then return nil end
+    local key=x..":"..y
+    if cells[key]~=nil then return cells[key] end
+    local chunk_x=math.floor(x/32);local chunk_y=math.floor(y/32)
+    local chunk_key=chunk_x..":"..chunk_y
+    if chunks[chunk_key]==nil then chunks[chunk_key]=surface.is_chunk_generated{x=chunk_x,y=chunk_y} end
+    if not chunks[chunk_key] then cells[key]=false;return false end
+    local tile=surface.get_tile(x,y)
+    cells[key]={water=tile.collides_with("water_tile"),name=tile.name}
+    return cells[key]
+  end
+  for y=min_y,max_y do for x=min_x,max_x do
+    local tile=tile_at(x,y)
+    if tile==false then unknown_count=unknown_count+1
+    elseif tile.water then
+      water_count=water_count+1
+      local d=(x+0.5-cx)^2+(y+0.5-cy)^2
+      if not nearest_distance or d<nearest_distance then nearest_distance=d;nearest_water={x=x,y=y,name=tile.name} end
+      for _,delta in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do
+        local lx=x+delta[1];local ly=y+delta[2];local land=tile_at(lx,ly)
+        if land and not land.water then shores[#shores+1]={waterX=x,waterY=y,landX=lx,landY=ly,waterTile=tile.name} end
+      end
+    else land_count=land_count+1 end
+  end end
+  table.sort(shores,function(a,b)
+    local ad=(a.waterX+0.5-cx)^2+(a.waterY+0.5-cy)^2
+    local bd=(b.waterX+0.5-cx)^2+(b.waterY+0.5-cy)^2
+    if ad~=bd then return ad<bd end
+    if a.waterY~=b.waterY then return a.waterY<b.waterY end
+    if a.waterX~=b.waterX then return a.waterX<b.waterX end
+    if a.landY~=b.landY then return a.landY<b.landY end
+    return a.landX<b.landX
+  end)
+  local visible={};for i=1,math.min(#shores,24) do visible[#visible+1]=shores[i] end
+  return {area={{min_x,min_y},{max_x,max_y}},waterTiles=water_count,landTiles=land_count,unknownTiles=unknown_count,
+    nearestWater=nearest_water,shorelines=visible,omittedShorelines=math.max(0,#shores-24),
+    note="Generated tiles only. Shorelines are adjacent water/land tiles, not verified pump footprints; inspect and build to confirm placement."}
+end
 local function observation(id,radius)
   local a=actor(id);radius=bounded(radius or 32,1,32)
   local entries={};local omitted=0
@@ -121,7 +167,8 @@ local function observation(id,radius)
       else omitted=omitted+1 end
     end
   end
-  return {actorId=id,x=a.position.x,y=a.position.y,inventory=contents(a),craftingQueue=a.crafting_queue,triggerCraftPending=storage.qs_trigger_crafts and storage.qs_trigger_crafts[id]~=nil or false,nearby=entries,omitted=omitted,tick=game.tick,world=world(),paused=storage.qs_paused or false}
+  return {actorId=id,x=a.position.x,y=a.position.y,inventory=contents(a),craftingQueue=a.crafting_queue,triggerCraftPending=storage.qs_trigger_crafts and storage.qs_trigger_crafts[id]~=nil or false,nearby=entries,omitted=omitted,
+    terrain=terrain_sample(a.surface,a.position.x,a.position.y,12),tick=game.tick,world=world(),paused=storage.qs_paused or false}
 end
 -- Read-only survey of generated terrain; never grants items or generates chunks.
 -- Cache the scan, and send compact resource cells rather than every ore tile.
@@ -610,7 +657,7 @@ remote.add_interface("agent_swarm", {
         box=e.bounding_box,status=status_names[e.status],type=e.type,belt=belt_contents(e),groundItem=e.type=="item-entity" and {name=e.stack.name,count=e.stack.count} or nil,pickup=e.type=="inserter" and e.pickup_position or nil,
         drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
     end
-    return {world=world(),tick=game.tick,area=area,entities=entities,total=#candidates,offset=query.offset,
+    return {world=world(),tick=game.tick,area=area,terrain=terrain_sample(game.surfaces[1],query.x,query.y,query.radius),entities=entities,total=#candidates,offset=query.offset,
       nextOffset=query.offset+40<#candidates and query.offset+40 or nil,
       note="Read-only layout, not a screenshot. Directions: 0 north,4 east,8 south,12 west. Belt direction is travel; inserter direction is pickup side; use actual pickup/drop coordinates. Bounding boxes show footprints. No automatic judgment of aesthetics or design."}
   end,
