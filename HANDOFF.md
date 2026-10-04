@@ -21,6 +21,7 @@ Real-provider ten-worker production, useful peer-message consumption, graphical 
 
 ## Session notes
 
+- Factorio message-board sidebar — codex-factor, 2026-10-03: desktop sidebar and main content now scroll independently, and live refreshes retain both positions. Pushed `cb8f5eb` (following `9a486d0`); updated the clean dashboard checkout serving ports 4174/4175 to `cb8f5eb` and confirmed both ports serve the new stylesheet. `npx tsc --noEmit`, browser bundle, and `git diff --check` passed. Reload the browser tab to load the new script and CSS.
 - [Inference implementation](docs/handoffs/codex-connect.md)
 - [Live acceptance owner](docs/handoffs/codex-inference-live.md)
 - [Runtime and historical fixture](docs/handoffs/codexq-factorio.md)
