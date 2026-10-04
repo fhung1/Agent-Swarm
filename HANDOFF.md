@@ -163,3 +163,24 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Remaining scope: circuit controls, actor fluid transfers and module configuration
   are not added. Fixture tests do not establish live inference factory completion.
   Monitor coaltrace's separate live miner verification after this deployment.
+
+
+## codex — Overseer Factorio reference lookup (2026-10-04)
+
+- Coordinator previously had live engine information but no reference retrieval.
+  Added a bounded `lookup` decision using official Factorio Wiki search and article
+  excerpts; all URLs are fixed-origin, requests timeout and cap bytes, no keys or
+  world state leave the process. Links, timestamps, errors and truncation are
+  retained in the last three persistent journal results and dashboard audit.
+- Lookup is available during assignment too, returns data on the next decision,
+  and uses existing model accounting. No extra agent/model/provider tool fee.
+  Prompt treats wiki content as untrusted reference and prioritizes pinned engine
+  state. Also removed an erroneous electric-smelting requirement from the default
+  iron goal text. Gameplay choices remain with Astra.
+- Checks: TypeScript check and coordinator bundle build; no test suite requested
+  or run for this change. Probed the public Wiki API to select supported search
+  and wikitext endpoints (extracts extension is unavailable).
+- Rollout preserves existing iron-zero run, world, task history, budget and saved
+  deadlines; coordinator restart uses the updated bundle. Article excerpts omit
+  infobox/templates and may describe newer releases, so precise recipe availability
+  must still be checked against live game state.

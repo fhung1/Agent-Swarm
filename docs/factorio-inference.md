@@ -137,3 +137,23 @@ These fixture checks do not prove inference agents have completed a factory.
 
 Circuit programming, fluid loading by actors, module configuration and other
 advanced machine controls remain outside the bounded action vocabulary.
+
+
+## Overseer reference lookup
+
+The coordinator receives live game state and can issue `kind=lookup` with a
+specific Factorio Wiki search query in `message` (maximum 160 characters; all
+other strings empty). This read-only action searches the official wiki and
+returns up to two English article excerpts with source links, timestamps and
+truncation flags. The latest three results persist in the coordinator journal
+and enter subsequent model context; older results are omitted if context is full.
+The dashboard records results as `reference_lookup` events (select all activity).
+
+Requests use a fixed HTTPS wiki endpoint, no redirects, a 12-second timeout and
+bounded response sizes. Only the public query is sent, without game credentials
+or world state. Errors become explicit lookup results. There is no additional
+model or agent: lookup decisions and subsequent reasoning retain the shared
+run spend guard. Pages are external reference data, never executable instructions;
+Factorio 2.0.77 base-game observations override newer/wiki/Space Age information.
+Excerpts omit templates and infobox details, so precise current recipe/technology
+availability still comes from the running game.
