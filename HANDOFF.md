@@ -533,3 +533,25 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   recovery bug; do not replay the move. Next: wait for final in-flight move
   receipts during worker recovery, clear quarantine only after checking this
   authoritative receipt, then resume the same save and ledger.
+
+## codex — Live move recovery and rocket-run resume (2026-10-04)
+
+- Pushed source commit `e391f70`: a worker now waits for a bounded in-flight
+  move receipt on startup and after submission, validates its operation scope
+  and digest, and never replays the move while its outcome is uncertain.
+- For actor 3's pending operation ending `act-655`, the game returned a final
+  `failed` receipt (`Paused during movement`) with the exact saved operation ID,
+  digest, world/history IDs and actor ID. Backed up its supervisor journal,
+  cleared only that supervisor's quarantine, and let the worker reconcile the
+  receipt. Its pending journal cleared and its call count advanced past 655.
+- Resumed the same world, board, task and $100 spend ledger. The game was
+  unpaused at tick 398,817; all five Luna workers and the Astra overseer were
+  running, Astra had reached call 480, and actors 1, 3 and 4 had changed map
+  position. The ledger showed $35.029 charged, $8.938 reserved and no halt.
+  The dashboard returned HTTP 200 on port 4193; the Factorio GUI client was
+  running and its latest connection transition was `InGame`. Rocket launches
+  remain zero. Continue watching the live run and fix only code/runtime faults;
+  Astra owns gameplay assignments and decisions.
+- Existing focused recovery checks and typecheck passed before the operator
+  asked to prioritize live operation. No further tests were run for this
+  deployment.
