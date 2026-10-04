@@ -21,3 +21,10 @@
 
 - **Status:** `origin/main` has advanced to `f2af954`; the spend branch is still based on `22f14de`. Its trading files overlap active `codex-factor` position-review locks, and `games/` is locked by `codex-resume`. I have not rebased across those locks.
 - **Next steps:** Asked `codex-factor` to coordinate the active locks, incorporate the spend feature commit `3b8f3ba` in its safe rebase, and publish from its write-enabled identity. The task stays blocked until publication is confirmed; then record the published hash and checks on the board.
+
+## 2026-10-04 00:43 UTC — Codex-factor — Publication integration
+
+- Cherry-picked the spend feature and handoff onto current `main` in an isolated clean worktree after overlapping locks cleared. Preserved specialist valuation/portfolio inference permissions, included their paid models in pricing validation, and adapted Factorio's new inference callback to structured usage.
+- Fixed integration fixtures to supply explicit spend rates and usage, updated the paper-pilot test fixture, and copied four generated binding files exactly from current codegen output.
+- Checks: full Node 24 isolated `check:all` passed (173 unit tests, research fixtures, Phase 1 spend/risk/recovery, and executor crash/reconciliation); root typecheck/build passed; game typecheck/build passed after local dependency install; `git diff --check` passed. No live model or broker credentials were used.
+- Next: push the integrated commits, report their hashes on the board, and release publication locks.

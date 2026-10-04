@@ -36,7 +36,11 @@ async function waitFor(fn: () => unknown): Promise<void> {
   while (!fn()) { if(Date.now()>deadline) throw new Error('cache convergence timeout'); await new Promise(r=>setTimeout(r,20)); }
 }
 let calls=0;
-const ask = (output: unknown) => async (schema: any) => { calls++; return schema.parse(output) };
+const ask = (output: unknown) => async (schema: any, _system: string, _prompt: string, options?: any) => {
+  calls++;
+  options?.onUsage?.({inputTokens:100,cacheReadTokens:0,cacheWriteTokens:0,outputTokens:100},'fixture');
+  return schema.parse(output);
+};
 const neverAsk = async () => {throw new Error('stored result must not call model again')};
 try {
   const operator = (await connect('operator')).conn;
@@ -47,6 +51,12 @@ try {
   let coordinatorClient = await connect('coordinator');
   let coordinator = coordinatorClient.conn;
   await operator.reducers.createRun({id:runId,goal:'Fixture model-handler verification; synthetic evidence only'});
+  await operator.reducers.configureRunLimits({runId,maxInferences:30,maxTokens:1_000_000,maxConcurrent:3,maxAttempts:3});
+  await operator.reducers.configureModelPrice({version:'research-fixture-v1',model:'fixture',
+    inputMicrosPerMillion:'1000000',cacheReadMicrosPerMillion:'1000000',
+    cacheWriteMicrosPerMillion:'1000000',outputMicrosPerMillion:'1000000'});
+  await operator.reducers.configureRunSpend({runId,pricingVersion:'research-fixture-v1',
+    maxSpendMicros:'1000000',maxWorkerSpendMicros:'1000000'});
   runCreated = true;
   for(const conn of clients) call('grant_run_access',conn.identity.toHexString(),runId);
   call('grant_account_access',reader.identity.toHexString(),'fixture-paper');
