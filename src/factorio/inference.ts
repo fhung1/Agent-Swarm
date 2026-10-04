@@ -115,13 +115,6 @@ export function buildFactorioPrompt(context: FactorioContext): string {
     });
     base = JSON.stringify(required);
   }
-  for (const count of [48, 32, 16, 8]) {
-    if (base.length <= 23500) break;
-    // The engine sorts nearby entities by distance, so reachable targets remain.
-    trim(observation, 'nearby', count, 'nearbyEntities');
-    trim(status, 'productionSites', count, 'productionSites');
-    base = JSON.stringify(required);
-  }
   if (base.length > 23500 && Array.isArray(required.tasks)) {
     required.tasks = required.tasks.map(task => {
       const row = record(task);
@@ -129,6 +122,18 @@ export function buildFactorioPrompt(context: FactorioContext): string {
       omissions.taskDescriptionCharacters = (omissions.taskDescriptionCharacters ?? 0) + row.details.length;
       return {...row, details: '', detailsTruncated: true};
     });
+    base = JSON.stringify(required);
+  }
+  // The current objective is retained separately. Free redundant board detail
+  // and distant global sites before dropping nearby physical evidence.
+  for (const count of [48, 32, 16, 8]) {
+    if (base.length <= 23500) break;
+    trim(status, 'productionSites', count, 'productionSites');
+    base = JSON.stringify(required);
+  }
+  for (const count of [48, 32, 16, 8]) {
+    if (base.length <= 23500) break;
+    trim(observation, 'nearby', count, 'nearbyEntities');
     base = JSON.stringify(required);
   }
   const resourceMap = record(status?.resourceMap);

@@ -125,3 +125,15 @@ test('ground pickup is bounded and uses observed item coordinates', () => {
  assert.equal(validateFactorioDecision({...wait,kind:'action',waitMs:0,command}).command?.kind,'pickup');
  for(const quantity of [0,101,1.5]) assert.throws(()=>validateFactorioDecision({...wait,kind:'action',waitMs:0,command:{...command,quantity}}));
 });
+
+test('local evidence survives duplicated task descriptions and large global site lists', () => {
+ const nearby=Array.from({length:32},(_,i)=>({unit:i+1,name:'transport-belt',x:i,y:0,detail:'x'.repeat(250)}));
+ const prompt=buildFactorioPrompt({...context,observation:{inventory:{items:{coal:1}},nearby},
+   tasks:Array.from({length:40},(_,i)=>({id:String(i),details:'y'.repeat(1000)})),
+   status:{productionSites:Array.from({length:100},()=>({detail:'z'.repeat(300)}))}});
+ const data=JSON.parse(prompt);
+ assert.deepEqual(data.observation.nearby,nearby);
+ assert.ok(data.omittedContext.taskDescriptionCharacters>0);
+ assert.equal(data.objective,context.objective);
+ assert.ok(prompt.length<30000);
+});

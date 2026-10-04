@@ -334,3 +334,13 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Saved/restarted live server and viewer to deploy, with private mod/manifest
   backup. Same scope/save/ledger; all inference roles resumed. Live layout now
   exposes the one dropped iron ore. Astra must choose pickup/build actions.
+
+## codex — Preserve local evidence during prompt compaction (2026-10-04)
+
+- Reconstructed two live actor prompts: both retained only 8/100 nearby entities.
+  The compactor discarded local evidence before removing repeated board details.
+- Remove duplicate descriptions first, then compact global sites, then nearby
+  entities. Own objective/inventory/last outcome and coordinator retention remain.
+- Same live snapshots now retain 16 entities under the same limit. Typecheck and
+  14 inference tests pass, including retaining a local list amid large duplicate
+  task/site data. Deploying same run; no strategy or world changes.
