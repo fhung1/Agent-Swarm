@@ -96,6 +96,27 @@ function readLatestRun(game) {
             remainingUsd: usd(BigInt(ledger.capMicros) - charged - reserved), halted: Boolean(ledger.halted) };
         }
       }
+      let overseer = null;
+      const overseerPath = join(runsDirectory, id, 'orchestrator-state.json');
+      if (existsSync(overseerPath)) {
+        try {
+          const state = JSON.parse(readFileSync(overseerPath, 'utf8'));
+          const sections = Object.entries(state.plan ?? {}).filter(([name, entry]) =>
+            /^[a-z0-9_-]{1,40}$/.test(name) && entry && typeof entry.content === 'string')
+            .slice(0, 20).map(([name, entry]) => ({ name, content: entry.content.slice(0, 1700),
+              revision: Number.isSafeInteger(entry.revision) ? entry.revision : 0,
+              updatedTick: Number.isSafeInteger(entry.updatedTick) ? entry.updatedTick : 0 }));
+          const decisions = Array.isArray(state.recentDecisions) ? state.recentDecisions.slice(-8).filter(row => row &&
+            Number.isSafeInteger(row.call) && typeof row.kind === 'string').map(row => ({
+              call: row.call, tick: Number.isSafeInteger(row.tick) ? row.tick : null,
+              kind: row.kind.slice(0, 30), recipient: typeof row.recipient === 'string' ? row.recipient.slice(0, 80) : '',
+              message: typeof row.message === 'string' ? row.message.slice(0, 400) : '',
+              title: typeof row.title === 'string' ? row.title.slice(0, 90) : '',
+            })) : [];
+          overseer = { calls: Number.isSafeInteger(state.calls) ? state.calls : 0,
+            updatedAt: new Date(statSync(overseerPath).mtimeMs).toISOString(), sections, decisions };
+        } catch { /* A concurrent journal write can be retried on the next status refresh. */ }
+      }
       candidates.push({ modifiedAt: statSync(planPath).mtimeMs, run: {
         runId: id, goal: plan.goal, provider: plan.provider, model: plan.model,
         mode: typeof plan.mode === 'string' ? plan.mode : 'unknown',
@@ -103,7 +124,7 @@ function readLatestRun(game) {
         totalCallLimit: Number.isSafeInteger(plan.totalCallLimit) ? plan.totalCallLimit : null,
         runMs: Number.isSafeInteger(plan.runMs) ? plan.runMs : null,
         maxRunSpendUsd: typeof plan.maxRunSpendUsd === 'string' ? plan.maxRunSpendUsd : null, spend: spend ?? null,
-        workers,
+        workers, overseer,
       } });
     } catch { /* Ignore incomplete or unreadable plans; the live game status remains useful. */ }
   }

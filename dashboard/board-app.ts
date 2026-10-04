@@ -73,12 +73,15 @@ const dashboardPorts = [
 let openDashboards: typeof dashboardPorts = [];
 type FactorioAgent = { index: number; actorId: number; sender: string; taskId: string };
 type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null;
-  runMs: number | null; maxRunSpendUsd: string | null; spend: { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean } | null; workers: FactorioAgent[] };
+  runMs: number | null; maxRunSpendUsd: string | null; spend: { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean } | null; workers: FactorioAgent[];
+  overseer: { calls: number; updatedAt: string; sections: Array<{name: string; content: string; revision: number; updatedTick: number}>;
+    decisions: Array<{call: number; tick: number | null; kind: string; recipient: string; message: string; title: string}> } | null };
 type FactorioActor = { unit: number; x: number; y: number; inventory: { ironOre: number; coal: number; ironPlate: number; items: Record<string, number> } };
 type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { automation?: {coalMined?:number;needsFuel?:boolean;verified:boolean; windows:number; mined:number; smelted:number; delivered:number; currentStored:number}; resourceMap?: ResourceSurvey; tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
 type ResourceSurvey = { tick: number; generatedChunks: number; totals: Record<string, number>; omittedCells: number;
   deposits: Array<{ id: string; resource: string; name: string; x: number; y: number; amount: number; distance: number }>; frontiers: Array<{x: number; y: number}> };
 let mapExpanded = false;
+let overseerExpanded = true;
 let factorioSnapshot: FactorioSnapshot | null = null;
 let factorioStatusError = 'Waiting for the Factorio server status…';
 let factorioControlPending = false;
@@ -366,6 +369,40 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
     put(runPanel, field('Call budget', run.maxCalls === null || run.totalCallLimit === null
       ? 'Unlimited · shared run spend cap stops all agents'
       : `${run.maxCalls} per actor · ${run.totalCallLimit} total`));
+    const overseer = node('details', 'evidence-details overseer-view'); overseer.open = overseerExpanded;
+    overseer.addEventListener('toggle', () => { overseerExpanded = overseer.open; });
+    put(overseer, node('summary', '', 'Overseer plan and recent decisions'),
+      node('p', 'muted small', 'Live recorded plan and decisions. The model’s private reasoning is not available.'));
+    if (run.overseer) {
+      put(overseer, field('Saved', new Date(run.overseer.updatedAt).toLocaleTimeString()),
+        field('Model calls', String(run.overseer.calls)));
+      const sections = [...run.overseer.sections].sort((a, b) => a.name === 'current' ? -1 : b.name === 'current' ? 1 : a.name.localeCompare(b.name));
+      if (sections.length) {
+        put(overseer, node('h3', '', 'External plan'));
+        for (const section of sections) {
+          const card = node('article', 'order-card overseer-plan');
+          put(card, node('strong', '', `${section.name} · revision ${section.revision} · tick ${section.updatedTick}`),
+            node('p', 'board-copy', section.content));
+          put(overseer, card);
+        }
+      } else put(overseer, node('p', 'muted small', 'Astra has not saved a plan section yet.'));
+      put(overseer, node('h3', '', 'Recent decisions'));
+      if (run.overseer.decisions.length) {
+        for (const decision of [...run.overseer.decisions].reverse()) {
+          const card = node('article', 'order-card overseer-decision');
+          put(card, node('strong', '', `Call ${decision.call} · ${decision.kind}${decision.tick === null ? '' : ` · tick ${decision.tick}`}`));
+          if (decision.recipient) put(card, field('Recipient', decision.recipient));
+          if (decision.title) put(card, field('Task', decision.title));
+          if (decision.message) put(card, node('p', 'board-copy', decision.message));
+          put(overseer, card);
+        }
+      } else put(overseer, node('p', 'muted small', 'No decisions recorded yet.'));
+    } else put(overseer, node('p', 'muted small', 'Waiting for the overseer journal.'));
+    put(overseer, button('Show overseer messages', () => {
+      messageAgent = `${run.runId}-orchestrator`; messageLimit = 100;
+      save(`${storagePrefix}:message-agent`, messageAgent); queueRender();
+    }));
+    put(runPanel, overseer);
     const workers = node('div', 'cards factorio-workers');
     if (!client.ready) empty(workers, 'Worker task and participant state will appear when the message-board subscription reconnects.');
     for (const worker of client.ready ? run.workers : []) {

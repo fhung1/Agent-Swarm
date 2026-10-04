@@ -431,3 +431,17 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   Astra issued a fresh bootstrap directive at call134; full module build pending.
 - Root typecheck and 15 focused orchestrator tests passed; rebuilt deployed
   orchestrator bundle. No gameplay items, board tasks or run settings reset.
+
+## codex — Overseer activity in Factorio dashboard (2026-10-04)
+
+- Added a live "Overseer plan and recent decisions" section to the Factorio
+  run panel. It shows sanitized external plan sections, last eight structured
+  decisions, model call count and a shortcut to overseer messages. It labels
+  these as recorded outputs; private model reasoning is not available.
+- Status API reads only the journal for the run whose saved world/history IDs
+  match the game. Plan content, decision text and names are length bounded;
+  credentials, raw prompts, provider traces and full tool results are excluded.
+- Restarted dashboard4193 without touching the game or inference roles. Live
+  API returned run iron-modular-20261004, two plan sections, eight decisions and
+  game tick56300; served browser bundle contains the new section. Dashboard
+  typecheck and server syntax check pass. Factory remains in progress.
