@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inferenceLaunchPlan } from './inference-launch.ts';
-const input = { runId: 'demo', actorIds: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], provider: 'codex', model: 'configured-model', maxCalls: 4, runMs: 60000 };
+const input = { runId: 'demo', actorIds: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], provider: 'codex', model: 'configured-model', mode: 'production' as const, maxCalls: 8, runMs: 60000 };
 test('ten physical actors map deterministically to ten independent identities/tasks', () => {
   const plan = inferenceLaunchPlan(input);
-  assert.equal(plan.totalCallLimit, 40);
+  assert.equal(plan.totalCallLimit, 80);
   assert.deepEqual(plan.workers.map(w => w.actorId), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.deepEqual(plan.actorIds, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
   assert.deepEqual(inferenceLaunchPlan({ ...input, actorIds: [...input.actorIds].reverse() }), plan);
@@ -18,4 +18,10 @@ test('launcher rejects rules fallback, repeated actors and unbounded calls', () 
   assert.throws(() => inferenceLaunchPlan({ ...input, maxCalls: Infinity }));
   assert.throws(() => inferenceLaunchPlan({ ...input, runMs: 0 }));
   assert.throws(() => inferenceLaunchPlan({ ...input, runId: '../world' }));
+});
+test('smoke and production budgets are explicitly separated', () => {
+  assert.equal(inferenceLaunchPlan({ ...input, mode: 'smoke', maxCalls: 3 }).mode, 'smoke');
+  assert.throws(() => inferenceLaunchPlan({ ...input, mode: 'smoke', maxCalls: 4 }));
+  assert.throws(() => inferenceLaunchPlan({ ...input, mode: 'production', maxCalls: 7 }));
+  assert.equal(inferenceLaunchPlan({ ...input, mode: 'production', maxCalls: 8 }).totalCallLimit, 80);
 });

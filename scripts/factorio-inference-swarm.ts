@@ -13,7 +13,8 @@ async function main() {
   if (status.world?.worldId !== manifest.worldId || status.world?.historyId !== manifest.historyId) throw Error('Game world differs from manifest');
   const plan = inferenceLaunchPlan({ runId, actorIds: status.actors.map((a: { unit: number }) => a.unit),
     provider: process.env.AGENT_BRAIN ?? '', model: process.env.AGENT_MODEL ?? '',
-    maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS) });
+    maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS),
+    mode: process.env.FACTORIO_DEMO_MODE as 'smoke' | 'production' | undefined });
   const providerKey = plan.provider === 'codex' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
   console.log(JSON.stringify({ mode: start ? 'start' : 'dry-run', worldId: manifest.worldId, historyId: manifest.historyId,
     ...plan, credentialConfigured: Boolean(process.env[providerKey]), paused: status.paused }, null, 2));
