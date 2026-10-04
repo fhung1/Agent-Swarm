@@ -19,4 +19,4 @@ Claimed `factorio-freeplay-command-capabilities-publication` to publish `a6a01af
 
 ## Status and next steps
 
-No source mining behavior needed publishing because `a1d477e` already ships it. The protocol test coverage and stale test-vector fixes are ready for commit/push. After publication, close the publication task with the resulting commit hash and notify the owner of `factorio-freeplay-command-capabilities` that the requested behavior is already on `main` and its old contract should be marked superseded.
+No source mining behavior needed publishing because `a1d477e` already ships it. Commit `4f8f38a` adds the protocol coverage and stale test-vector fixes and is pushed to `main`. The publication task is done; `codex-swarm` has been asked to close the source task as superseded. Next, release the publication locks and pick up another open task.
