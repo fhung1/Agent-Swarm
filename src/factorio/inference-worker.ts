@@ -237,7 +237,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
             usageKnown: Boolean(usage), promptBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
             reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
-          const reason = 'The previous model response was invalid or incomplete; return one minimal valid decision JSON without explanation and retry.';
+          const reason = error.feedback;
           await post(`${id}-rejected`, 'decision_rejected', { reason });
           state.lastResult = { kind: 'invalid_model_output', reason }; state.decision = null; o.save(state);
           continue;
