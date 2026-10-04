@@ -1,5 +1,5 @@
 import { participantName } from './participant-name.js';
-import { comparePriority } from '../message-board/priority.js';
+import { comparePriority, type TaskPriority } from '../message-board/priority.js';
 import { priorityControl } from './priority-control.js';
 import { parseBoardConfig, findBoard } from '../message-board/config.js';
 import { MessageBoardClient, stored, save, type BoardTask } from './board-client.js';
@@ -23,6 +23,13 @@ let draftBody = '';
 let draftRecipient = '';
 let draftTask = '';
 let sending = false;
+let creatingTask = false;
+let taskCreatedNotice = '';
+let newTaskTitle = '';
+let newTaskDetails = '';
+let newTaskArea = 'general';
+let newTaskPriority: TaskPriority = 'normal';
+let newTaskDependency = '';
 let actionPending = false;
 let error = board.id === requestedBoard ? '' : `Unknown board: ${requestedBoard}. Showing ${board.label}.`;
 const dashboardPorts = [
@@ -33,7 +40,8 @@ const dashboardPorts = [
 ];
 let openDashboards: typeof dashboardPorts = [];
 type FactorioAgent = { index: number; actorId: number; sender: string; taskId: string };
-type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null; runMs: number | null; workers: FactorioAgent[] };
+type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null;
+  runMs: number | null; maxRunSpendUsd: string | null; spend: { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean } | null; workers: FactorioAgent[] };
 type FactorioActor = { unit: number; x: number; y: number; inventory: { ironOre: number; coal: number; ironPlate: number; items: Record<string, number> } };
 type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
 let factorioSnapshot: FactorioSnapshot | null = null;
@@ -119,15 +127,15 @@ function queueRender(): void {
   requestAnimationFrame(() => {
     queued = false;
     const active = document.activeElement;
-    const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
+    const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
     const label = editing ? active.dataset.field : undefined;
-    const selection = editing ? [active.selectionStart, active.selectionEnd] : undefined;
+    const selection = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement ? [active.selectionStart, active.selectionEnd] : undefined;
     render();
     if (label) {
-      const control = Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-field]'))
+      const control = Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-field]'))
         .find(element => element.dataset.field === label);
       control?.focus({ preventScroll: true });
-      if (control && selection) control.setSelectionRange(selection[0], selection[1]);
+      if ((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && selection) control.setSelectionRange(selection[0], selection[1]);
     }
   });
 }
@@ -146,6 +154,36 @@ function input(label: string, value: string, update: (value: string) => void, mu
   control.addEventListener('input', () => update(control.value));
   put(wrapper, node('span', 'muted small', label), control);
   return wrapper;
+}
+function select(label: string, value: string, options: Array<[string, string]>, update: (value: string) => void): HTMLElement {
+  const wrapper = node('label', 'board-input');
+  const control = node('select');
+  control.dataset.field = label;
+  for (const [optionValue, optionLabel] of options) {
+    const option = node('option', '', optionLabel);
+    option.value = optionValue;
+    control.append(option);
+  }
+  control.value = value;
+  control.addEventListener('change', () => update(control.value));
+  put(wrapper, node('span', 'muted small', label), control);
+  return wrapper;
+}
+async function createBoardTask(): Promise<void> {
+  if (creatingTask) return;
+  creatingTask = true; error = ''; taskCreatedNotice = ''; queueRender();
+  try {
+    const title = newTaskTitle.trim();
+    if (!title) throw Error('Enter a task title.');
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 72) || 'task';
+    const name = await asParticipant();
+    const id = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
+    await client.createTask(name, { id, title, details: newTaskDetails.trim(), area: newTaskArea.trim() || 'general',
+      dependsOn: newTaskDependency, priority: newTaskPriority });
+    newTaskTitle = ''; newTaskDetails = ''; newTaskArea = 'general'; newTaskPriority = 'normal'; newTaskDependency = '';
+    taskCreatedNotice = `Created “${title}” (${id}).`;
+  } catch (reason) { error = String(reason); }
+  finally { creatingTask = false; queueRender(); }
 }
 async function asParticipant(): Promise<string> {
   const name = participantName(sessionName, client.identity);
@@ -249,10 +287,14 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
     const matchingTasks = run.workers.map(worker => snapshot.tasks.find(task => task.id === worker.taskId));
     const done = matchingTasks.filter(task => task?.status === 'done').length;
     const claimed = matchingTasks.filter(task => task?.status === 'claimed').length;
+    const goalLabel = run.goal === 'plates' ? 'Iron plate factory' : run.goal;
     const runPanel = panel(`Inference run · ${run.runId}`, client.ready
-      ? `${run.goal} · ${run.provider}/${run.model} · ${done}/${run.workers.length} tasks complete · ${claimed} in progress`
-      : `${run.goal} · ${run.provider}/${run.model} · message board unavailable`);
+      ? `${goalLabel} · ${run.provider}/${run.model} · ${done}/${run.workers.length} tasks complete · ${claimed} in progress`
+      : `${goalLabel} · ${run.provider}/${run.model} · message board unavailable`);
     put(runPanel, field('Run limits', `${run.mode} · ${run.runMs === null ? 'duration unavailable' : `${Math.round(run.runMs / 60000)} min`}`));
+    put(runPanel, field('Run spend', run.spend
+      ? `${run.spend.halted ? 'STOPPED · ' : ''}${run.spend.chargedUsd} charged · ${run.spend.reservedUsd} reserved · ${run.spend.remainingUsd} remaining of ${run.spend.capUsd}`
+      : `${run.maxRunSpendUsd ? `$${run.maxRunSpendUsd} cap` : 'Spend cap unavailable'} · waiting for run ledger`));
     put(runPanel, field('Call budget', run.maxCalls === null || run.totalCallLimit === null
       ? 'Unlimited · shared run spend cap stops all agents'
       : `${run.maxCalls} per actor · ${run.totalCallLimit} total`));
@@ -336,6 +378,19 @@ function render(): void {
   const secondary = node('div', 'column');
   const taskPanel = panel('Task board', `${shownTasks.length} tasks · ${filter} · highest priority first`);
   put(taskPanel, input('Your participant name', sessionName, value => { sessionName = value; save(NAME_KEY, value); queueRender(); }));
+  const createForm = node('form', 'board-form task-create-form');
+  put(createForm, node('h3', '', 'Create a task'),
+    input('Title', newTaskTitle, value => { newTaskTitle = value; }),
+    input('Details', newTaskDetails, value => { newTaskDetails = value; }, true),
+    input('Area', newTaskArea, value => { newTaskArea = value; }),
+    select('Priority', newTaskPriority, [['urgent', 'Urgent'], ['high', 'High'], ['normal', 'Normal'], ['low', 'Low']], value => { newTaskPriority = value as TaskPriority; }),
+    select('Depends on (optional)', newTaskDependency, [['', 'No dependency'], ...tasks.map(task => [task.id, `${task.title} (${task.status})`] as [string, string])], value => { newTaskDependency = value; }));
+  const createButton = node('button', 'primary-button', creatingTask ? 'Creating…' : 'Create task');
+  createButton.type = 'submit'; createButton.disabled = creatingTask;
+  put(createForm, createButton);
+  createForm.addEventListener('submit', event => { event.preventDefault(); void createBoardTask(); });
+  put(taskPanel, createForm);
+  if (taskCreatedNotice) put(taskPanel, node('p', 'task-created-notice', taskCreatedNotice));
   if (!shownTasks.length) empty(taskPanel, 'No tasks in this view.');
   const cards = node('div', 'cards');
   for (const task of shownTasks) {

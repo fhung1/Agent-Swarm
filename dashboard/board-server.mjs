@@ -80,12 +80,29 @@ function readLatestRun(game) {
       const workers = plan.workers.filter(worker => worker && Number.isSafeInteger(worker.index) && Number.isSafeInteger(worker.actorId) &&
         typeof worker.sender === 'string' && typeof worker.taskId === 'string')
         .map(worker => ({ index: worker.index, actorId: worker.actorId, sender: worker.sender, taskId: worker.taskId }));
+      let spend;
+      const spendPath = join(runsDirectory, id, 'run-spend.json');
+      if (existsSync(spendPath)) {
+        const ledger = JSON.parse(readFileSync(spendPath, 'utf8'));
+        if (ledger.version === 1 && ledger.runId === id && ledger.worldId === game.world.worldId && ledger.historyId === game.world.historyId &&
+            typeof ledger.capMicros === 'string' && /^\d+$/.test(ledger.capMicros) && ledger.records && typeof ledger.records === 'object') {
+          let charged = 0n, reserved = 0n;
+          for (const record of Object.values(ledger.records)) {
+            if (record.status === 'settled' && /^\d+$/.test(record.chargedMicros)) charged += BigInt(record.chargedMicros);
+            else if (record.status === 'reserved' && /^\d+$/.test(record.reservedMicros)) reserved += BigInt(record.reservedMicros);
+          }
+          const usd = micros => `$${micros / 1_000_000n}.${String(micros % 1_000_000n).padStart(6, '0')}`;
+          spend = { capUsd: usd(BigInt(ledger.capMicros)), chargedUsd: usd(charged), reservedUsd: usd(reserved),
+            remainingUsd: usd(BigInt(ledger.capMicros) - charged - reserved), halted: Boolean(ledger.halted) };
+        }
+      }
       candidates.push({ modifiedAt: statSync(planPath).mtimeMs, run: {
         runId: id, goal: plan.goal, provider: plan.provider, model: plan.model,
         mode: typeof plan.mode === 'string' ? plan.mode : 'unknown',
         maxCalls: Number.isSafeInteger(plan.maxCalls) ? plan.maxCalls : null,
         totalCallLimit: Number.isSafeInteger(plan.totalCallLimit) ? plan.totalCallLimit : null,
         runMs: Number.isSafeInteger(plan.runMs) ? plan.runMs : null,
+        maxRunSpendUsd: typeof plan.maxRunSpendUsd === 'string' ? plan.maxRunSpendUsd : null, spend: spend ?? null,
         workers,
       } });
     } catch { /* Ignore incomplete or unreadable plans; the live game status remains useful. */ }

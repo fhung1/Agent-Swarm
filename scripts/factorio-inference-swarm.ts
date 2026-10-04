@@ -87,17 +87,21 @@ async function main() {
     }
     await board.setParticipantLimit(8);
     await board.register(plan.orchestrator.sender, 'factorio-orchestrator', `Board-only coordinator; five ${plan.actorModel} low-effort game actors; ${plan.orchestrator.model} high effort`);
-    if (goal === 'rocket' && !board.snapshot().tasks.some(t => t.id === `${runId}.goal-rocket`)) {
-      await board.createTask(plan.orchestrator.sender, { id: `${runId}.goal-rocket`, title: 'Beat Factorio: launch a rocket', area: 'factorio-goal',
-        details: `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. The overseer must create one run-scoped subtask per actor before workers start. push when finished`, priority: 'high' });
+    const goalTaskId = `${runId}.goal-${goal}`;
+    if (!board.snapshot().tasks.some(t => t.id === goalTaskId)) {
+      const title = goal === 'rocket' ? 'Beat Factorio: launch a rocket' : 'Build and operate an iron plate factory';
+      const details = goal === 'rocket'
+        ? `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. The overseer must create one run-scoped subtask per actor before workers start.`
+        : `World ${manifest.worldId}; history ${manifest.historyId}. Build and operate a furnace-based iron plate factory using game resources, crafting and shared logistics. Each of the five assigned actors must contribute, produce at least five iron plates, and verify that a furnace remains in the world. The overseer must create one run-scoped subtask per actor before workers start.`;
+      await board.createTask(plan.orchestrator.sender, { id: goalTaskId, title, area: 'factorio-goal', details, priority: 'high' });
     }
-    if (goal === 'rocket' && !board.snapshot().messages.some(row => {
+    if (!board.snapshot().messages.some(row => {
       try { const body = JSON.parse(row.body); return row.sender === plan.orchestrator.sender && body.runId === runId && body.eventId === `${runId}-budget`; }
       catch { return false; }
     })) {
       await board.post(plan.orchestrator.sender, JSON.stringify({ version: 1, runId, worldId: manifest.worldId, historyId: manifest.historyId,
         sender: plan.orchestrator.sender, eventId: `${runId}-budget`, kind: 'run_budget',
-        payload: { capUsd: spend.snapshot().capUsd, priceVersion: plan.spendPriceVersion, actors: plan.actorModel, overseer: plan.orchestrator.model } }), '', `${runId}.goal-rocket`);
+        payload: { capUsd: spend.snapshot().capUsd, priceVersion: plan.spendPriceVersion, actors: plan.actorModel, overseer: plan.orchestrator.model } }), '', goalTaskId);
     }
     const deadlinePath = join(directory, 'orchestrator-deadline.json');
     const configuredDeadline = Date.now() + plan.runMs;
@@ -134,7 +138,9 @@ async function main() {
       const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
         detached: process.platform !== 'win32',
         env: { ...baseEnv, AGENT_MODEL: plan.actorModel, AGENT_EFFORT: plan.actorEffort, FACTORIO_TASK_ID: taskId,
-          FACTORIO_OBJECTIVE: 'Wait for the Astra overseer to create and announce your run-scoped rocket task before acting.',
+          FACTORIO_OBJECTIVE: goal === 'rocket'
+            ? 'Wait for the Astra overseer to create and announce your run-scoped rocket task before acting.'
+            : 'Wait for the Astra overseer to create and announce your run-scoped iron plate factory task before acting.',
           ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
       closeSync(log); children.push(child);
       results.push(new Promise(resolveResult => {

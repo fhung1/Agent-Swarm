@@ -118,7 +118,9 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     const assignedObjective = [initial.title, initial.details].filter(Boolean).join('\n');
     if (initial.status === 'done' && initial.assignee === scope.sender) {
       const observed = observe();
-      const won = o.goal === 'rocket' ? Number((o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches) >= 1 : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates;
+      const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number };
+      const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
+        : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates && Number(engineStatus.furnaces) >= 1;
       if (state.pending || !won) throw Error('Completed task disagrees with live actor state');
       return;
     }
@@ -196,13 +198,15 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.lastResult = { kind: 'wait', reason: output.message }; state.decision = null; o.save(state);
         await sleep(output.waitMs);
       } else if (output.kind === 'complete') {
-        const won = o.goal === 'rocket'
-          ? Number((o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches) >= 1
-          : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates;
+        const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number };
+        const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
+          : (observed.inventory.ironPlate ?? 0) >= o.requiredPlates && Number(engineStatus.furnaces) >= 1;
         if (!won) {
-          state.lastResult = { error: 'Completion rejected: live inventory does not satisfy objective' }; state.decision = null; o.save(state); continue;
+          state.lastResult = { error: o.goal === 'rocket' ? 'Completion rejected: no engine-observed rocket launch'
+            : 'Completion rejected: live inventory needs five iron plates and the game must contain a furnace' }; state.decision = null; o.save(state); continue;
         }
-        await post(`${id}-complete`, 'completion', { taskId: o.taskId, inventory: observed.inventory, tick: observed.tick, rocketLaunches: (o.game({ kind: 'status' }) as { rocketLaunches?: number }).rocketLaunches });
+        await post(`${id}-complete`, 'completion', { taskId: o.taskId, inventory: observed.inventory, tick: observed.tick,
+          rocketLaunches: engineStatus.rocketLaunches, furnaces: engineStatus.furnaces });
         leases.stop();
         for (const r of board.snapshot().reservations.filter(r => r.holder === scope.sender && r.taskId === o.taskId)) {
           leases.release(r.path); await board.releaseReservation(scope.sender, r.path);
@@ -210,7 +214,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         snapshot();
         await board.updateTask(scope.sender, o.taskId, 'done', o.goal === 'rocket'
           ? `Engine rocket launch observed by actor ${scope.actorId} at tick ${observed.tick}`
-          : `Inference actor ${scope.actorId}: ${observed.inventory.ironPlate} plates observed at tick ${observed.tick}`);
+          : `Game verified ${observed.inventory.ironPlate} iron plates in actor ${scope.actorId}'s inventory and ${engineStatus.furnaces} furnace(s) at tick ${observed.tick}`);
         state.decision = null; o.save(state); return;
       } else if (output.kind === 'subtask' || output.kind === 'resource_request') {
         const taskId = `${scope.runId}.subtask-${scope.actorId}-${state.calls}`;
@@ -227,7 +231,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           title: output.kind === 'resource_request' ? `Deliver ${request.quantity} ${request.item} to box ${request.boxId}` : String(request.title),
           details: output.kind === 'resource_request'
             ? `${JSON.stringify({ runId: scope.runId, worldId: scope.worldId, requestedBy: scope.sender, item: request.item, quantity: request.quantity, boxId: request.boxId })}\npush when finished`
-            : `${String(request.details)}\nParent goal: ${scope.runId}.goal-rocket; world ${scope.worldId}; push when finished`,
+            : `${String(request.details)}\nParent goal: ${scope.runId}.goal-${o.goal === 'rocket' ? 'rocket' : 'plates'}; world ${scope.worldId}; push when finished`,
           area: output.kind === 'resource_request' ? 'factorio-resource' : 'factorio-subtask', dependsOn });
         await post(`${id}-task`, output.kind, { taskId, ...request });
         state.lastResult = { kind: output.kind, taskId }; state.decision = null; o.save(state);
@@ -356,7 +360,7 @@ export async function inferenceWorkerMain(): Promise<void> {
     await runInferenceWorker({ scope, state, taskId: process.env.FACTORIO_TASK_ID ?? `${runId}.production-${index}`,
       objective: process.env.FACTORIO_OBJECTIVE ?? (process.env.FACTORIO_GOAL === 'rocket'
         ? 'Beat Factorio by launching a rocket from this empty-resource freeplay world. Decompose the goal into board subtasks and cooperate through resource requests and shared chests.'
-        : 'Cooperate with peers and collect five iron plates in your own inventory.'),
+        : 'Cooperate to build and operate a furnace-based iron plate factory; deliver five game-produced plates into your inventory and verify a furnace remains in the world.'),
       operatorPrompt: () => process.env.FACTORIO_PROMPT_FILE ? readFileSync(process.env.FACTORIO_PROMPT_FILE, 'utf8') : process.env.FACTORIO_PROMPT ?? 'Share plans and observations; avoid resource contention.',
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,

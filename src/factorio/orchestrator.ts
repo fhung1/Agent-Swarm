@@ -21,7 +21,7 @@ export interface OrchestratorContext {
 export interface OrchestratorState { calls: number }
 type OrchestratorBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'createTask' | 'claimTask' | 'updateTask'>;
 export interface OrchestratorOptions {
-  scope: Omit<FactorioScope, 'actorId'> & { agents: string[] }; goalTaskId: string; objective: string;
+  scope: Omit<FactorioScope, 'actorId'> & { agents: string[] }; goalTaskId: string; objective: string; goal?: 'plates' | 'rocket';
   maxCalls: number; deadline: number; intervalMs: number; timeoutMs: number;
   requireActorSubtasks?: boolean;
   ask: Ask; board: OrchestratorBoard; state: OrchestratorState; save: (state: OrchestratorState) => void;
@@ -75,7 +75,7 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
   await waitReady();
   await board.register(scope.sender, 'factorio-orchestrator', `board-only coordinator; run ${scope.runId}; model ${o.ask.model ?? 'configured'} high effort`);
   let current = snapshot().tasks.find(task => task.id === o.goalTaskId);
-  if (!current) throw Error('Missing rocket goal task');
+  if (!current) throw Error('Missing run goal task');
   if (current.status === 'done') return;
   if (current.status === 'open') await board.claimTask(scope.sender, current.id);
   for (let i = 0; i < 40; i++) {
@@ -93,20 +93,40 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
   while (true) {
     withinRun(); await waitReady();
     let s = snapshot(); assertOwnership();
-    const launchProof = selectRunMessages(s.messages, scope, s.messages.length || 1).find(message => {
-      if (message.kind !== 'completion') return false;
-      const payload = message.payload as { taskId?: string; rocketLaunches?: number };
-      return Boolean(s.tasks.some(task => task.id === payload.taskId && task.assignee === message.sender && task.status === 'done') &&
-        Number(payload.rocketLaunches) >= 1);
-    });
-    if (launchProof) {
-      const payload = launchProof.payload as { taskId: string; rocketLaunches: number; tick: number };
-      const completedTask = s.tasks.find(task => task.id === payload.taskId && task.assignee === launchProof.sender && task.status === 'done');
-      if (!completedTask) throw Error('Rocket completion message has no completed assigned task');
-      const proof = `Engine reports ${payload.rocketLaunches} rocket launch at tick ${payload.tick}`;
-      await post(`${scope.runId}-orchestrator-goal-complete`, 'goal_completion', { taskId: completedTask.id, proof });
-      await board.updateTask(scope.sender, o.goalTaskId, 'done', `Worker ${launchProof.sender} reported the engine-verified rocket launch: ${proof}`);
-      return;
+    const completions = selectRunMessages(s.messages, scope, s.messages.length || 1)
+      .filter(message => message.kind === 'completion');
+    if ((o.goal ?? 'rocket') === 'rocket') {
+      const launchProof = completions.find(message => {
+        const payload = message.payload as { taskId?: string; rocketLaunches?: number };
+        return Boolean(s.tasks.some(task => task.id === payload.taskId && task.assignee === message.sender && task.status === 'done') &&
+          Number(payload.rocketLaunches) >= 1);
+      });
+      if (launchProof) {
+        const payload = launchProof.payload as { taskId: string; rocketLaunches: number; tick: number };
+        const completedTask = s.tasks.find(task => task.id === payload.taskId && task.assignee === launchProof.sender && task.status === 'done');
+        if (!completedTask) throw Error('Rocket completion message has no completed assigned task');
+        const proof = `Engine reports ${payload.rocketLaunches} rocket launch at tick ${payload.tick}`;
+        await post(`${scope.runId}-orchestrator-goal-complete`, 'goal_completion', { taskId: completedTask.id, proof });
+        await board.updateTask(scope.sender, o.goalTaskId, 'done', `Worker ${launchProof.sender} reported the engine-verified rocket launch: ${proof}`);
+        return;
+      }
+    } else {
+      const actorProofs = scope.agents.map((actor, index) => {
+        const taskId = `${scope.runId}.subtask-orchestrator-${index + 1}`;
+        const task = s.tasks.find(row => row.id === taskId && row.assignee === actor && row.status === 'done');
+        const message = completions.find(row => row.sender === actor && (row.payload as { taskId?: string }).taskId === taskId);
+        const payload = message?.payload as { inventory?: { ironPlate?: number }; furnaces?: number; tick?: number } | undefined;
+        return task && payload && Number(payload.inventory?.ironPlate) >= 5 && Number(payload.furnaces) >= 1
+          ? { actor, taskId, plates: Number(payload.inventory!.ironPlate), furnaces: Number(payload.furnaces), tick: Number(payload.tick ?? 0) }
+          : undefined;
+      });
+      if (actorProofs.every((proof): proof is NonNullable<typeof proof> => Boolean(proof))) {
+        const proof = `All five assigned actors have game-verified inventories of at least five iron plates; the game reports ${Math.max(...actorProofs.map(row => row!.furnaces))} furnace(s). ` +
+          actorProofs.map(row => `${row!.actor}: ${row!.plates} plates at tick ${row!.tick}`).join('; ');
+        await post(`${scope.runId}-orchestrator-goal-complete`, 'goal_completion', { taskIds: actorProofs.map(row => row!.taskId), proof });
+        await board.updateTask(scope.sender, o.goalTaskId, 'done', proof);
+        return;
+      }
     }
     const assignmentTarget = o.requireActorSubtasks
       ? scope.agents.map((actor, index) => ({ actor, taskId: `${scope.runId}.subtask-orchestrator-${index + 1}` }))
@@ -225,7 +245,9 @@ export async function factorioOrchestratorMain(): Promise<void> {
     await runFactorioOrchestrator({
       scope: { runId, worldId: manifest.worldId, historyId: manifest.historyId, sender: `${runId}-orchestrator`,
         agents: Array.from({ length: 5 }, (_, index) => `${runId}-agent-${index + 1}`) },
-      goalTaskId: `${runId}.goal-rocket`, objective: process.env.FACTORIO_OBJECTIVE ?? 'Coordinate the five player agents to beat Factorio and launch a rocket.',
+      goalTaskId: `${runId}.goal-${process.env.FACTORIO_GOAL === 'plates' ? 'plates' : 'rocket'}`,
+      objective: process.env.FACTORIO_OBJECTIVE ?? 'Coordinate the five player agents to beat Factorio and launch a rocket.',
+      goal: process.env.FACTORIO_GOAL === 'plates' ? 'plates' : 'rocket',
       maxCalls: Number(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS ?? 120), deadline,
       intervalMs: Number(process.env.FACTORIO_ORCHESTRATOR_INTERVAL_MS ?? 30000), timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000),
       requireActorSubtasks: true, spend, ask: createAsker(provider), board, state, save: value => saveState(statePath, value), signal: controller.signal,
