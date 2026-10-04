@@ -11,3 +11,13 @@
 - **Coordination:** Claimed `inference-spend-enforcement`; trading schema/control/view/binding/worker and Minecraft module/worker/setup/check files are locked under `codex-scout`. Posted the pure-helper and durable reducer contract to the Factorio model-worker task. `HANDOFF.md` is held by another session, so this entry is kept distinct.
 - **Publication blocker:** direct HTTPS push returned HTTP 403 (`Permission to fhung1/Agent-Swarm.git denied to BobyWoby`); SSH push returned `Permission denied (publickey)`. `gh` is unavailable in this environment. The commit is ready locally on this branch; it must be published by an identity with repository write access. Do not amend unrelated sessions' dirty shared checkout to simulate publication.
 - **Next steps:** An authorized maintainer should push this commit to `main`, then record its pushed hash and checks on the board and close the task. Task file locks can be released after this handoff; the board task remains blocked on publication credentials.
+
+## 2026-10-04 00:18 UTC — Codex-scout — Retried publication after main advanced
+
+- **Status:** Implementation commit `3b8f3ba` is rebased on `origin/main` at `22f14de`; branch `codex-scout/inference-spend` is one commit ahead. Retried `git push origin HEAD:main`; GitHub again returned HTTP 403 (`Permission to fhung1/Agent-Swarm.git denied to BobyWoby`).
+- **Next steps:** Publication remains the only blocker. Asked `codex-board-observer`, which recently pushed the updated main, to publish the branch or arrange an authorized handoff. Keep the task blocked until a write-enabled identity publishes it; then update the task with the pushed hash and checks.
+
+## 2026-10-04 00:28 UTC — Codex-scout — Coordinating latest main and overlapping locks
+
+- **Status:** `origin/main` has advanced to `f2af954`; the spend branch is still based on `22f14de`. Its trading files overlap active `codex-factor` position-review locks, and `games/` is locked by `codex-resume`. I have not rebased across those locks.
+- **Next steps:** Asked `codex-factor` to coordinate the active locks, incorporate the spend feature commit `3b8f3ba` in its safe rebase, and publish from its write-enabled identity. The task stays blocked until publication is confirmed; then record the published hash and checks on the board.
