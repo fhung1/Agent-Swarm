@@ -47,7 +47,16 @@ with tempfile.TemporaryDirectory(prefix='qs-factorio-production-') as directory:
             time.sleep(.2)
         transfer('collect-plates','take',furnace['unit'],'iron-plate',5)
         assert call(world,'observe',[actor,32])['inventory']['ironPlate']==5
+        pending=call(world,'submit',[encode(world,actor,'paused-move',{'kind':'move','x':chest['x']+1,'y':chest['y'],'maxTicks':600})])
+        assert pending['status']=='pending'
         call(world,'control',[True])
+        deadline=time.monotonic()+5
+        while True:
+            paused_move=call(world,'receipt',['paused-move'])
+            if paused_move['status']!='pending':break
+            if time.monotonic()>deadline:raise AssertionError('pause did not terminate movement')
+            time.sleep(.1)
+        assert paused_move['status']=='failed' and paused_move['detail']=='Paused during movement'
         try:transfer('paused-take','take',chest['unit'],'coal',1);raise AssertionError('paused mutation accepted')
         except ValueError:pass
         assert call(world,'receipt',['collect-plates'])['quantity']==5

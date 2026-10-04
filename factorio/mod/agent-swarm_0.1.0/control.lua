@@ -124,6 +124,8 @@ script.on_event(defines.events.on_tick,function()
     if receipt.status=="pending" and receipt.target then
       local ok,a=pcall(actor,receipt.actorId)
       if not ok then finish(id,"failed","Actor lost")
+      elseif storage.qs_paused then
+        a.walking_state={walking=false,direction=defines.direction.north};finish(id,"failed","Paused during movement")
       elseif distance(a.position,receipt.target)<0.5 then
         a.walking_state={walking=false,direction=defines.direction.north};finish(id,"completed","Arrived")
       elseif game.tick>=receipt.deadline then
