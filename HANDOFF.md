@@ -1,5 +1,11 @@
 # Factorio handoff
 
+## Event-driven swarm communication — codex, 2026-10-04
+
+Actor and Astra prompts now request communication only for actionable blockers, handoffs/completion, relevant discoveries and material plan changes; routine narration, acknowledgments and unchanged progress are discouraged. Repeated identical chat to the same recipient is suppressed using run/world/history-scoped board history, surviving restarts. Peer context excludes inference audits, decisions, wait events and routine movement receipts while retaining coordination and material/failure receipts. All activity evidence remains on the board. Factorio dashboard defaults to Coordination only, with All activity available; agent filters and exact displayed-message exports respect this selection. Human text remains visible.
+
+Root/dashboard typechecks and live watch/worker/overseer builds pass; no tests added or run. Stopped old role groups and resumed `iron-zero-20261004` with the same save, identities, task ownership, journals, original deadline and $100 ledger. No game reset or new item grants. Live agents continue; ordinary failed mining/transfer receipts still occur and are handled by their worker loops. Changes guide semantic relevance through prompts and enforce exact duplicate suppression; they do not classify every paraphrase of a redundant message.
+
 ## Dashboard agent filter and displayed-message export — codex, 2026-10-04
 
 Added an Agent ID selector to Live messages, with Factorio worker index/physical actor ID labels and sent/addressed-to/either routing filters. Selection persists per board across reloads. Filtering happens before the visible message limit; Load older messages expands the filtered stream. Download displayed logs exports precisely the rendered message array in newest-first JSON, with full body, string ID, ISO timestamp, sender, recipient, task ID and filter metadata. Empty exports are disabled. Scoped responsive controls handle long IDs. Dashboard TypeScript check and live esbuild watch compilation pass; no tests added or run. Refresh the existing port-4193 dashboard to load the controls. Gameplay processes/save/budget are untouched.

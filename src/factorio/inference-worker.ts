@@ -1,3 +1,4 @@
+import { repeatsLatestChat } from './communication.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, fsyncSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -192,8 +193,9 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       if (observed.paused) { await sleep(500); continue; }
       await post(`${id}-decision`, 'decision', { actorId: scope.actorId, model: o.ask.model ?? 'injected', output });
       if (output.kind === 'chat') {
-        await post(`${id}-chat`, 'chat', { text: output.message, actorId: scope.actorId }, output.recipient);
-        state.lastResult = { kind: 'chat', recipient: output.recipient }; state.decision = null; o.save(state);
+        const repeated = repeatsLatestChat(board.snapshot().messages, scope, output.recipient, output.message);
+        if (!repeated) await post(`${id}-chat`, 'chat', { text: output.message, actorId: scope.actorId }, output.recipient);
+        state.lastResult = { kind: 'chat', recipient: output.recipient, ...(repeated ? {suppressed: 'Unchanged announcement already delivered; act or wait until something changes'} : {}) }; state.decision = null; o.save(state);
       } else if (output.kind === 'wait') {
         state.lastResult = { kind: 'wait', reason: output.message }; state.decision = null; o.save(state);
         await sleep(output.waitMs);

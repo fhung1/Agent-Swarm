@@ -1,3 +1,4 @@
+import { isCoordinationKind } from '../src/factorio/communication.js';
 import { participantName } from './participant-name.js';
 import { comparePriority, type TaskPriority } from '../message-board/priority.js';
 import { priorityControl } from './priority-control.js';
@@ -17,6 +18,8 @@ const client = new MessageBoardClient({ uri: host, database: board.database, tok
 let filter = 'active';
 let selectedTask = '';
 let messageLimit = 100;
+let messageChannel = stored(`${storagePrefix}:message-channel`) ?? (board.id === 'factorio' ? 'coordination' : 'all');
+if (!['coordination', 'all'].includes(messageChannel)) messageChannel = 'coordination';
 let messageAgent = stored(`${storagePrefix}:message-agent`) ?? '';
 let messageDirection = stored(`${storagePrefix}:message-direction`) ?? 'sent';
 if (!['sent', 'received', 'either'].includes(messageDirection)) messageDirection = 'sent';
@@ -462,12 +465,29 @@ function render(): void {
   }
   put(taskPanel, cards);
   put(primary, taskPanel);
-  const matchingMessages = messages.filter(message => !messageAgent ||
-    (messageDirection !== 'received' && message.sender === messageAgent) ||
-    (messageDirection !== 'sent' && message.recipient === messageAgent));
+  const matchingMessages = messages.filter(message => {
+    if (messageAgent && !((messageDirection !== 'received' && message.sender === messageAgent) ||
+      (messageDirection !== 'sent' && message.recipient === messageAgent))) return false;
+    if (messageChannel === 'all') return true;
+    try {
+      const body = JSON.parse(message.body);
+      return body?.version !== 1 || typeof body.kind !== 'string' || isCoordinationKind(body.kind);
+    } catch { return true; } // Ordinary human messages remain visible.
+  });
   const displayedMessages = matchingMessages.slice(0, messageLimit);
   const messagePanel = panel('Live messages', `${displayedMessages.length} displayed · ${matchingMessages.length} matching · ${messages.length} total`);
   const messageControls = node('div', 'controls message-controls');
+  const channelLabel = node('label', 'board-input');
+  const channelSelect = node('select'); channelSelect.dataset.field = 'Message channel';
+  for (const [value, label] of [['coordination', 'Coordination only'], ['all', 'All activity (including logs)']]) {
+    const option = node('option', '', label); option.value = value; put(channelSelect, option);
+  }
+  channelSelect.value = messageChannel;
+  channelSelect.addEventListener('change', () => {
+    messageChannel = channelSelect.value; messageLimit = 100;
+    save(`${storagePrefix}:message-channel`, messageChannel); queueRender();
+  });
+  put(channelLabel, node('span', 'muted small', 'Show'), channelSelect);
   const agentLabel = node('label', 'board-input');
   const agentSelect = node('select');
   agentSelect.dataset.field = 'Message agent ID';
@@ -500,7 +520,7 @@ function render(): void {
     const exportedAt = new Date().toISOString();
     const payload = {
       version: 1, exportedAt, board: {id: board.id, label: board.label, database: board.database},
-      filter: {agentId: messageAgent || null, direction: messageAgent ? messageDirection : 'all'},
+      filter: {channel: messageChannel, agentId: messageAgent || null, direction: messageAgent ? messageDirection : 'all'},
       order: 'newest-first', displayedCount: displayedMessages.length, matchingCount: matchingMessages.length,
       messages: displayedMessages.map(message => ({id: String(message.id), createdAt: message.createdAt.toDate().toISOString(),
         sender: message.sender, recipient: message.recipient, taskId: message.taskId, body: message.body})),
@@ -512,7 +532,7 @@ function render(): void {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   });
   download.disabled = displayedMessages.length === 0;
-  put(messageControls, agentLabel, directionLabel, download);
+  put(messageControls, channelLabel, agentLabel, directionLabel, download);
   put(messagePanel, messageControls, node('p', 'muted small', 'Download exports exactly the displayed messages as JSON, including full bodies and timestamps. Load older messages to include more. Addressed-to filtering matches direct recipients; broadcasts are included under All agents.'));
   const stream = node('div', 'timeline');
   if (!displayedMessages.length) empty(stream, messageAgent ? 'No messages match this agent filter.' : 'No messages yet.');
