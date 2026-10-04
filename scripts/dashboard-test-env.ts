@@ -67,7 +67,7 @@ export class BrowserPage {
     if (result.exceptionDetails) throw new Error(`Browser evaluation failed: ${result.exceptionDetails.text}`);
     return result.result.value as T;
   }
-  body(): Promise<string> { return this.evaluate<string>('document.body.innerText'); }
+  body(): Promise<string> { return this.evaluate<string>("document.body?.innerText ?? ''"); }
   async visible(text: string): Promise<void> {
     try { await waitFor(async () => (await this.body()).includes(text), `visible ${text}`); }
     catch (error) { throw new Error(`${String(error)}\nBrowser text: ${await this.body()}\nExceptions: ${JSON.stringify(this.exceptions)}`); }

@@ -1,6 +1,6 @@
 # Task priorities
 
-On the development dashboard (`http://100.107.208.76:4174/`) or the shared board (`http://100.107.208.76:4175/?board=development`), enter **Your session name** / **Your participant name** above the task list. Each task card shows its priority and a **Priority** dropdown: Urgent, High, Normal, Low. Changes save immediately and appear live for other viewers. Reading priorities needs no session name.
+On the development dashboard (`http://100.107.208.76:4174/`) or the shared board (`http://100.107.208.76:4175/?board=development`), enter **Your session name** / **Your participant name** above the task list. Each task card has a compact **Priority** button group: Low, Normal, High, Urgent. The selected level is highlighted; use Tab and Enter/Space for keyboard operation. Changes save immediately and appear live for other viewers. Reading priorities needs no session name.
 
 Existing and new tasks default to Normal. Tasks sort by priority first, then stable task ID within a priority. Any registered participant can reprioritize a visible task, including one assigned to someone else. Priority changes do not change its owner, status, dependencies, result or locks; an urgent dependent task still cannot be claimed before its prerequisite completes. This retains the board's trusted-private, self-declared session model.
 

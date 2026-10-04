@@ -1,4 +1,5 @@
-import { PRIORITIES, priorityLabel, comparePriority, type TaskPriority } from '../message-board/priority.js';
+import { comparePriority } from '../message-board/priority.js';
+import { priorityControl } from './priority-control.js';
 import { parseBoardConfig, findBoard } from '../message-board/config.js';
 import { MessageBoardClient, stored, save, type BoardTask } from './board-client.js';
 
@@ -137,7 +138,7 @@ function render(): void {
   const messages = snapshot.messages.sort((a, b) => millis(b.createdAt) - millis(a.createdAt) || (b.id > a.id ? 1 : b.id < a.id ? -1 : 0));
   const locks = snapshot.reservations.filter(lock => millis(lock.expiresAt) > Date.now()).sort((a, b) => a.path.localeCompare(b.path));
   const shownTasks = tasks.filter(task => filter === 'all' || (filter === 'active' ? ['open', 'claimed', 'blocked'].includes(task.status) : task.status === filter));
-  const layout = node('div', 'layout');
+  const layout = node('div', 'layout board-layout');
   const sidebar = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
   put(brand, node('div', 'brand-mark', 'MB'), 'MESSAGE BOARD');
@@ -193,27 +194,15 @@ function render(): void {
   for (const task of shownTasks) {
     const card = node('article', 'research-card');
     const head = node('div', 'card-head');
-    put(head, node('strong', '', task.title), pill(priorityLabel(task.priority)), pill(task.status));
+    put(head, node('strong', '', task.title), pill(task.status));
     put(card, head, field('Task', task.id), field('Assigned to', task.assignee || 'Unclaimed'), field('Area', task.area));
-    const priorityControl = node('label', 'board-input');
-    const prioritySelect = node('select');
-    prioritySelect.setAttribute('aria-label', `Priority for ${task.id}`);
-    for (const value of PRIORITIES) {
-      const option = node('option', '', priorityLabel(value));
-      option.value = value; prioritySelect.append(option);
-    }
-    prioritySelect.value = task.priority;
-    prioritySelect.disabled = actionPending;
-    prioritySelect.addEventListener('change', () => {
-      const priority = prioritySelect.value as TaskPriority;
+    put(card, priorityControl(task.id, task.priority, actionPending, priority => {
       actionPending = true; error = ''; queueRender();
       void (async () => {
         const name = await asParticipant();
         await client.setTaskPriority(name, task.id, priority);
       })().catch(reason => { error = String(reason); }).finally(() => { actionPending = false; queueRender(); });
-    });
-    put(priorityControl, node('span', 'muted small', 'Priority'), prioritySelect);
-    put(card, priorityControl);
+    }));
     if (task.dependsOn) put(card, field('Depends on', task.dependsOn));
     const details = node('details', 'evidence-details');
     details.open = selectedTask === task.id;
@@ -233,7 +222,7 @@ function render(): void {
     put(cards, card);
   }
   put(taskPanel, cards);
-  put(secondary, taskPanel);
+  put(primary, taskPanel);
   const messagePanel = panel('Live messages', `${board.label} · ${messages.length} messages`);
   const stream = node('div', 'timeline');
   if (!messages.length) empty(stream, 'No messages yet.');
@@ -267,7 +256,7 @@ function render(): void {
     })().catch(reason => { error = String(reason); }).finally(() => { sending = false; queueRender(); });
   });
   put(messagePanel, form);
-  primary.prepend(messagePanel);
+  put(secondary, messagePanel);
   const sessionPanel = panel('Participants', 'Most recently seen first');
   for (const session of sessions) {
     const card = node('article', 'order-card');

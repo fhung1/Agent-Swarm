@@ -56,22 +56,33 @@ try {
   assert.equal(environment.rows('dev_message').find(row => row.sender === 'browser-b')!.recipient, '');
   console.log('PASS invalid-name refusal, register/send, recipient/task routing, draft clearing and escaped hostile text');
 
-  await a.evaluate(`(() => { const control = document.querySelector('select[aria-label="Priority for dev-live"]'); if (control.value !== 'normal') throw Error('Expected default Normal'); control.value = 'urgent'; control.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await waitFor(() => b.evaluate<boolean>(`document.querySelector('select[aria-label="Priority for dev-live"]')?.value === 'urgent'`), 'second browser receives priority');
+  await a.evaluate(`(() => { const control = document.querySelector('[role="group"][aria-label="Priority for dev-live"]'); if (control.querySelector('[aria-pressed="true"]').textContent !== 'Normal') throw Error('Expected default Normal'); Array.from(control.querySelectorAll('button')).find(b => b.textContent === 'Urgent').click(); })()`);
+  await waitFor(() => b.evaluate<boolean>(`document.querySelector('[aria-label="Priority for dev-live"] [aria-pressed="true"]')?.textContent === 'Urgent'`), 'second browser receives priority');
   assert.equal(environment.rows('task_priority').find(row => row.task_id === 'dev-live')!.priority, 'urgent');
   assert.equal(task('dev-live').status, 'open');
   assert.equal(task('dev-live').assignee, '');
-  await waitFor(() => b.evaluate<boolean>(`document.querySelector('.research-card select')?.getAttribute('aria-label') === 'Priority for dev-live'`), 'urgent task sorts first');
-  await b.evaluate(`(() => { const control = document.querySelector('select[aria-label="Priority for dev-live"]'); control.value = 'high'; control.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await waitFor(() => a.evaluate<boolean>(`document.querySelector('select[aria-label="Priority for dev-live"]')?.value === 'high'`), 'priority editable by second participant');
+  await waitFor(() => b.evaluate<boolean>(`document.querySelector('.research-card [role="group"]')?.getAttribute('aria-label') === 'Priority for dev-live'`), 'urgent task sorts first');
+  await b.evaluate(`(() => { const control = document.querySelector('[aria-label="Priority for dev-live"]'); Array.from(control.querySelectorAll('button')).find(b => b.textContent === 'High').click(); })()`);
+  await waitFor(() => a.evaluate<boolean>(`document.querySelector('[aria-label="Priority for dev-live"] [aria-pressed="true"]')?.textContent === 'High'`), 'priority editable by second participant');
   console.log('PASS default priority, editing from two browsers, live updates, priority ordering and unchanged ownership');
+  for (const width of [1440, 1280, 1024, 768, 390]) {
+    await a.send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+    await delay(150);
+    const sizing = await a.evaluate<{ viewport: number; content: number }>('({viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth})');
+    assert.ok(sizing.content <= sizing.viewport, `Horizontal overflow at ${width}: ${JSON.stringify(sizing)}`);
+    const controlsFit = await a.evaluate<boolean>(`Array.from(document.querySelectorAll('.priority-choice')).every(button => { const rect = button.getBoundingClientRect(); return rect.left >= 0 && rect.right <= innerWidth; })`);
+    assert.ok(controlsFit, `Priority controls clipped at ${width}`);
+  }
+  await a.send('Emulation.clearDeviceMetricsOverride');
+  console.log('PASS no horizontal page overflow or clipped priority buttons at 1440/1280/1024/768/390px');
+
 
   await taskButton(a, 'dev-dependent', 'Claim task');
   await a.visible('waits on dev-prerequisite');
   assert.equal(task('dev-dependent').status, 'open');
   // Capture both buttons before a subscription rerender can remove the losing browser's control.
   for (const page of [a, b]) {
-    await page.evaluate(`(() => { const card = ${taskCard('dev-race')}; card.querySelector('details').open = true; window.__raceButton = card.querySelector('button'); })()`);
+    await page.evaluate(`(() => { const card = ${taskCard('dev-race')}; card.querySelector('details').open = true; window.__raceButton = Array.from(card.querySelectorAll('button')).find(button => button.textContent === 'Claim task'); })()`);
   }
   await Promise.all([a.evaluate('window.__raceButton.click()'), b.evaluate('window.__raceButton.click()')]);
   await waitFor(() => task('dev-race').status === 'claimed', 'atomic claim');
@@ -84,8 +95,8 @@ try {
   assert.equal(environment.rows('dev_task').filter(row => row.id === 'dev-race' && row.status === 'claimed').length, 1);
   console.log('PASS incomplete dependencies refuse claims; exactly one competing browser wins');
 
-  call('lock', winner, 'fixture-owned/', 'dev-race', 'Browser task reservation', 10);
-  await a.visible('fixture-owned/'); await b.visible('fixture-owned/');
+  call('lock', winner, 'fixture-owned/very-long-resource-name-that-must-wrap-on-a-laptop-screen/finish_inference_reducer.ts', 'dev-race', 'Browser task reservation', 10);
+  await a.visible('fixture-owned/very-long-resource-name-that-must-wrap-on-a-laptop-screen/finish_inference_reducer.ts'); await b.visible('fixture-owned/very-long-resource-name-that-must-wrap-on-a-laptop-screen/finish_inference_reducer.ts');
   owner.promptReply = 'BLOCK-FIXTURE-REASON';
   await taskButton(owner, 'dev-race', 'Block');
   await waitFor(() => task('dev-race').status === 'blocked', 'owner blocks task');
@@ -96,7 +107,7 @@ try {
   await taskButton(owner, 'dev-race', 'Release');
   await waitFor(() => task('dev-race').status === 'open', 'owner releases task');
   assert.equal(task('dev-race').assignee, '');
-  await a.absent('fixture-owned/'); await b.absent('fixture-owned/');
+  await a.absent('fixture-owned/very-long-resource-name-that-must-wrap-on-a-laptop-screen/finish_inference_reducer.ts'); await b.absent('fixture-owned/very-long-resource-name-that-must-wrap-on-a-laptop-screen/finish_inference_reducer.ts');
   await loser.visible('Race to own this task');
   await taskButton(loser, 'dev-race', 'Claim task');
   await waitFor(() => task('dev-race').assignee === loserName, 'released task takeover');
@@ -108,7 +119,7 @@ try {
   assert.equal(task('dev-race').result, 'DONE-FIXTURE');
   assert.equal(environment.rows('file_lock').length, 0);
   await navigation(owner, 'Completed'); await owner.visible('DONE-FIXTURE');
-  assert.equal(await owner.evaluate<number>(`${taskCard('dev-race')}.querySelectorAll('button').length`), 0);
+  assert.equal(await owner.evaluate<number>(`${taskCard('dev-race')}.querySelectorAll('details button').length`), 0);
   console.log('PASS block/release/takeover/complete, status filtering and live task-lock retention/release');
 
   await taskButton(loser, 'dev-prerequisite', 'Claim task');
