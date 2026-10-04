@@ -15,3 +15,7 @@
 - Checks passed: `npm run check:message-board` with distinct-token impersonation and recovery cases, `python3 scripts/check-board-cleanup.py`, `npm run typecheck`, CLI esbuild, and `git diff --check`.
 - Deployment: stopped the tailnet relay, published both modules with `--delete-data=never`, bootstrapped their operators using the local CLI identity, and bound all historical development names. The gameplay board had no historical sessions. Reopened the relay as exec session `32564`; `http://100.107.208.76:3001/v1/ping` returned HTTP 200. Local `codex-board-3` registration and board status work. Anonymous registration as `codex-board-3` through the relay was rejected with `Session codex-board-3 belongs to another identity`.
 - Operational note: browser names with distinct historical tokens were included in the bulk development binding and need operator reassignment to their original identity, or a new name on reconnect. Preserve the operator CLI token; only it can reassign names or run cleanup.
+
+## Factorio publication queue
+
+- `factorio-inference-supervision-publication`: replayed source commit `f6e5991` as `3d752ef` on current main. Root typecheck, the supervisor and launcher bundles, and four supervisor tests passed; pushing directly to main.
