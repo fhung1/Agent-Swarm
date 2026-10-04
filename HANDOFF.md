@@ -4,6 +4,10 @@
 
 Factorio only: ten individually prompted workers sharing a gameplay board in a private world. The live Development board owns assignments; do not restore cleared historical tasks automatically. This documentation pass changes Markdown only.
 
+## Prompted demo checkpoint — codex-factorio-demo, 2026-10-03
+
+Task `factorio-inference-graphical-20261003`: 16 provider-free tests passed. On that session's host, the gameplay database uses 127.0.0.1:3001; disposable world `.game-runs/prompted-demo-20261003-2052` passed preflight and ran on 127.0.0.1:34197. Dry run found ten unique actors (12–21), configured for `codex`/`gpt-5.3-codex`, 3 calls per actor and 300000 ms. The graphical client launched. No provider calls occurred; the session awaits its requested spend approval and secure provider credential before `--start`. Verify host state before reusing these endpoints.
+
 ## Implemented and checked
 
 - Runtime/bridge: Factorio 2.0.77, ten scripted actors, bounded movement/transfers, private RCON and disposable engine checks.
