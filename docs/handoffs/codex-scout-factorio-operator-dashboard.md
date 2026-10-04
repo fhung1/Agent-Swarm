@@ -26,4 +26,4 @@ Claimed `factorio-operator-run-dashboard`. The existing Factorio board showed sh
 - HTTP smoke with a disposable fake bridge — passed for projected game/run data, absent/wrong-token rejection, strict payload and content-type validation, and authenticated pause/resume routing.
 - Browser/visual acceptance is unavailable in this environment because Chrome/Chromium is not installed; the repository's browser harness uses Chrome DevTools Protocol.
 
-Next: complete final diff review, commit and push, close `factorio-operator-run-dashboard` with the pushed hash, and release all task locks.
+Implementation commit `813a912` is pushed to `main`. Next: close `factorio-operator-run-dashboard` with its check summary and release all task locks.
