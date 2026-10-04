@@ -748,4 +748,5 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   and no worker or overseer processes are running. The engine reports 94
   production sites, 16 furnaces, `automation-2` at zero progress, `needsFuel`,
   and zero rocket launches. Do not reset or resume this ledger; a new run needs
-  explicit spend authorization.
+  explicit spend authorization. Implementation commit `bb4cec7` is pushed to
+  `main`.
