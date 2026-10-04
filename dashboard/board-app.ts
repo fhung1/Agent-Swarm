@@ -24,6 +24,32 @@ let messageAgent = stored(`${storagePrefix}:message-agent`) ?? '';
 let messageDirection = stored(`${storagePrefix}:message-direction`) ?? 'sent';
 if (!['sent', 'received', 'either'].includes(messageDirection)) messageDirection = 'sent';
 let queued = false;
+let interactingSelect: HTMLSelectElement | null = null;
+let deferredRender = false;
+// Native select popups disappear when their DOM node is replaced. Coalesce
+// live updates while a selector is being used, then render the newest state.
+function finishSelectInteraction(): void {
+  interactingSelect = null;
+  if (deferredRender) { deferredRender = false; queueRender(); }
+}
+root.addEventListener('focusin', event => {
+  if (event.target instanceof HTMLSelectElement) interactingSelect = event.target;
+});
+root.addEventListener('pointerdown', event => {
+  if (event.target instanceof HTMLSelectElement) interactingSelect = event.target;
+  else finishSelectInteraction();
+}, true);
+root.addEventListener('keydown', event => {
+  if (!(event.target instanceof HTMLSelectElement)) return;
+  if (event.key === 'Escape' || event.key === 'Tab') finishSelectInteraction();
+  else if (['ArrowDown', 'ArrowUp', 'Home', 'End', ' ', 'Enter'].includes(event.key)) interactingSelect = event.target;
+}, true);
+root.addEventListener('change', event => {
+  if (event.target instanceof HTMLSelectElement) finishSelectInteraction();
+}, true);
+root.addEventListener('focusout', event => {
+  if (event.target === interactingSelect) finishSelectInteraction();
+});
 let sessionName = stored(NAME_KEY) ?? '';
 let draftBody = '';
 let draftRecipient = '';
@@ -135,6 +161,7 @@ function queueRender(): void {
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
+    if (interactingSelect?.isConnected) { deferredRender = true; return; }
     const active = document.activeElement;
     const editing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement;
     const label = editing ? active.dataset.field : undefined;
@@ -144,6 +171,7 @@ function queueRender(): void {
       const control = Array.from(root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('[data-field]'))
         .find(element => element.dataset.field === label);
       control?.focus({ preventScroll: true });
+      if (control instanceof HTMLSelectElement) interactingSelect = null;
       if ((control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) && selection) control.setSelectionRange(selection[0], selection[1]);
     }
   });

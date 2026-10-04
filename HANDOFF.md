@@ -1,5 +1,9 @@
 # Factorio handoff
 
+## Stable dashboard dropdown interaction — codex, 2026-10-04
+
+The dashboard replaced the full layout on each board/status refresh, destroying open native select menus despite restoring focus afterward. Live redraws now coalesce while a select is being used; change, blur, outside interaction or Escape/Tab releases the pending redraw. Incoming subscription state continues updating, and the eventual render uses the latest snapshot. Programmatic focus restoration does not reopen the interaction guard. Applies to agent/direction/channel filters and other dashboard selects. Dashboard TypeScript check, diff check and live watch build pass; no tests run. Refresh the existing dashboard tab once to load this fix. Gameplay is untouched.
+
 ## Event-driven swarm communication — codex, 2026-10-04
 
 Actor and Astra prompts now request communication only for actionable blockers, handoffs/completion, relevant discoveries and material plan changes; routine narration, acknowledgments and unchanged progress are discouraged. Repeated identical chat to the same recipient is suppressed using run/world/history-scoped board history, surviving restarts. Peer context excludes inference audits, decisions, wait events and routine movement receipts while retaining coordination and material/failure receipts. All activity evidence remains on the board. Factorio dashboard defaults to Coordination only, with All activity available; agent filters and exact displayed-message exports respect this selection. Human text remains visible.
