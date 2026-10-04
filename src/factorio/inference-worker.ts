@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSyn
 import { dirname, join, resolve } from 'node:path';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask } from '../agents/llm.ts';
-import { decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
+import { buildFactorioPrompt, decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases, ResourceRenewalUncertain } from './resource-leases.ts';
 import { createFactorioSpendGuard, type FactorioSpendGuard } from './run-spend.ts';
@@ -26,7 +26,7 @@ export interface InferenceState {
 }
 type WorkerBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'createTask' | 'claimTask' | 'updateTask' | 'reserve' | 'releaseReservation'>;
 export interface InferenceWorkerOptions {
-  scope: FactorioScope; taskId: string; objective: string; operatorPrompt: () => string;
+  scope: FactorioScope; taskId: string; objective: string; operatorPrompt?: () => string;
   maxCalls: number; deadline: number; timeoutMs: number; requiredPlates: number; goal?: 'plates' | 'rocket';
   ask: Ask; board: WorkerBoard; game: (request: Record<string, unknown>) => unknown;
   state: InferenceState; save: (state: InferenceState) => void; sleep?: (ms: number) => Promise<void>;
@@ -216,15 +216,14 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
         const currentObjective = assignment ? [assignment.title, assignment.details].filter(Boolean).join('\n')
           : assignedObjective || 'Wait for Astra to assign a concrete next task.';
-        const context = { ...scope, objective: currentObjective, operatorPrompt: o.operatorPrompt(), observation: observed,
-          status: await o.game({ kind: 'status' }), reservations: board.snapshot().reservations
+        const boardContext = board.snapshot();
+        const context = { ...scope, objective: currentObjective, observation: observed,
+          reservations: boardContext.reservations
             .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
             .map(r => ({ path: r.path, holder: r.holder })),
-          tasks: [],
-          messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
-          recipients: { overseer: `${scope.runId}-orchestrator`, actors: board.snapshot().participants
-            .map(participant => participant.name).filter(name => name.startsWith(`${scope.runId}-agent-`)) },
-          budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: o.deadline === 0 ? null : remainingRunMs(o.deadline) } };
+          messages: selectPeerMessages(boardContext.messages, scope), lastResult: state.lastResult,
+          recipients: { overseer: `${scope.runId}-orchestrator` } };
+        const promptBytes = Buffer.byteLength(buildFactorioPrompt(context), 'utf8');
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
         let spend: { reservedUsd?: string; chargedUsd?: string } = {};
@@ -236,7 +235,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         } catch (error) {
           if (!(error instanceof InvalidFactorioDecisionError)) throw error;
           await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-            usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls,
+            usageKnown: Boolean(usage), promptBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
             reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
           const reason = 'The previous model response was invalid or incomplete; return one minimal valid decision JSON without explanation and retry.';
           await post(`${id}-rejected`, 'decision_rejected', { reason });
@@ -244,7 +243,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           continue;
         }
         await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-          usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls,
+          usageKnown: Boolean(usage), promptBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
           reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
         state.decision = { id, output }; o.save(state);
       }
@@ -448,7 +447,6 @@ export async function inferenceWorkerMain(): Promise<void> {
       objective: process.env.FACTORIO_OBJECTIVE ?? (process.env.FACTORIO_GOAL === 'rocket'
         ? 'Beat Factorio by launching a rocket from this empty-resource freeplay world. Decompose the goal into board subtasks and cooperate through resource requests and shared chests.'
         : 'Start empty, gather natural materials, craft and assemble an automated iron factory: automatic ore and fuel acquisition, smelting and plate delivery into storage. Manual bootstrap work is allowed; no ongoing actor feeding or hauling after commissioning. Completion requires status.automation.verified.'),
-      operatorPrompt: () => process.env.FACTORIO_PROMPT_FILE ? readFileSync(process.env.FACTORIO_PROMPT_FILE, 'utf8') : process.env.FACTORIO_PROMPT ?? 'Share plans and observations; avoid resource contention.',
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,
       timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000), ask: createAsker(provider), board,
