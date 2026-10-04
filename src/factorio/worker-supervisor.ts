@@ -72,7 +72,7 @@ export async function supervise(options: { statePath: string; runId: string; dea
       if (delay === null) return code ?? 1;
       // Persist the charged attempt before waiting/spawning, including supervisor restart.
       state.attempts++; saveRestartState(options.statePath, state);
-      console.error(`Board outage: worker restart ${state.attempts}/8 in ${delay}ms`);
+      console.error(`Transient worker outage: restart ${state.attempts}/8 in ${delay}ms`);
       await new Promise<void>(resolve => {
         const timer = setTimeout(() => { cancelWait = undefined; resolve(); }, delay);
         cancelWait = () => { clearTimeout(timer); cancelWait = undefined; resolve(); };

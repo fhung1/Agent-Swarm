@@ -9,6 +9,7 @@ import { decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type 
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases, ResourceRenewalUncertain } from './resource-leases.ts';
 import { createFactorioSpendGuard, type FactorioSpendGuard } from './run-spend.ts';
+import { isTransientTransportFailure, RETRYABLE_TRANSPORT_FAILURE } from './transient-errors.ts';
 
 export interface Observation {
   actorId: number; tick: number; x: number; y: number; world: { worldId: string; historyId: string }; paused: boolean;
@@ -461,5 +462,6 @@ export function inferenceFailureExitCode(error: unknown): number {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes('Unknown game outcome') || message.includes('Receipt from future history')) return 78;
   if (error instanceof ResourceRenewalUncertain || message === 'Board disconnected') return 75;
+  if (isTransientTransportFailure(error)) return RETRYABLE_TRANSPORT_FAILURE;
   return 1;
 }
