@@ -364,3 +364,15 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Typecheck and 16 inference tests pass; new regression verifies own-chat retention,
   older/audit/foreign-history exclusion and survival through peer activity.
   Same run redeployed; behavioral reduction remains to be observed.
+
+## codex — Belt flow observations (2026-10-04)
+
+- Astra repeatedly inspected stalled coal transport, but machine/layout output
+  exposed direction/status with no item contents; "working" alone did not reveal
+  empty vs loaded belts. Added read-only lane counts and summed contents for
+  transport belts, underground belts and splitters.
+- Disposable Factorio 2.0.77 test passes: two lanes with different items, totals,
+  machine/local/layout agreement, empty belt distinction and repeated-read
+  conservation. No inference decisions or transport mutations were scripted.
+- Deploying same save with private mod/manifest backup and unchanged run ledger.
+  Live completion remains unverified; Astra owns route diagnosis and repairs.
