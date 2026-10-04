@@ -474,3 +474,29 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   task and one message; both were confirmed in SpacetimeDB. Live 4193 bundle
   updated. Disposable server/browser stopped. Rocket continuation on same save
   is the next task; do not reset world or board.
+
+## codex — Same-save rocket continuation and actor reassignment (2026-10-04)
+
+- Source commit `f5508cb` resumes completed iron run `iron-modular-20261004`
+  as a rocket phase only after the board's completed iron goal and scoped engine
+  automation proof. It keeps world/history, all six identities and journals, and
+  the existing $100 atomic spend ledger. The operator's existing task
+  `factorio-launch-a-rocket-d57692ee` is claimed by Astra; the launcher never
+  creates a duplicate or grants items. The task's external ID is visible to
+  Astra's task inspection. Rocket completion requires the live engine launch
+  counter, independent of worker claims.
+- Astra can issue a targeted `subtask` whenever it changes an actor's role.
+  Workers accept only scoped directed coordinator announcements, claim the new
+  subtask, display its title, and use its details as the current objective.
+  Existing initial subtasks remain durable ownership anchors. Astra alone
+  chooses the assignment and gameplay strategy.
+- Live deployment kept the same save, board and ledger. Astra created
+  `iron-modular-20261004.subtask-orchestrator-391` for actor 4, titled "Survey
+  and mark the steam-power shoreline"; the board shows it claimed by actor 4.
+  All five Luna workers and Astra are running, Factorio is unpaused, dashboard
+  4193 returns HTTP 200, and the rocket launch count was 0 at the handoff.
+- Root typecheck, 17 focused overseer tests, two focused reassignment tests,
+  bundle builds and `git diff --check` passed. The older full worker test file
+  has a fixture that does not satisfy the five initial-task startup barrier;
+  its unrelated cases time out when run together. The two new reassignment
+  cases pass independently, and the live claim verifies the deployed path.
