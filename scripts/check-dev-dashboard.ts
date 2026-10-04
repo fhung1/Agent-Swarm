@@ -32,11 +32,20 @@ try {
   await a.visible('LIVE-INSERTED-TASK'); await b.visible('LIVE-INSERTED-TASK');
   console.log('PASS two real browser tabs receive the initial snapshot and live task inserts');
 
+  // No name entry is needed to set priority from a fresh browser.
+  await a.evaluate(`Array.from(document.querySelector('[aria-label="Priority for dev-live"]').querySelectorAll('button')).find(b => b.textContent === 'Low').click()`);
+  await waitFor(() => environment.rows('task_priority').some(row => row.task_id === 'dev-live' && row.priority === 'low'), 'anonymous browser priority');
+  const automaticName = environment.rows('task_priority').find(row => row.task_id === 'dev-live')!.updated_by;
+  assert.match(automaticName, /^browser-[a-f0-9]{16}$/);
+  await waitFor(() => b.evaluate<boolean>(`document.querySelector('[aria-label="Priority for dev-live"] [aria-pressed="true"]')?.textContent === 'Low'`), 'automatic identity priority reaches peer');
+  await a.evaluate(`Array.from(document.querySelector('[aria-label="Priority for dev-live"]').querySelectorAll('button')).find(b => b.textContent === 'Normal').click()`);
+  await waitFor(() => environment.rows('task_priority').some(row => row.task_id === 'dev-live' && row.priority === 'normal'), 'restore default priority');
   await setInput(a, 'Your session name', 'INVALID NAME');
   await setInput(a, 'Message', 'invalid-name-message');
   await a.evaluate("document.querySelector('form').requestSubmit()");
-  await a.visible('Choose a lowercase session name');
-  assert.equal(environment.rows('dev_message').length, 0);
+  await a.visible('invalid-name-message');
+  assert.equal(environment.rows('dev_message').length, 1);
+  assert.equal(environment.rows('dev_message')[0].sender, 'invalid-name');
   const hostile = '<img src=x onerror="window.__hostile=true">DEV-HOSTILE-TEXT';
   await setInput(a, 'Your session name', 'browser-a');
   await setInput(a, 'Recipient (blank = everyone)', 'fixture-recipient');
@@ -54,7 +63,7 @@ try {
   await b.evaluate("document.querySelector('form').requestSubmit()");
   await a.visible('Second browser registered'); await b.visible('Second browser registered');
   assert.equal(environment.rows('dev_message').find(row => row.sender === 'browser-b')!.recipient, '');
-  console.log('PASS invalid-name refusal, register/send, recipient/task routing, draft clearing and escaped hostile text');
+  console.log('PASS blank-name priority, name normalization, register/send, recipient/task routing, draft clearing and escaped hostile text');
 
   await a.evaluate(`(() => { const control = document.querySelector('[role="group"][aria-label="Priority for dev-live"]'); if (control.querySelector('[aria-pressed="true"]').textContent !== 'Normal') throw Error('Expected default Normal'); Array.from(control.querySelectorAll('button')).find(b => b.textContent === 'Urgent').click(); })()`);
   await waitFor(() => b.evaluate<boolean>(`document.querySelector('[aria-label="Priority for dev-live"] [aria-pressed="true"]')?.textContent === 'Urgent'`), 'second browser receives priority');

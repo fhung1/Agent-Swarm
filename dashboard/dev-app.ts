@@ -1,3 +1,4 @@
+import { participantName } from './participant-name.js';
 import { comparePriority } from '../message-board/priority.js';
 import { priorityControl } from './priority-control.js';
 import { DbConnection } from './coord_bindings/index.js';
@@ -9,6 +10,7 @@ const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm-coord');
 const TOKEN_KEY = dashboardTokenKey('development', HOST, DATABASE);
 const NAME_KEY = 'quant-swarm:development:name';
 let connection: DbConnection | undefined;
+let browserIdentity = '';
 let ready = false;
 let state = 'Connecting to development backend…';
 let filter = 'active';
@@ -90,8 +92,8 @@ function input(label: string, value: string, update: (value: string) => void, mu
   return wrapper;
 }
 async function asSession(conn: DbConnection): Promise<string> {
-  const name = sessionName.trim();
-  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) throw new Error('Choose a lowercase session name (letters, numbers, dot, dash or underscore).');
+  const name = participantName(sessionName, browserIdentity);
+  sessionName = name;
   save(NAME_KEY, name);
   if (!conn.db.session.name.find(name)) await conn.reducers.register({ name, tool: 'human', focus: 'Development dashboard' });
   return name;
@@ -280,9 +282,10 @@ function connect(): void {
     .withUri(HOST)
     .withDatabaseName(DATABASE)
     .withToken(sessionToken)
-    .onConnect((conn, _identity, token) => {
+    .onConnect((conn, identity, token) => {
       if (current !== generation) { conn.disconnect(); return; }
       connection = conn;
+      browserIdentity = identity.toHexString();
       retry = 0;
       sessionToken = token;
       save(TOKEN_KEY, token);

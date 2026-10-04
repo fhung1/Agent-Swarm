@@ -1,4 +1,4 @@
-import { comparePriority, type TaskPriority } from './priority.js';
+import { PRIORITIES, comparePriority, type TaskPriority } from './priority.js';
 import { DbConnection } from './bindings/index.js';
 import type { DevTask, Session, DevMessage, FileLock } from './bindings/types.js';
 
@@ -68,8 +68,11 @@ export class MessageBoardClient {
   }
   register(name: string, type: string, focus = '') { return this.reducers.register({ name, tool: type, focus }); }
   post(sender: string, body: string, recipient = '', taskId = '') { return this.reducers.post({ sender, body, recipient, taskId }); }
-  createTask(name: string, task: { id: string; title: string; details?: string; area?: string; dependsOn?: string }) {
-    return this.reducers.createTask({ name, details: '', area: '', dependsOn: '', ...task });
+  async createTask(name: string, task: { id: string; title: string; details?: string; area?: string; dependsOn?: string; priority?: TaskPriority }) {
+    const { priority, ...fields } = task;
+    if (priority !== undefined && !PRIORITIES.includes(priority)) throw new Error('Invalid task priority');
+    await this.reducers.createTask({ name, details: '', area: '', dependsOn: '', ...fields });
+    if (priority !== undefined) await this.setTaskPriority(name, task.id, priority);
   }
   setTaskPriority(name: string, id: string, priority: TaskPriority) { return this.reducers.setTaskPriority({ name, id, priority }); }
   claimTask(name: string, id: string) { return this.reducers.claimTask({ name, id }); }

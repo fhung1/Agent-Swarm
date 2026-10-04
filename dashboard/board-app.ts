@@ -1,3 +1,4 @@
+import { participantName } from './participant-name.js';
 import { comparePriority } from '../message-board/priority.js';
 import { priorityControl } from './priority-control.js';
 import { parseBoardConfig, findBoard } from '../message-board/config.js';
@@ -102,8 +103,9 @@ function input(label: string, value: string, update: (value: string) => void, mu
   return wrapper;
 }
 async function asParticipant(): Promise<string> {
-  const name = sessionName.trim();
-  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) throw new Error('Choose a lowercase participant name (letters, numbers, dot, dash or underscore).');
+  const name = participantName(sessionName, client.identity);
+  sessionName = name;
+  save(NAME_KEY, name);
   if (!client.snapshot().participants.some(participant => participant.name === name)) await client.register(name, 'human', `${board.label} dashboard`);
   return name;
 }

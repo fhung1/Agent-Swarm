@@ -84,7 +84,7 @@ try {
   await other.register('alice', 'factory-planner');
   await dev.register('developer', 'codex');
   await alice.createTask('alice', { id: 'same-id', title: 'Independent task', details: 'No development instructions here.' });
-  await other.createTask('alice', { id: 'same-id', title: 'Separate board task' });
+  await other.createTask('alice', { id: 'same-id', title: 'Separate board task', priority: 'high' });
   await dev.createTask('developer', { id: 'same-id', title: 'Development task' });
   await wait(() => dev.snapshot().tasks.length === 1 && other.snapshot().tasks.length === 1, 'task snapshots');
   assert.match(dev.snapshot().tasks[0].details, /push when finished/);
@@ -92,7 +92,9 @@ try {
   assert.equal(alice.snapshot().tasks[0].priority, 'normal', 'existing tasks default to Normal');
   await bob.setTaskPriority('bob', 'same-id', 'urgent');
   await wait(() => alice.snapshot().tasks[0].priority === 'urgent', 'priority shared with another identity');
-  assert.equal(other.snapshot().tasks[0].priority, 'normal', 'priority isolated by board');
+  assert.equal(other.snapshot().tasks[0].priority, 'high', 'bot-supplied creation priority is isolated by board');
+  await assert.rejects(other.createTask('alice', { id: 'bad-priority', title: 'Must not be created', priority: 'invalid' as any }));
+  assert.ok(!other.snapshot().tasks.some(t => t.id === 'bad-priority'));
   await assert.rejects(alice.setTaskPriority('unregistered', 'same-id', 'high'));
   await assert.rejects(alice.setTaskPriority('alice', 'missing-task', 'high'));
   await assert.rejects(alice.setTaskPriority('alice', 'same-id', 'invalid' as any));
