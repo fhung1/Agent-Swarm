@@ -382,3 +382,20 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   listeners remain rejected. Local socket regression passed both cases. Server,
   GUI and same inference mapping resumed after readiness; live belt761 exposes
   three coal on lane2. No data reset or cap change.
+
+## codex — Iron factory completion audit (2026-10-04)
+
+- Engine verified two unattended windows at tick1612860; Astra marked gameplay
+  goal done and exited0. Stored plates grew 38->53 during the qualifying minute.
+- All five pending journals null and zero inference role processes after stop.
+  Continued factory production passed window3 and reached71 aggregate stored
+  plates at tick1616340; output chest770 held34 in next status read.
+- Natural coal/iron miners, furnace773, fuel arms and output chain inspected;
+  belt coal present at all three iron-cell pickup points. Original manifest has
+  zero grants. Dashboard HTTP200, viewer running.
+- Ledger final: $53.749406 charged, $8.935149 unresolved reservations, $100 cap.
+  No new run or cap increase. Detailed scope/limitations recorded in
+  docs/factorio-iron-factory-result.md.
+- Fixed launcher success classification for forced idle-sibling cleanup after
+  successful coordinator/goal completion. Typecheck and four launch tests pass.
+  No completed gameplay roles restarted to test this reporting change.

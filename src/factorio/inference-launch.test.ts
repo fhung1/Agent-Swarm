@@ -29,3 +29,12 @@ test('smoke and production budgets are explicitly separated', () => {
   assert.throws(() => inferenceLaunchPlan({ ...input, mode: 'production', maxCalls: 8, orchestratorMaxCalls: 10 }));
   assert.equal(inferenceLaunchPlan(input).totalCallLimit, null);
 });
+
+test('completed goal tolerates terminated idle actors but failed coordinator remains failure', async () => {
+ const {inferenceTeamSucceeded}=await import('./inference-launch.ts');
+ const results=[{role:'orchestrator',code:0},{role:'actor',code:null,signal:'SIGKILL'}];
+ assert.equal(inferenceTeamSucceeded(true,results),true);
+ assert.equal(inferenceTeamSucceeded(false,results),false);
+ assert.equal(inferenceTeamSucceeded(true,[{role:'orchestrator',code:1},{role:'actor',code:0}]),false);
+ assert.equal(inferenceTeamSucceeded(false,[]),false);
+});

@@ -3,7 +3,7 @@ import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_pro
 import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { MessageBoardClient } from '../message-board/client.ts';
-import { inferenceLaunchPlan } from '../src/factorio/inference-launch.ts';
+import { inferenceLaunchPlan, inferenceTeamSucceeded } from '../src/factorio/inference-launch.ts';
 import { createFactorioSpendGuard } from '../src/factorio/run-spend.ts';
 
 async function main() {
@@ -212,8 +212,10 @@ async function main() {
     if (stopping) throw Error('Run stopped before overseer task assignment completed');
     actorsReady = true;
     const completed = await Promise.all(results);
-    console.log(JSON.stringify({ runId, results: completed, spend: spend.snapshot(), logs: directory }));
-    if (completed.some(r => r.code !== 0)) process.exitCode = 1;
+    const goalDone=board.snapshot().tasks.some(t=>t.id===goalTaskId && t.status==='done');
+    const succeeded=inferenceTeamSucceeded(goalDone,completed);
+    console.log(JSON.stringify({ runId, goalDone, succeeded, results: completed, spend: spend.snapshot(), logs: directory }));
+    if (!succeeded) process.exitCode = 1;
   } finally {
     if (stopTimer) clearTimeout(stopTimer);
     if (spendMonitor) clearInterval(spendMonitor);

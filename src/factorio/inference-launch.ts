@@ -33,3 +33,10 @@ export function inferenceLaunchPlan(input: InferenceLaunchInput) {
     actorId, index: i + 1, sender: `${input.runId}-agent-${i + 1}`, taskId: `${input.runId}.subtask-orchestrator-${i + 1}`,
   })) };
 }
+
+/** A completed coordinator goal permits termination of still-idle actor siblings. */
+export function inferenceTeamSucceeded(goalDone: boolean, results: {role: string; code: number | null; signal?: string | null}[]): boolean {
+  const coordinator=results.find(r=>r.role==='orchestrator');
+  if(goalDone && coordinator?.code===0) return true;
+  return results.length>0 && results.every(r=>r.code===0);
+}
