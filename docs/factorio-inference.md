@@ -42,7 +42,19 @@ The game status includes a cached survey of all generated terrain: resource tota
 
 Every actor receives this map in its existing status context. Astra receives the same read-only status without a character, checks world/history and monotonic ticks, and waits while the game is paused. Its instructions now explicitly allow directing actors to move, mine, craft and build, with resource quantities and coordinates. Actors still approach in bounded waypoints and observe locally before mining or transferring. Existing action validation, ownership, receipts and the shared spend guard remain in force.
 
-## Supplied-equipment automation demo
+## Empty-inventory automation run
+
+The current operator goal uses `scenario: "freeplay"`, with five empty inventories,
+no supplied raw resources and no prebuilt machines. Agents gather natural wood,
+stone, iron and coal, bootstrap smelting, craft unlocked machines and assemble the
+factory themselves. Manual work is allowed during construction; completion still
+requires unattended mining, smelting and plate storage. Burner production setups
+also need newly machine-mined coal in each verification window. Coordinate fuel
+acquisition and delivery as part of the factory, not ongoing actor feeding.
+
+## Optional supplied-equipment test fixture
+
+This fixture is **not** the current live run configuration.
 
 Use `scenario: "automation-starter"` to give each actor one electric mining drill,
 one electric furnace, 12 solar panels, 10 accumulators, 20 medium poles, 60 belts,

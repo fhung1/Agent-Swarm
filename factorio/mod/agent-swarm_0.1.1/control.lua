@@ -426,16 +426,21 @@ script.on_nth_tick(60,function()
     if a.crafting_queue_size>0 or (a.player and a.player.mining_state.mining) then storage.qs_automation=nil;return end
   end
   local stats=game.forces.player.get_item_production_statistics(surface)
-  local ore=stats.get_input_count("iron-ore");local plates=stats.get_input_count("iron-plate");local stored=0
+  local ore=stats.get_input_count("iron-ore");local coal=stats.get_input_count("coal");local plates=stats.get_input_count("iron-plate");local stored=0
   for _,e in pairs(surface.find_entities_filtered{type="container",force="player"}) do stored=stored+e.get_item_count("iron-plate") end
   local proof=storage.qs_automation
-  if not proof then proof={verified=false,startTick=game.tick,ore=ore,plates=plates,stored=stored,windows=0};storage.qs_automation=proof end
+  if not proof then proof={verified=false,startTick=game.tick,ore=ore,coal=coal,plates=plates,stored=stored,windows=0};storage.qs_automation=proof end
   proof.currentStored=stored;proof.tick=game.tick
-  proof.mined=ore-proof.ore;proof.smelted=plates-proof.plates;proof.delivered=stored-proof.stored
+  proof.mined=ore-proof.ore;proof.coalMined=coal-(proof.coal or coal);proof.smelted=plates-proof.plates;proof.delivered=stored-proof.stored
+  local needsFuel=false
+  for _,e in pairs(surface.find_entities_filtered{type={"mining-drill","furnace","boiler"},force="player"}) do
+    if e.burner then needsFuel=true;break end
+  end
+  proof.needsFuel=needsFuel
   if game.tick-proof.startTick>=1800 then
-    if proof.mined>=5 and proof.smelted>=5 and proof.delivered>=5 then proof.windows=proof.windows+1 else proof.windows=0 end
+    if proof.mined>=5 and proof.smelted>=5 and proof.delivered>=5 and (not needsFuel or proof.coalMined>=1) then proof.windows=proof.windows+1 else proof.windows=0 end
     proof.verified=proof.windows>=2
-    proof.startTick=game.tick;proof.ore=ore;proof.plates=plates;proof.stored=stored
+    proof.startTick=game.tick;proof.ore=ore;proof.coal=coal;proof.plates=plates;proof.stored=stored
     if proof.verified then proof.verifiedTick=game.tick end
   end
 end)

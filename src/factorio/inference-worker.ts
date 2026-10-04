@@ -364,7 +364,7 @@ export async function inferenceWorkerMain(): Promise<void> {
     await runInferenceWorker({ scope, state, taskId: process.env.FACTORIO_TASK_ID ?? `${runId}.production-${index}`,
       objective: process.env.FACTORIO_OBJECTIVE ?? (process.env.FACTORIO_GOAL === 'rocket'
         ? 'Beat Factorio by launching a rocket from this empty-resource freeplay world. Decompose the goal into board subtasks and cooperate through resource requests and shared chests.'
-        : 'Build an automated iron factory with supplied machines: natural ore mining, powered smelting and automatic plate delivery into storage. No ongoing actor feeding or hauling. Completion requires status.automation.verified.'),
+        : 'Start empty, gather natural materials, craft and assemble an automated iron factory: automatic ore and fuel acquisition, smelting and plate delivery into storage. Manual bootstrap work is allowed; no ongoing actor feeding or hauling after commissioning. Completion requires status.automation.verified.'),
       operatorPrompt: () => process.env.FACTORIO_PROMPT_FILE ? readFileSync(process.env.FACTORIO_PROMPT_FILE, 'utf8') : process.env.FACTORIO_PROMPT ?? 'Share plans and observations; avoid resource contention.',
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,

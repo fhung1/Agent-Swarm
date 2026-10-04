@@ -1,5 +1,11 @@
 # Factorio handoff
 
+## Empty-inventory automation correction — codex, 2026-10-04
+
+Operator clarified that no equipment or materials may be supplied. Stopped `iron-auto-20261004` and preserved its save and ledger; replaced the kit-specific prompts/objective with gather → bootstrap smelt → craft → assemble → unattended production. Manual gathering/feeding is allowed only as bootstrap work. Burner production requires fresh machine-mined coal during each proof window. The kit scenario remains an optional disposable fixture only.
+
+Current run `iron-zero-20261004` uses a fresh **freeplay** save at `.game-runs/iron-zero-20261004/world`; world `c40346fa-f288-4a7c-abca-4439f41b9532`, history `52ef8cd4-51cf-4d3e-ae36-8b5bcda45795`. Live engine startup assertions verified all five inventories empty, zero chests/furnaces and no prebuilt production equipment. One Astra High coordinator and five Luna Low actors, unlimited call counts, fresh shared $100 cap; inherited one-hour deadline remains. Board database `iron-zero-20261004` on port 3008, game 34201/RCON 27019, dashboard `http://127.0.0.1:4193/?board=factorio`. Fresh run started; automation has not yet been achieved. Prior implementation `03224d9` is pushed. Next: monitor actor gathering and crafting, construction, and engine proof without granting items or manually operating their factory.
+
 ## Unattended iron automation — codex, 2026-10-04
 
 Operator clarified that actors must construct an automatic ore-to-storage factory using supplied in-game equipment. Plate inventory claims no longer complete the iron goal. Added bounded oriented `build` and machine `recover` actions across model schema, protocol, worker and Lua bridge; nearest-first local observations; machine power/direction and inserter endpoints; engine proof requiring two consecutive 30-second mining/smelting/storage-growth windows without actor material assistance; and dashboard proof display. `automation-starter` explicitly declares each actor's equipment kit, with no raw resources or prebuilt factory. Twenty focused inference/orchestrator/launch tests, root/dashboard typechecks and bundles pass. Disposable engine test `factorio/check-automation.py` passed direction, recovery, 29 automatically stored plates, verified production and proof reset after a construction action. This fixture is not evidence of model cooperation.
