@@ -1,5 +1,13 @@
 # Factorio handoff
 
+## Browser task creation and live iron-plate factory run — codex, 2026-10-04
+
+Added the browser **Create a task** form for title, details, area, priority, and optional dependency; it submits through the current dashboard participant after the live board subscription is applied. The dashboard now shows the run spend ledger. Added an iron-plate-factory parent goal whose five actor completions require engine-observed inventories of at least five plates each and at least one furnace. Code commit `5369cdd` is pushed to `main`.
+
+The live run `iron-factory-20261003-2358` uses Astra High plus five Luna Low actors, unlimited calls, a shared $100 cap, and the existing world/history (`22cc4c86-f4dc-4698-81c7-97e2d2c669c1` / `51b661d1-cf9a-4034-af99-aa8a0c21b601`). At game tick 218,086, Astra created all five actor subtasks and all five Luna identities claimed them. The game reports one furnace; actor 12 has two iron plates and actor 15 has 25 coal. The goal is still in progress. The ledger reports $0.291894 charged and $0.049409 reserved; it is not halted. Dashboard `http://127.0.0.1:4189/?board=factorio` and the Factorio GUI are open. The previous run's services on 3007/4188 were stopped while keeping their database files.
+
+Checks: `npm run typecheck`, all four correct inference bundle builds, and the dashboard browser build succeeded. No tests were run. Next: keep monitoring the live board, game inventory/receipts, and shared ledger; the run stops on the $100 guard or its one-hour deadline.
+
 ## Unlimited production calls under shared spend cap — codex, 2026-10-03
 
 Production runs now require `FACTORIO_MAX_CALLS=0` and `FACTORIO_ORCHESTRATOR_MAX_CALLS=0`; both the five actors and Astra continue without a model-call count limit. The shared atomic ledger remains the spend stop and the launcher terminates all six process groups when its cap blocks a request. The dashboard labels call counts as unlimited. Smoke mode retains its small per-actor count for quick checks. Commit `6116919` is pushed to `main`. Typecheck and all four inference bundles pass; tests were not run. The prior 2252 run was stopped before this change (charged $0.485961, reserved $0.064757 against its $398.30 cap; one Astra process needed SIGKILL during manual stop).
