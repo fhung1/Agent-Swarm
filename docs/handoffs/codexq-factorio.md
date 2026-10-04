@@ -1,61 +1,7 @@
-# Codexq Factorio runtime handoff
+# Factorio runtime handoff
 
-- Task: factorio-runtime-prep; push when finished.
-- Status: runtime implementation and real-engine smoke complete; publishing immediately before next package.
-- Worktree: /tmp/quant-factorio-runtime, based on fetched upstream main; shared dirty workspace preserved.
-- Implemented: official pinned installer, isolated world CLI, declared starter/freeplay scenarios, ten scripted actors, base-only mod list/hash, world/history IDs, private RCON status and disposable engine check. Guide: factorio/README.md.
-- Checks: `python3 factorio/check-runtime.py` PASS against actual 2.0.77: ten unique actors, 50 ore/20 coal/two furnaces, seed/IDs, advancing ticks, overwrite/port/hash refusals and clean stop. Installer succeeded. No model/board calls or graphical viewer claim.
-- Remaining: bounded action bridge, durable worker/journal and gameplay-board integration, ten-agent production and remote graphical viewer acceptance. Parent F0 task remains dependent on generic-message-board integration.
-- Coordination: HANDOFF.md locked by cancellation session; this distinct handoff is the interim entry for later incorporation. merge-fix offered standalone journal work; sent compatible suggested receipt metadata on the board.
+Runtime, private binding and bounded bridge have real 2.0.77 checks: ten actors, declared grants/seed, save/hash/port refusals, five-plate smelting, replay, pause and restart. Historical independent ten-worker verification recorded fifty plates with matching board/game receipts; see [evidence](../factorio-live-verification.md).
 
-## Bounded bridge and production milestone
+Recovery checkpoint/supervisor components landed in `22f14de` with six focused tests. Worker integration and real prolonged-outage evidence are separate gates. A past board outage stopped viewing workers; saved output did not establish automatic recovery.
 
-- Task: factorio-bridge-prep; push when finished.
-- Status: implementation/checks complete; publishing immediately.
-- Work: validated TypeScript and Python operation encoding; Lua local observation, bounded walking/transfers, persistent exact-request receipts, actor serialization and pause admission. Real single-actor furnace test consumes fixture ore/fuel and collects five plates.
-- Checks: three TypeScript contract tests and strict file typecheck PASS; runtime engine smoke PASS; production/replay/pause/save/restart engine check PASS. No provider, gameplay-board or graphical-client acceptance claimed.
-- Next: integrate generic board and the pushed operation journal, implement durable independent rules workers and ten-agent reservation coordination. Full command vocabulary remains incomplete (mining, crafting, construction/pathfinding).
-
-## Tailscale game binding
-
-- Task: factorio-tailnet-bind; push when finished.
-- Implemented: gameBind config selects a specific private/tailnet IPv4 UDP endpoint; loopback default and RCON always loopback. Wildcard/public/unavailable binding refuses before server launch.
-- Check: actual 2.0.77 engine smoke with FACTORIO_CHECK_GAME_BIND=100.107.208.76; actors/resources/IDs, progress and clean stop verified; wildcard config refusal checked. Graphical client join pending.
-- Deployment: merge-fix owns fresh live demo on UDP 34198/RCON27016 and ten-process launcher. No competing world remains running from this session.
-
-## Independent live ten-worker acceptance
-
-- Task: factorio-live-blackbox; push when finished.
-- Status: actual final run3 independently verified; publishing read-only checker and documentation.
-- Check: ten live worker processes, ten distinct recorded identities and owners, ten avatars with five plates each, fifty matched engine/board transfer receipts, expected source depletion, scope, contention and development separation all PASS. Checked directly against engine and database, not only launcher report.
-- Added: factorio/verify-live.py; docs/factorio-live-verification.md. Viewer mod/checksum/report served from dedicated public artifact directory /tmp/factorio-viewer-public on Tailscale4180. Verified HTTP download, archive files and SHA-256; no private state served.
-- Remaining release work: shared client/launcher owner must push final integration; graphical join must be confirmed by operator/client. Current ten-worker world and board are live, owned by merge-fix; this session does not modify their controls.
-
-## Dashboard routing and interruption-resistant live session
-
-- Tasks: factorio-tailnet-board and factorio-live-restart; push when finished.
-- Findings: tailnet100.107.208.76:3000 served an unrelated Next.js application, so browser/SDK WebSocket subscriptions hung despite HTTP200. Live viewing game had also ended abruptly; its pending view tasks reported connection-refused blockers. Production evidence from run3 remains valid.
-- Work in progress: dedicated validated tailnet TCP relay3001 to actual loopback SpacetimeDB3000; restarted4175 dashboard with correct remote URI. Real SDK and Chromium now receive live snapshots.
-- Durability: user-manager services agent-swarm-db-relay, agent-swarm-board, and agent-swarm-factorio-demo4 preserve processes across assistant turn interruptions. Fresh run4 world preserves previous worlds, ten workers, fixed fixture grants and bounded60minute deadline23:56UTC/19:56Eastern.
-- Checks: fresh run4 independent engine/board verification PASS (ten workers/identities/tasks, fifty plates and fifty matched receipts). Real Chromium shows LIVE data and current ten workers; SDK relay restart recovered same identity and fresh snapshot. Relay address/port refusal checks PASS.
-- Publication: access fix prepared; waiting for codex-queue MERGE COMPLETE before direct-main push to avoid disrupting the explicitly coordinated merge.
-- Next: push access/restart documentation after merge, preserve active user services and verify launcher/framework publication with owners.
-
-## Final active test session after shared database outage
-
-- Task: factorio-live-restart; push when finished.
-- Network fix published: authored1d6be72 via00cbf4a to main; real SDK/browser and same-identity relay restart checks passed.
-- Incident: shared loopback database disappeared. Another session restarted it concurrently; my attempted agent-swarm-local-db unit failed on its data lock and changed no data. Corrected the earlier board attribution immediately. Long outage caused run4 workers to stop/quarantine instead of replaying uncertain work. Production proof and worlds remain preserved.
-- Resolution: gracefully saved/stopped run4, created declared fixture run5 under user service agent-swarm-factorio-demo5; directory /home/cig/.local/share/agent-swarm/live-demo-5, run demo-mut03ct1. Active until00:05:58UTC October4 /20:05:58Eastern October3.
-- Checks: fresh run5 independently PASS: ten live workers/distinct recorded identities/tasks/avatars, fifty actual plates and fifty matched engine/board receipts, source depletion, sharing contention and development isolation. Evidence /tmp/factorio-live5-independent-evidence/verification.json. Actual server bound100.107.208.76:34198; board4175, relay3001 and public artifacts4180 active under user services.
-- Follow-up: factorio-board-outage-recovery records missing prolonged-disconnect restart/phase reconciliation; graphical client join remains unverified. Launcher/dashboard source publication remains with merge-fix; generic framework now pulled from main. No claims of model-driven behavior or natural-map progression.
-
-## Continued outage recovery implementation
-
-- Task: factorio-board-outage-recovery; push when finished.
-- Pulled main9079d9e and claimed recovery. Current demo5 has reached its deadline; dashboard4175 and relay3001 remain active.
-- Implementing durable bounded supervisor: only explicit board-outage exit75 restarts; unknown outcomes78 quarantine persistently; deadline and restart budget survive supervisor restarts.
-- Integration pending: canonical demo-worker.ts remains locked by merge-fix; requested handoff on board. Production phase and viewing checkpoint recovery must be integrated before this task is complete.
-- Added worker-checkpoint.ts: durable scope/history/avatar, tick floor, viewing sequence and irreversible production-to-viewing phase; recovery refuses absent board, ownership changes, missing production receipts and inventory mismatch.
-- Checks: six focused tests PASS, including real child retry/quarantine, supervisor restart persistence, viewing recovery and rollback refusal; git diff --check PASS. One initial Node strip-mode parameter-property failure was fixed with explicit fields.
-- Still required: integrate checkpoint/supervisor with canonical worker and run a real prolonged outage. No claim that live recovery is complete; merge-fix lock remains active and two handoff requests were posted.
+Old demos had finite viewing windows and have expired. Use the current [runtime](../../factorio/README.md), [inference](../factorio-inference.md) and [access](../factorio-tailnet-access.md) guides; inspect services before claiming a live run. Graphical and real-provider acceptance remain independently verified requirements.

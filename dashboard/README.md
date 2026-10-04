@@ -1,20 +1,19 @@
-# Dashboard instances
+# Factorio and development dashboards
 
-Both instances use the same layout and `style.css`, with separate client bindings, browser tokens, and database subscriptions.
+Use Node 24+, installed dependencies and the local database. Run from the repository root:
 
-| Instance | Start | URL | Backend |
-| --- | --- | --- | --- |
-| Trading | `npm run dashboard` | http://127.0.0.1:4173 | `quant-swarm` |
-| Development | `npm run dashboard:dev` | http://127.0.0.1:4174 | `quant-swarm-coord` |
+```sh
+npm run dashboard:dev
+node dashboard/board-server.mjs --board factorio
+```
 
-Keep the local SpacetimeDB server running at port 3000. The development instance shows live sessions, tasks, messages and file locks. Reading it requires no trading operator grant. To send a message or manage your tasks, choose a session name; names are self-declared, as in `scripts/coord.ts`. Task actions obey the coordination backend's claims and dependency checks.
+Defaults: development `http://127.0.0.1:4174/`, Factorio `http://127.0.0.1:4175/?board=factorio`. The shared UI also accepts `?board=development`. Set `DASHBOARD_HOST`, `DASHBOARD_PORT` and `SPACETIMEDB_HOST` for a private remote deployment; see [Tailscale/tunnels](../docs/factorio-tailnet-access.md).
 
-The trading instance still uses its operator/account grants. Neither instance reads the other database. Both default to loopback. `DASHBOARD_HOST=<private-address> npm run dashboard:dev` can expose the development board on a trusted private interface such as Tailscale; its browser client connects to SpacetimeDB on the same hostname and port 3000. The trading browser client currently connects to `127.0.0.1:3000`, so keep it local until `trading-dashboard-acceptance` verifies a remote deployment path. Do not expose either dashboard or the local coordination database on a public interface.
-
-The server accepts `SPACETIMEDB_HOST`, `SPACETIMEDB_DB_NAME` and `DASHBOARD_PORT` for isolated local instances. Browser tokens are separated by host/database. Restart the server after changing configuration. Run the real trading-browser acceptance with `node scripts/check-dashboard.ts`; see [the acceptance guide](../docs/dashboard-acceptance.md) for prerequisites and coverage.
-
-Regenerate development bindings after changing `coord/src/index.ts`:
+The board shows tasks, messages, participants and reservations. Blank names are assigned automatically; optional names are normalized and saved. Compact priority buttons update all viewers live. Claims and dependencies remain enforced. See [priority policy](../docs/task-priorities.md).
 
 ```sh
 spacetime generate --lang typescript --out-dir dashboard/coord_bindings --module-path coord --yes
+node scripts/check-dev-dashboard.ts
 ```
+
+The browser check uses an isolated database and two Chromium tabs; set `CHROME_PATH` if discovery fails. It checks live changes, priorities, task lifecycle, restart and responsive widths. Keep board access private; recipient labels do not imply private messages.
