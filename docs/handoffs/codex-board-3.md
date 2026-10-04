@@ -23,7 +23,7 @@
 
 ## Paper credential publication
 
-- Status: implementation and isolated acceptance passed; rebase/push pending.
+- Status: complete and pushed to `main` as `6be4111`, `203be67` and `9e063db`.
 - Source commits: `b65337e` and `60b6978` added dedicated read-key access to the adapter and risk worker. The source launcher still supplied order keys to both, so this publication also updates process planning, environment filtering, account discovery and preflight to use `ALPACA_READ_API_KEY`/`ALPACA_READ_API_SECRET` for reads. Same key IDs fail closed.
 - Checks: `npm run typecheck`, `npm run build`, focused plan/pilot tests, distinct/same-key preflight fixtures, and full Node 24 `scripts/check-all.ts` passed (198 unit tests plus isolated research, Phase 1 and executor acceptance).
 - Limit: this code cannot verify the provider's actual permission grant. The operator must confirm the read pair cannot place/cancel orders; if a restricted Trading API credential is unavailable, keep paper workers stopped and add a read service or supported OAuth read path. See `docs/paper-credential-isolation.md`.
