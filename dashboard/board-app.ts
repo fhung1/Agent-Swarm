@@ -1,35 +1,47 @@
 import { PRIORITIES, priorityLabel, comparePriority, type TaskPriority } from '../message-board/priority.js';
-import { DbConnection } from './coord_bindings/index.js';
-import type { DevTask } from './coord_bindings/types.js';
-import { dashboardConfig, dashboardTokenKey } from './config.js';
+import { parseBoardConfig, findBoard } from '../message-board/config.js';
+import { MessageBoardClient, stored, save, type BoardTask } from './board-client.js';
 
 const root = document.querySelector<HTMLElement>('#app')!;
-const { host: HOST, database: DATABASE } = dashboardConfig('quant-swarm-coord');
-const TOKEN_KEY = dashboardTokenKey('development', HOST, DATABASE);
-const NAME_KEY = 'quant-swarm:development:name';
-let connection: DbConnection | undefined;
-let ready = false;
-let state = 'Connecting to development backend…';
+const config = parseBoardConfig(JSON.parse(decodeURIComponent(document.documentElement.dataset.boards!)));
+const boards = config.boards;
+const requestedBoard = new URLSearchParams(location.search).get('board') ?? document.documentElement.dataset.board ?? config.defaultBoard;
+const board = boards.find(item => item.id === requestedBoard) ?? findBoard(config, config.defaultBoard);
+const host = decodeURIComponent(document.documentElement.dataset.host!);
+const storagePrefix = `message-board:${host}:${board.database}`;
+const NAME_KEY = `${storagePrefix}:name`;
+const client = new MessageBoardClient({ uri: host, database: board.database, token: stored(`${storagePrefix}:token`),
+  onToken: token => save(`${storagePrefix}:token`, token), onChange: queueRender });
 let filter = 'active';
 let selectedTask = '';
-let generation = 0;
-let retry = 0;
-let timer: number | undefined;
+let messageLimit = 100;
 let queued = false;
 let sessionName = stored(NAME_KEY) ?? '';
-let sessionToken = stored(TOKEN_KEY);
-let recoveredToken = false;
 let draftBody = '';
 let draftRecipient = '';
 let draftTask = '';
 let sending = false;
 let actionPending = false;
-let error = '';
-
-function stored(key: string): string | undefined {
-  try { return localStorage.getItem(key) ?? undefined; } catch { return undefined; }
+let error = board.id === requestedBoard ? '' : `Unknown board: ${requestedBoard}. Showing ${board.label}.`;
+const dashboardPorts = [
+  { port: 4174, label: 'Development dashboard' },
+  { port: 4175, label: 'Factorio and message boards' },
+  { port: 4173, label: 'Paper portfolio' },
+  { port: 4176, label: 'Local tunnel board' },
+];
+let openDashboards: typeof dashboardPorts = [];
+async function refreshDashboards(): Promise<void> {
+  const checked = await Promise.all(dashboardPorts.map(async item => {
+    try {
+      await fetch(`${location.protocol}//${location.hostname}:${item.port}/`, { mode: 'no-cors', signal: AbortSignal.timeout(2000) });
+      return item;
+    } catch { return undefined; }
+  }));
+  openDashboards = checked.filter((item): item is typeof dashboardPorts[number] => item !== undefined);
+  queueRender();
 }
-function save(key: string, value: string): void { try { localStorage.setItem(key, value); } catch { /* Session still works. */ } }
+
+
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const element = document.createElement(tag);
   element.className = className;
@@ -88,48 +100,57 @@ function input(label: string, value: string, update: (value: string) => void, mu
   put(wrapper, node('span', 'muted small', label), control);
   return wrapper;
 }
-async function asSession(conn: DbConnection): Promise<string> {
+async function asParticipant(): Promise<string> {
   const name = sessionName.trim();
-  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) throw new Error('Choose a lowercase session name (letters, numbers, dot, dash or underscore).');
-  save(NAME_KEY, name);
-  if (!conn.db.session.name.find(name)) await conn.reducers.register({ name, tool: 'human', focus: 'Development dashboard' });
+  if (!/^[a-z0-9][a-z0-9._-]{0,63}$/.test(name)) throw new Error('Choose a lowercase participant name (letters, numbers, dot, dash or underscore).');
+  if (!client.snapshot().participants.some(participant => participant.name === name)) await client.register(name, 'human', `${board.label} dashboard`);
   return name;
 }
-async function taskAction(conn: DbConnection, task: DevTask, status: string): Promise<void> {
+async function taskAction(task: BoardTask, status: string): Promise<void> {
   if (actionPending) return;
-  actionPending = true;
-  error = '';
-  queueRender();
+  actionPending = true; error = ''; queueRender();
   try {
-    const name = await asSession(conn);
-    if (status === 'claim') await conn.reducers.claimTask({ name, id: task.id });
-    else {
-      const result = window.prompt(status === 'blocked' ? 'Why is this task blocked?' : 'Result or note:', '') ?? undefined;
-      if (result === undefined) return;
-      await conn.reducers.updateTask({ name, id: task.id, status, result });
+    const result = status === 'claim' ? '' : window.prompt(status === 'blocked' ? 'Why is this task blocked?' : 'Result or note:', '');
+    if (result !== null) {
+      const name = await asParticipant();
+      if (status === 'claim') await client.claimTask(name, task.id);
+      else if (status === 'done' || status === 'blocked' || status === 'open') await client.updateTask(name, task.id, status, result);
     }
   } catch (reason) { error = String(reason); }
   finally { actionPending = false; queueRender(); }
 }
-function render(): void {
-  if (!ready || !connection) {
-    const gate = node('div', 'gate');
-    put(gate, node('div', 'brand-mark', 'QS'), node('p', 'eyebrow', 'DEVELOPMENT · LOCAL COORDINATION'),
-      node('h1', '', 'Agent Swarm'), node('p', 'lead', state));
-    root.replaceChildren(gate);
-    return;
+function boardNavigation(): HTMLElement {
+  const navigation = node('nav', 'run-list board-navigation');
+  navigation.setAttribute('aria-label', 'Message boards');
+  for (const item of boards) {
+    const link = node('a', `run-item ${board.id === item.id ? 'selected' : ''}`, item.label);
+    link.href = `/?board=${item.id}`;
+    if (board.id === item.id) link.setAttribute('aria-current', 'page');
+    put(navigation, link);
   }
-  const conn = connection;
-  const tasks = [...conn.db.devTask.iter()].map(task => ({ ...task, priority: conn.db.taskPriority.taskId.find(task.id)?.priority ?? 'normal' })).sort(comparePriority);
-  const sessions = [...conn.db.session.iter()].sort((a, b) => millis(b.lastSeen) - millis(a.lastSeen));
-  const messages = [...conn.db.devMessage.iter()].sort((a, b) => a.id > b.id ? -1 : a.id < b.id ? 1 : 0);
-  const locks = [...conn.db.fileLock.iter()].filter(lock => millis(lock.expiresAt) > Date.now()).sort((a, b) => a.path.localeCompare(b.path));
+  return navigation;
+}
+function render(): void {
+  const snapshot = client.snapshot();
+  const tasks = snapshot.tasks.sort(comparePriority);
+  const sessions = snapshot.participants.sort((a, b) => millis(b.lastSeen) - millis(a.lastSeen));
+  const messages = snapshot.messages.sort((a, b) => millis(b.createdAt) - millis(a.createdAt) || (b.id > a.id ? 1 : b.id < a.id ? -1 : 0));
+  const locks = snapshot.reservations.filter(lock => millis(lock.expiresAt) > Date.now()).sort((a, b) => a.path.localeCompare(b.path));
   const shownTasks = tasks.filter(task => filter === 'all' || (filter === 'active' ? ['open', 'claimed', 'blocked'].includes(task.status) : task.status === filter));
   const layout = node('div', 'layout');
   const sidebar = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
-  put(brand, node('div', 'brand-mark', 'AS'), 'AGENT SWARM');
-  put(sidebar, brand, node('div', 'side-label', 'DEVELOPMENT BOARD'));
+  put(brand, node('div', 'brand-mark', 'MB'), 'MESSAGE BOARD');
+  put(sidebar, brand, node('div', 'side-label', 'MESSAGE BOARDS'), boardNavigation());
+  const dashboardLinks = node('nav', 'run-list');
+  dashboardLinks.setAttribute('aria-label', 'Open dashboards');
+  for (const item of openDashboards) {
+    const link = node('a', 'run-item', item.label);
+    link.href = `${location.protocol}//${location.hostname}:${item.port}/${item.port === 4175 || item.port === 4176 ? '?board=factorio' : ''}`;
+    if (item.port === Number(location.port)) link.setAttribute('aria-current', 'page');
+    put(dashboardLinks, link);
+  }
+  put(sidebar, node('div', 'side-label', 'OPEN DASHBOARDS'), dashboardLinks, node('div', 'side-label task-filter-label', 'TASK FILTERS'));
   const navigation = node('div', 'run-list');
   for (const [value, label] of [['active', 'Active tasks'], ['open', 'Open'], ['claimed', 'In progress'], ['blocked', 'Blocked'], ['done', 'Completed'], ['all', 'All tasks']]) {
     const nav = node('button', `run-item ${filter === value ? 'selected' : ''}`, label);
@@ -139,21 +160,23 @@ function render(): void {
   }
   put(sidebar, navigation, node('div', 'side-spacer'));
   const footer = node('div', 'side-footer');
-  put(footer, node('span', 'online-dot'), node('span', '', 'LIVE · LOCAL'), node('small', 'mono', 'quant-swarm-coord'));
+  put(footer, node('span', client.ready ? 'online-dot' : 'offline-dot'), node('span', '', client.ready ? 'LIVE · LOCAL' : 'CONNECTING'), node('small', '', `${board.label} board`));
   put(sidebar, footer);
   const main = node('main', 'main');
   const header = node('header', 'page-head');
   const title = node('div', 'title');
-  put(title, node('p', 'eyebrow', 'DEVELOPMENT OVERVIEW'), node('h1', '', 'Development coordination'),
-    node('p', 'muted', 'Sessions, tasks, messages and file locks'));
+  put(title, node('p', 'eyebrow', 'SHARED COMMUNICATION'), node('h1', '', `${board.label} message board`),
+    node('p', 'muted', 'Messages, tasks and agent activity'));
   const controls = node('div', 'controls');
-  const trading = node('a', 'ghost-button', 'Trading dashboard ↗');
-  trading.href = 'http://127.0.0.1:4173';
-  put(controls, trading);
   put(header, title, controls);
   put(main, header);
+  if (!client.ready) {
+    const notice = panel('Connecting to message board', board.label);
+    put(notice, node('p', 'board-copy', client.state));
+    put(main, notice); put(layout, sidebar, main); root.replaceChildren(layout); return;
+  }
   const stats = node('div', 'stats');
-  for (const [label, count] of [['Sessions', sessions.length], ['Open tasks', tasks.filter(t => t.status === 'open').length], ['In progress', tasks.filter(t => t.status === 'claimed').length], ['Blocked', tasks.filter(t => t.status === 'blocked').length], ['File locks', locks.length], ['Messages', messages.length]]) {
+  for (const [label, count] of [['Participants', sessions.length], ['Open tasks', tasks.filter(t => t.status === 'open').length], ['In progress', tasks.filter(t => t.status === 'claimed').length], ['Blocked', tasks.filter(t => t.status === 'blocked').length], ['Reservations', locks.length], ['Messages', messages.length]]) {
     const stat = node('div', 'stat');
     put(stat, node('span', 'stat-label', String(label)), node('strong', '', String(count)));
     put(stats, stat);
@@ -164,7 +187,7 @@ function render(): void {
   const primary = node('div', 'column');
   const secondary = node('div', 'column');
   const taskPanel = panel('Task board', `${shownTasks.length} tasks · ${filter} · highest priority first`);
-  put(taskPanel, input('Your session name', sessionName, value => { sessionName = value; save(NAME_KEY, value); queueRender(); }));
+  put(taskPanel, input('Your participant name', sessionName, value => { sessionName = value; save(NAME_KEY, value); queueRender(); }));
   if (!shownTasks.length) empty(taskPanel, 'No tasks in this view.');
   const cards = node('div', 'cards');
   for (const task of shownTasks) {
@@ -185,8 +208,8 @@ function render(): void {
       const priority = prioritySelect.value as TaskPriority;
       actionPending = true; error = ''; queueRender();
       void (async () => {
-        const name = await asSession(conn);
-        await conn.reducers.setTaskPriority({ name, id: task.id, priority });
+        const name = await asParticipant();
+        await client.setTaskPriority(name, task.id, priority);
       })().catch(reason => { error = String(reason); }).finally(() => { actionPending = false; queueRender(); });
     });
     put(priorityControl, node('span', 'muted small', 'Priority'), prioritySelect);
@@ -201,7 +224,7 @@ function render(): void {
     const actions = node('div', 'controls');
     const available = task.status === 'open' ? [['claim', 'Claim task']] : task.assignee === sessionName.trim() && ['claimed', 'blocked'].includes(task.status) ? [['done', 'Complete'], ['blocked', 'Block'], ['open', 'Release']] : [];
     for (const [status, label] of available) {
-      const action = button(label, () => { void taskAction(conn, task, status); });
+      const action = button(label, () => { void taskAction(task, status); });
       action.disabled = actionPending;
       put(actions, action);
     }
@@ -210,11 +233,11 @@ function render(): void {
     put(cards, card);
   }
   put(taskPanel, cards);
-  put(primary, taskPanel);
-  const messagePanel = panel('Live messages', 'Development coordination history');
+  put(secondary, taskPanel);
+  const messagePanel = panel('Live messages', `${board.label} · ${messages.length} messages`);
   const stream = node('div', 'timeline');
   if (!messages.length) empty(stream, 'No messages yet.');
-  for (const message of messages.slice(0, 100)) {
+  for (const message of messages.slice(0, messageLimit)) {
     const event = node('article', 'event');
     const content = node('div', 'event-body');
     const top = node('div', 'event-top');
@@ -225,6 +248,7 @@ function render(): void {
     put(stream, event);
   }
   put(messagePanel, stream);
+  if (messages.length > messageLimit) put(messagePanel, button('Load older messages', () => { messageLimit += 100; queueRender(); }));
   const form = node('form', 'board-form');
   put(form, input('Recipient (blank = everyone)', draftRecipient, value => { draftRecipient = value; }),
     input('Task ID (optional)', draftTask, value => { draftTask = value; }),
@@ -237,14 +261,14 @@ function render(): void {
     if (sending) return;
     sending = true; error = ''; send.disabled = true;
     void (async () => {
-      const name = await asSession(conn);
-      await conn.reducers.post({ sender: name, recipient: draftRecipient.trim(), taskId: draftTask.trim(), body: draftBody });
+      const name = await asParticipant();
+      await client.post(name, draftBody, draftRecipient.trim(), draftTask.trim());
       draftBody = '';
     })().catch(reason => { error = String(reason); }).finally(() => { sending = false; queueRender(); });
   });
   put(messagePanel, form);
-  put(secondary, messagePanel);
-  const sessionPanel = panel('Sessions', 'Most recently seen first');
+  primary.prepend(messagePanel);
+  const sessionPanel = panel('Participants', 'Most recently seen first');
   for (const session of sessions) {
     const card = node('article', 'order-card');
     const head = node('div', 'card-head');
@@ -253,8 +277,8 @@ function render(): void {
     put(sessionPanel, card);
   }
   if (!sessions.length) empty(sessionPanel, 'No registered sessions.');
-  put(primary, sessionPanel);
-  const lockPanel = panel('File locks', 'Active reservations');
+  put(secondary, sessionPanel);
+  const lockPanel = panel('Reservations', 'Active reservations');
   for (const lock of locks) {
     const card = node('article', 'order-card');
     put(card, node('strong', 'mono', lock.path), field('Held by', lock.holder), field('Task', lock.taskId), field('Expires', when(lock.expiresAt)));
@@ -262,54 +286,18 @@ function render(): void {
     put(lockPanel, card);
   }
   if (!locks.length) empty(lockPanel, 'No active file locks.');
-  put(secondary, lockPanel);
+  if (board.showReservations) put(secondary, lockPanel);
   put(columns, primary, secondary);
   put(main, columns);
   put(layout, sidebar, main);
   root.replaceChildren(layout);
 }
-function reconnect(reason: unknown, current: number): void {
-  if (current !== generation) return;
-  // Only recover an explicitly rejected login, never a reducer/access denial.
-  // Keep the fallback in memory even when browser storage is unavailable.
-  if (sessionToken && !recoveredToken && /failed to verify token/i.test(String(reason))) {
-    recoveredToken = true;
-    sessionToken = undefined;
-    try { localStorage.removeItem(TOKEN_KEY); } catch { /* In-memory reset still works. */ }
-  }
-  if (timer !== undefined) return;
-  ready = false;
-  connection = undefined;
-  state = `Development connection interrupted: ${String(reason)}. Reconnecting…`;
-  queueRender();
-  timer = window.setTimeout(() => { timer = undefined; connect(); }, Math.min(30_000, 1000 * 2 ** Math.min(retry++, 5)));
-}
-function connect(): void {
-  const current = ++generation;
-  ready = false;
-  connection = DbConnection.builder()
-    .withUri(HOST)
-    .withDatabaseName(DATABASE)
-    .withToken(sessionToken)
-    .onConnect((conn, _identity, token) => {
-      if (current !== generation) { conn.disconnect(); return; }
-      connection = conn;
-      retry = 0;
-      sessionToken = token;
-      save(TOKEN_KEY, token);
-      for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock, conn.db.taskPriority]) {
-        table.onInsert(queueRender); table.onUpdate(queueRender); table.onDelete(queueRender);
-      }
-      conn.subscriptionBuilder()
-        .onApplied(() => { if (current === generation) { ready = true; queueRender(); } })
-        .onError(reason => { conn.disconnect(); reconnect(reason, current); })
-        .subscribe(['SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock', 'SELECT * FROM task_priority']);
-    })
-    .onConnectError((_ctx, reason) => reconnect(reason, current))
-    .onDisconnect((_ctx, reason) => reconnect(reason, current))
-    .build();
-}
+document.title = `Agent communication · ${board.label}`;
 render();
-connect();
-// Refresh expired lock visibility even when the backend has no new writes.
+client.start();
+window.addEventListener('pagehide', () => client.stop());
+window.addEventListener('pageshow', event => { if (event.persisted) client.start(); });
 window.setInterval(queueRender, 30_000);
+
+void refreshDashboards();
+window.setInterval(() => { void refreshDashboards(); }, 30_000);

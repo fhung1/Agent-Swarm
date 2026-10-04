@@ -41,6 +41,7 @@ import CreateTaskReducer from "./create_task_reducer";
 import LockReducer from "./lock_reducer";
 import PostReducer from "./post_reducer";
 import RegisterReducer from "./register_reducer";
+import SetTaskPriorityReducer from "./set_task_priority_reducer";
 import UnlockReducer from "./unlock_reducer";
 import UpdateTaskReducer from "./update_task_reducer";
 
@@ -52,6 +53,7 @@ import DevMessageRow from "./dev_message_table";
 import DevTaskRow from "./dev_task_table";
 import FileLockRow from "./file_lock_table";
 import SessionRow from "./session_table";
+import TaskPriorityRow from "./task_priority_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -118,6 +120,17 @@ const tablesSchema = __schema({
       { name: 'session_name_key', constraint: 'unique', columns: ['name'] },
     ],
   }, SessionRow),
+  taskPriority: __table({
+    name: 'task_priority',
+    indexes: [
+      { accessor: 'taskId', name: 'task_priority_task_id_idx_btree', algorithm: 'btree', columns: [
+        'taskId',
+      ] },
+    ],
+    constraints: [
+      { name: 'task_priority_task_id_key', constraint: 'unique', columns: ['taskId'] },
+    ],
+  }, TaskPriorityRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -129,6 +142,7 @@ const reducersSchema = __reducers(
   __reducerSchema("lock", LockReducer),
   __reducerSchema("post", PostReducer),
   __reducerSchema("register", RegisterReducer),
+  __reducerSchema("set_task_priority", SetTaskPriorityReducer),
   __reducerSchema("unlock", UnlockReducer),
   __reducerSchema("update_task", UpdateTaskReducer),
 );

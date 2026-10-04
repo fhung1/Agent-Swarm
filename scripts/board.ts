@@ -2,6 +2,7 @@
 // General-purpose message-board CLI. The coord.ts entry point is a compatibility alias.
 import { execFileSync, spawn } from 'node:child_process';
 import * as os from 'node:os';
+import { PRIORITIES, priorityRank } from '../message-board/priority.ts';
 import * as path from 'node:path';
 import { loadBoardConfig } from '../message-board/load-config.ts';
 import { findBoard } from '../message-board/config.ts';
@@ -24,7 +25,8 @@ Identify yourself with --as <name> or BOARD_AS=<name> (COORD_AS also works) (low
   inbox [--since MSG_ID] [--limit N]            Messages to you or everyone (default last 20)
   tasks [--all]                                 Active tasks (--all includes done and cancelled)
   apply-policy                                 Apply this instance's configured task instruction to existing tasks
-  add <id> <title> [--details D] [--area A] [--after TASK_ID]
+  add <id> <title> [--details D] [--area A] [--after TASK_ID] [--priority LEVEL]
+  priority <id> <low|normal|high|urgent>          Set priority for everyone
   claim <id>                                    Atomically take an open task
   done <id> [result] | block <id> <why> | release <id> [note] | cancel <id> [note]
   lock <path>... [--task ID] [--reason R] [--minutes 120]   Lock files or dirs/ before editing
@@ -83,6 +85,7 @@ function call(reducer: string, ...args: (string | number)[]): void {
 }
 
 function snapshot(...queries: string[]): Update {
+  if (queries.some(q => q.includes("FROM dev_task"))) queries.push("SELECT * FROM task_priority");
   try {
     const out = execFileSync(CLI, ['subscribe', '--server', SERVER, DB, ...queries, '--print-initial-update', '-n', '0', '--yes'],
       { env: ENV, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
@@ -93,7 +96,13 @@ function snapshot(...queries: string[]): Update {
   }
 }
 
-const rows = (update: Update, table: string) => update[table]?.inserts ?? [];
+const rows = (update: Update, table: string): Row[] => {
+  const values = update[table]?.inserts ?? [];
+  if (table !== 'dev_task') return values;
+  const priorities = new Map((update.task_priority?.inserts ?? []).map(p => [p.task_id, p.priority]));
+  return values.map(task => ({ ...task, priority: priorities.get(task.id) ?? 'normal' }));
+};
+const byPriority = (a: Row, b: Row) => priorityRank(String(a.priority)) - priorityRank(String(b.priority)) || String(a.id).localeCompare(String(b.id));
 const micros = (value: unknown) => Number((value as { __timestamp_micros_since_unix_epoch__: number }).__timestamp_micros_since_unix_epoch__);
 
 function ago(value: unknown): string {
@@ -124,7 +133,7 @@ function formatTask(t: Row): string {
   const after = t.depends_on ? ` after ${t.depends_on}` : '';
   const area = t.area ? `  area: ${t.area}` : '';
   const result = t.result ? `\n      ${t.result}` : '';
-  return `${t.id} [${t.status}${who}]${after} ${t.title}${area}${result}`;
+  return `${t.id} [priority:${t.priority ?? 'normal'}] [${t.status}${who}]${after} ${t.title}${area}${result}`;
 }
 
 function formatLock(l: Row): string {
@@ -151,7 +160,7 @@ function status(): void {
   const sessions = rows(update, 'session').sort((a, b) => micros(b.last_seen) - micros(a.last_seen));
   printSection('Participants', sessions.map(s => `${s.name} (${s.tool}, seen ${ago(s.last_seen)})${s.focus ? `: ${s.focus}` : ''}`));
   const active = rows(update, 'dev_task').filter(t => ['open', 'claimed', 'blocked'].includes(String(t.status)));
-  printSection('Active tasks', active.sort((a, b) => String(a.id).localeCompare(String(b.id))).map(formatTask));
+  printSection('Active tasks', active.sort(byPriority).map(formatTask));
   printSection('Locks', liveLocks(update).map(formatLock));
   const messages = rows(update, 'dev_message').sort((a, b) => Number(a.id) - Number(b.id)).slice(-10);
   printSection(name ? `Recent messages for ${name}` : 'Recent broadcasts', messages.map(formatMessage));
@@ -160,7 +169,7 @@ function status(): void {
 function watch(): void {
   const name = me();
   const child = spawn(CLI, ['subscribe', '--server', SERVER, DB, 'SELECT * FROM dev_message', 'SELECT * FROM dev_task',
-    'SELECT * FROM file_lock', '--yes'], { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
+    'SELECT * FROM file_lock', 'SELECT * FROM task_priority', '--yes'], { env: ENV, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk: string) => {
     for (const line of chunk.split('\n')) if (line.trim() && !line.includes('UNSTABLE')) console.error(line);
@@ -179,6 +188,7 @@ function watch(): void {
       for (const m of rows(update, 'dev_message')) {
         if (m.sender !== name && (m.recipient === '' || m.recipient === name)) console.log(`MESSAGE ${formatMessage(m)}`);
       }
+      for (const p of update.task_priority?.inserts ?? []) console.log(`PRIORITY ${p.task_id}: ${p.priority} (by ${p.updated_by})`);
       const removed = new Set((update.dev_task?.deletes ?? []).map(t => t.id));
       for (const t of rows(update, 'dev_task')) console.log(`TASK ${removed.has(t.id) ? 'updated' : 'added'}: ${formatTask(t)}`);
       const replaced = new Set(rows(update, 'file_lock').map(l => l.path));
@@ -220,15 +230,25 @@ switch (command) {
   case 'tasks': {
     const all = rows(snapshot('SELECT * FROM dev_task'), 'dev_task')
       .filter(t => flags.all || ['open', 'claimed', 'blocked'].includes(String(t.status)))
-      .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      .sort(byPriority);
     console.log(all.map(formatTask).join('\n') || '(no tasks)');
     break;
   }
   case 'add': {
     const [id, ...title] = rest;
     if (!id || !title.length) fail('add needs <id> <title>');
+    const priority = flag('priority');
+    if (priority && !PRIORITIES.some(p => p === priority)) fail('Priority must be low, normal, high, or urgent');
     call('create_task', me(), id, title.join(' '), flag('details') ?? '', flag('area') ?? '', flag('after') ?? '');
+    if (priority) call('set_task_priority', me(), id, priority);
     console.log(`Added ${id}.`);
+    break;
+  }
+  case 'priority': {
+    const [id, priority] = rest;
+    if (!id || !PRIORITIES.some(p => p === priority)) fail('priority needs <id> <low|normal|high|urgent>');
+    call('set_task_priority', me(), id, priority);
+    console.log(`${id} priority → ${priority}`);
     break;
   }
   case 'claim': {

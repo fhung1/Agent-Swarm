@@ -56,6 +56,16 @@ try {
   assert.equal(environment.rows('dev_message').find(row => row.sender === 'browser-b')!.recipient, '');
   console.log('PASS invalid-name refusal, register/send, recipient/task routing, draft clearing and escaped hostile text');
 
+  await a.evaluate(`(() => { const control = document.querySelector('select[aria-label="Priority for dev-live"]'); if (control.value !== 'normal') throw Error('Expected default Normal'); control.value = 'urgent'; control.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(() => b.evaluate<boolean>(`document.querySelector('select[aria-label="Priority for dev-live"]')?.value === 'urgent'`), 'second browser receives priority');
+  assert.equal(environment.rows('task_priority').find(row => row.task_id === 'dev-live')!.priority, 'urgent');
+  assert.equal(task('dev-live').status, 'open');
+  assert.equal(task('dev-live').assignee, '');
+  await waitFor(() => b.evaluate<boolean>(`document.querySelector('.research-card select')?.getAttribute('aria-label') === 'Priority for dev-live'`), 'urgent task sorts first');
+  await b.evaluate(`(() => { const control = document.querySelector('select[aria-label="Priority for dev-live"]'); control.value = 'high'; control.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(() => a.evaluate<boolean>(`document.querySelector('select[aria-label="Priority for dev-live"]')?.value === 'high'`), 'priority editable by second participant');
+  console.log('PASS default priority, editing from two browsers, live updates, priority ordering and unchanged ownership');
+
   await taskButton(a, 'dev-dependent', 'Claim task');
   await a.visible('waits on dev-prerequisite');
   assert.equal(task('dev-dependent').status, 'open');

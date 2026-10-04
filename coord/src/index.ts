@@ -26,7 +26,11 @@ const fileLock = table({ name: 'file_lock', public: true }, {
   acquiredAt: t.timestamp(), expiresAt: t.timestamp(),
 });
 
-const spacetimedb = schema({ session, devTask, archivedTask, devMessage, fileLock });
+const taskPriority = table({ name: 'task_priority', public: true }, {
+  taskId: t.string().primaryKey(), priority: t.string(), updatedBy: t.string(), updatedAt: t.timestamp(),
+});
+
+const spacetimedb = schema({ session, devTask, archivedTask, devMessage, fileLock, taskPriority });
 export default spacetimedb;
 type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
 
@@ -221,6 +225,19 @@ export const cleanupBoard = spacetimedb.reducer(
       if (task && ['open', 'claimed'].includes(task.status)) continue;
       ctx.db.devMessage.id.delete(id);
     }
+    touch(ctx, name);
+  }
+);
+
+export const setTaskPriority = spacetimedb.reducer(
+  { name: t.string(), id: t.string(), priority: t.string() },
+  (ctx, { name, id, priority }) => {
+    requireSession(ctx, name);
+    if (!ctx.db.devTask.id.find(id)) throw new SenderError(`Unknown active task ${id}`);
+    if (!['low', 'normal', 'high', 'urgent'].includes(priority)) throw new SenderError('Priority must be low, normal, high, or urgent');
+    const row = { taskId: id, priority, updatedBy: name, updatedAt: ctx.timestamp };
+    if (ctx.db.taskPriority.taskId.find(id)) ctx.db.taskPriority.taskId.update(row);
+    else ctx.db.taskPriority.insert(row);
     touch(ctx, name);
   }
 );

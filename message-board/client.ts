@@ -1,7 +1,8 @@
+import { comparePriority, type TaskPriority } from './priority.js';
 import { DbConnection } from './bindings/index.js';
 import type { DevTask, Session, DevMessage, FileLock } from './bindings/types.js';
 
-export type BoardTask = DevTask;
+export type BoardTask = DevTask & { priority: TaskPriority };
 export type Participant = Session;
 export type BoardMessage = DevMessage;
 export type Reservation = FileLock;
@@ -42,13 +43,13 @@ export class MessageBoardClient {
         if (current !== this.generation) { conn.disconnect(); return; }
         this.connection = conn; this.identity = identity.toHexString(); this.token = token;
         this.options.onToken?.(token);
-        for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock]) {
+        for (const table of [conn.db.session, conn.db.devTask, conn.db.devMessage, conn.db.fileLock, conn.db.taskPriority]) {
           table.onInsert(this.changed); table.onUpdate(this.changed); table.onDelete(this.changed);
         }
         conn.subscriptionBuilder()
           .onApplied(() => { if (current === this.generation) { this.ready = true; this.retry = 0; this.state = 'Live'; this.changed(); } })
           .onError(ctx => failed(ctx.event ?? 'Subscription failed'))
-          .subscribe(['SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock']);
+          .subscribe(['SELECT * FROM session', 'SELECT * FROM dev_task', 'SELECT * FROM dev_message', 'SELECT * FROM file_lock', 'SELECT * FROM task_priority']);
       }).onConnectError((_ctx, error) => failed(error)).onDisconnect((_ctx, error) => failed(error)).build();
   }
   stop(): void {
@@ -59,7 +60,7 @@ export class MessageBoardClient {
   snapshot(): BoardSnapshot {
     if (!this.ready || !this.connection) return emptySnapshot();
     const db = this.connection.db;
-    return { tasks: [...db.devTask.iter()], participants: [...db.session.iter()], messages: [...db.devMessage.iter()], reservations: [...db.fileLock.iter()] };
+    return { tasks: [...db.devTask.iter()].map(task => ({ ...task, priority: (db.taskPriority.taskId.find(task.id)?.priority ?? 'normal') as TaskPriority })).sort(comparePriority), participants: [...db.session.iter()], messages: [...db.devMessage.iter()], reservations: [...db.fileLock.iter()] };
   }
   private get reducers() {
     if (!this.ready || !this.connection) throw new Error('Board is disconnected; wait for the subscription snapshot');
@@ -70,6 +71,7 @@ export class MessageBoardClient {
   createTask(name: string, task: { id: string; title: string; details?: string; area?: string; dependsOn?: string }) {
     return this.reducers.createTask({ name, details: '', area: '', dependsOn: '', ...task });
   }
+  setTaskPriority(name: string, id: string, priority: TaskPriority) { return this.reducers.setTaskPriority({ name, id, priority }); }
   claimTask(name: string, id: string) { return this.reducers.claimTask({ name, id }); }
   updateTask(name: string, id: string, status: 'open' | 'done' | 'blocked' | 'cancelled', result = '') {
     return this.reducers.updateTask({ name, id, status, result });

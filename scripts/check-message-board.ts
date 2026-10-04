@@ -89,6 +89,15 @@ try {
   await wait(() => dev.snapshot().tasks.length === 1 && other.snapshot().tasks.length === 1, 'task snapshots');
   assert.match(dev.snapshot().tasks[0].details, /push when finished/);
   assert.doesNotMatch(alice.snapshot().tasks[0].details, /push when finished/);
+  assert.equal(alice.snapshot().tasks[0].priority, 'normal', 'existing tasks default to Normal');
+  await bob.setTaskPriority('bob', 'same-id', 'urgent');
+  await wait(() => alice.snapshot().tasks[0].priority === 'urgent', 'priority shared with another identity');
+  assert.equal(other.snapshot().tasks[0].priority, 'normal', 'priority isolated by board');
+  await assert.rejects(alice.setTaskPriority('unregistered', 'same-id', 'high'));
+  await assert.rejects(alice.setTaskPriority('alice', 'missing-task', 'high'));
+  await assert.rejects(alice.setTaskPriority('alice', 'same-id', 'invalid' as any));
+  await dev.setTaskPriority('developer', 'same-id', 'low');
+  await wait(() => dev.snapshot().tasks[0].priority === 'low', 'development priority');
   const claims = await Promise.allSettled([alice.claimTask('alice', 'same-id'), bob.claimTask('bob', 'same-id')]);
   assert.equal(claims.filter(c => c.status === 'fulfilled').length, 1, 'atomic claim has exactly one winner');
   await wait(() => alice.snapshot().tasks[0]?.status === 'claimed' && bob.snapshot().tasks[0]?.status === 'claimed', 'claim delivery');
@@ -111,6 +120,7 @@ try {
   alice.stop(); assert.equal(alice.snapshot().messages.length, 0, 'no stale disconnected snapshot');
   alice.start(); await wait(() => alice.ready && alice.snapshot().messages.length === 1, 'restart recovery');
   assert.equal(alice.identity, identity, 'restart retains identity');
+  assert.equal(alice.snapshot().tasks.find(t => t.id === 'same-id')!.priority, 'urgent', 'priority survives reconnect');
   // Publishing the shared implementation again preserves compatible development history.
   await publish('coord', 'board-development');
   await wait(() => dev.ready && dev.snapshot().tasks.length === 1, 'development update preserves history');
@@ -118,6 +128,8 @@ try {
   await startServer(); await wait(() => clients.every(c => c.ready), 'automatic reconnect', 40_000);
   assert.equal(alice.identity, identity); assert.equal(bob.snapshot().messages.length, 1);
   assert.equal(other.snapshot().messages.length, 0); assert.match(dev.snapshot().tasks[0].details, /push when finished/);
+  assert.equal(dev.snapshot().tasks[0].priority, 'low', 'priority survives database restart and module republish');
+  assert.equal(alice.snapshot().tasks[0].id, 'same-id', 'urgent sorts before normal tasks');
   const config = JSON.parse(readFileSync(join(root, 'message-board/instances.json'), 'utf8'));
   config.boards.push({ id: 'new-application', label: 'New application', database: 'new-board', modulePath: 'message-board' });
   assert.equal(parseBoardConfig(config).boards.length, 5, 'new application only needs configuration');

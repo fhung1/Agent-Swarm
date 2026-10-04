@@ -159,6 +159,7 @@ export class DashboardTestEnv {
     const module = this.mode === 'trading' ? 'spacetimedb' : 'coord';
     const filter = (path: string) => !/(?:^|\/)(node_modules|build|dist)(?:\/|$)/.test(path);
     cpSync(join(this.root, module), join(this.snapshot, module), { recursive: true, filter });
+    cpSync(join(this.root, 'message-board'), join(this.snapshot, 'message-board'), { recursive: true, filter });
     cpSync(join(this.root, 'dashboard'), join(this.snapshot, 'dashboard'), { recursive: true, filter });
     cpSync(join(this.root, 'tsconfig.json'), join(this.snapshot, 'tsconfig.json'));
     cpSync(join(this.root, 'package.json'), join(this.snapshot, 'package.json'));

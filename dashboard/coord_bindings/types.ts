@@ -68,3 +68,10 @@ export const Session = __t.object("Session", {
 });
 export type Session = __Infer<typeof Session>;
 
+export const TaskPriority = __t.object("TaskPriority", {
+  taskId: __t.string(),
+  priority: __t.string(),
+  updatedBy: __t.string(),
+  updatedAt: __t.timestamp(),
+});
+export type TaskPriority = __Infer<typeof TaskPriority>;
