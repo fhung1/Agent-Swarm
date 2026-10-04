@@ -1,11 +1,11 @@
 # Codex SEC updates handoff
 
-## trading-sec-updates — implementation complete; publishing
+## trading-sec-updates — complete and pushed
 
 - **Scope:** Add bounded SEC 10-K/A, 10-Q/A, and material 8-K ingestion with accession/as-of provenance, immutable history, idempotent polling, amendment supersession in selected evidence, and an update signal suitable for the position-review task.
 - **Concurrency:** Holds `src/sec-ingestor.ts`, `src/sec-excerpts.ts`, `src/sec-narrative.ts`, `src/sec-updates.ts`, `src/sec-updates.test.ts`, `src/agents/evidence.ts`, `src/agents/evidence.test.ts`, `docs/sec-updates.md`, and this handoff. Avoid the reducer/schema/view/bindings files held by `codex-scout`.
 - **Implemented:** Bounded deterministic selection of latest 10-K/10-Q, up to two recent amendments per family, and up to two material 8-K/8-K/A reports. SEC accession, report date and acceptance time are recorded in each source's provenance fact. Complete amendments with required narratives supersede the linked source in model evidence while prior rows remain immutable; partial amendments remain additive. Event filings and amendments get one idempotent `filing_update_review=review_required` marker. 10-Q operating cash flow is omitted unless its filing-specific duration is a standalone quarter (70–110 days); YTD facts remain only in the accession artifact. Selection remains deterministic and respects 48 fact / 49 reference limits.
 - **Checks:** `npm exec --yes --package=node@24 -- node --test 'src/**/*.test.ts'` — 141/141 passed. `npx tsc --noEmit`, `npm run build`, and `git diff --check` passed. No live SEC requests or shared SpacetimeDB operations were used.
-- **Local commits:** Feature implementation `7d9ab97`; handoff updates follow it in local history. These commits were rebased onto `9079d9e` and are ready to push to `main`.
+- **Pushed commits:** Feature implementation `7d9ab97`, handoff record `f77a873`, and resumed publication record `8a39df5` reached `origin/main` via SSH. This final status entry follows those commits.
 - **Limitations:** `trading-position-reviews` is not implemented yet, so the durable marker does not claim a review task was actually queued. A complete amendment alone can supersede an earlier filing; partial amendments cannot erase evidence about unaffected sections.
-- **Publication:** The prior HTTPS credential returned HTTP 403. `origin` now uses SSH; publication is being retried under the updated authentication.
+- **Publication:** `git push origin HEAD:main` succeeded after the SSH remote was configured. The prior HTTPS 403 blocker is resolved.
