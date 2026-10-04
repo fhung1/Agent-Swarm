@@ -15,7 +15,7 @@ if [ ! -x "$cli" ]; then
   echo "SpacetimeDB CLI is unavailable: $cli" >&2
   exit 1
 fi
-if [ ! -d "$root/spacetime" ] || [ ! -d "$root/artifacts" ] || [ ! -d "$root/.local/share/quant-swarm/tokens" ]; then
+if [ ! -d "$root/spacetime" ] || [ ! -d "$root/artifacts" ] || [ ! -d "$root/.local/share/quant-swarm/tokens" ] || [ ! -d "$root/factorio" ]; then
   echo "State, artifact, or worker-token directory is missing under $root" >&2
   exit 1
 fi
@@ -42,6 +42,7 @@ bundle="$mount/agent-swarm-$stamp"
 "$repo/scripts/backup.sh" "$bundle" \
   --data-dir "$root/spacetime" \
   --artifacts-dir "$root/artifacts" \
+  --factorio-dir "$root/factorio" \
   --tokens-dir "$root/.local/share/quant-swarm/tokens" \
   --jwt-private-key "$root/identity/id_ecdsa" \
   --jwt-public-key "$root/identity/id_ecdsa.pub"

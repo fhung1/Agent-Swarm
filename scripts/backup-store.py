@@ -81,6 +81,8 @@ def backup(args):
     artifacts = Path(args.artifacts_dir).resolve()
     output = Path(args.bundle).resolve()
     sources = {'data': data, 'artifacts': artifacts}
+    if args.factorio_dir:
+        sources['factorio'] = Path(args.factorio_dir).resolve()
     if args.tokens_dir:
         sources['tokens'] = Path(args.tokens_dir).resolve()
     keys = [Path(args.jwt_private_key).resolve(), Path(args.jwt_public_key).resolve()]
@@ -142,7 +144,7 @@ def restore(args):
     if actual != manifest['files']:
         raise ValueError('Bundle checksum verification failed')
     groups = {name.split('/')[0] for name in actual}
-    if not {'data', 'identity'} <= groups or not groups <= {'data', 'artifacts', 'identity', 'tokens'}:
+    if not {'data', 'identity'} <= groups or not groups <= {'data', 'artifacts', 'identity', 'tokens', 'factorio'}:
         raise ValueError('Bundle has unexpected or missing payload directories')
     targets = {
         'data': Path(args.data_dir).resolve(), 'artifacts': Path(args.artifacts_dir).resolve(),
@@ -153,6 +155,11 @@ def restore(args):
         raise ValueError('Supply --tokens-dir exactly when the bundle includes worker tokens')
     if has_tokens:
         targets['tokens'] = Path(args.tokens_dir).resolve()
+    has_factorio = 'factorio' in manifest['source_paths']
+    if has_factorio != bool(args.factorio_dir):
+        raise ValueError('Supply --factorio-dir exactly when the bundle includes Factorio state')
+    if has_factorio:
+        targets['factorio'] = Path(args.factorio_dir).resolve()
     distinct([bundle, *targets.values()])
     for target in targets.values():
         fresh(target)
@@ -190,6 +197,7 @@ def main():
         command.add_argument('--data-dir', required=True)
         command.add_argument('--artifacts-dir', required=True)
         command.add_argument('--tokens-dir')
+        command.add_argument('--factorio-dir')
     save.add_argument('--jwt-private-key', required=True)
     save.add_argument('--jwt-public-key', required=True)
     load.add_argument('--identity-dir', required=True)
