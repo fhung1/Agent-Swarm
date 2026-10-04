@@ -32,7 +32,8 @@ test('model completion is verified and call charged before dispatch', async () =
   }) as Ask;
   await runInferenceWorker(f.options);
   assert.equal(f.task.status, 'done'); assert.equal(f.mutations(), 0);
-  assert.deepEqual(f.events.map(e => e.kind), ['decision', 'completion']);
+  assert.deepEqual(f.events.map(e => e.kind), ['inference_audit', 'decision', 'completion']);
+  assert.equal((f.events[0]!.payload as { usageKnown: boolean }).usageKnown, false);
 });
 test('false completion consumes budget and never completes the task', async () => {
   const f = fixture(); f.observation.inventory.ironPlate = 0;

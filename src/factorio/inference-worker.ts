@@ -114,7 +114,12 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           status: o.game({ kind: 'status' }), reservations: board.snapshot().reservations.filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n).map(r => ({ path: r.path, holder: r.holder })),
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
           budget: { remainingCalls: o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
-        const output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())) });
+        let usage: import('../agents/llm.ts').AskUsage | undefined;
+        let actualModel = o.ask.model ?? 'configured';
+        const output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())),
+          onUsage: (reported, model) => { usage = reported; if (model) actualModel = model; } });
+        await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
+          usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls });
         state.decision = { id, output }; o.save(state);
       }
       const { id, output } = state.decision;
