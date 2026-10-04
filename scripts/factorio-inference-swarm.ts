@@ -16,6 +16,7 @@ async function main() {
   const plan = inferenceLaunchPlan({ runId, actorIds: status.actors.map((a: { unit: number }) => a.unit),
     provider: process.env.AGENT_BRAIN ?? '', model: process.env.AGENT_MODEL ?? '',
     maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS),
+    ...(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS ? { orchestratorMaxCalls: Number(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS) } : {}),
     mode: process.env.FACTORIO_DEMO_MODE as 'smoke' | 'production' | undefined });
   const providerKey = plan.provider === 'codex' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';
   console.log(JSON.stringify({ mode: start ? 'start' : 'dry-run', goal, worldId: manifest.worldId, historyId: manifest.historyId,
@@ -25,7 +26,8 @@ async function main() {
   if (status.paused) throw Error('Game world is paused');
   const workerScript = resolve('dist/factorio-inference-worker.mjs');
   const supervisorScript = resolve('dist/factorio-inference-supervisor.mjs');
-  if (!existsSync(workerScript) || !existsSync(supervisorScript)) throw Error('Build dist/factorio-inference-worker.mjs and dist/factorio-inference-supervisor.mjs first');
+  const orchestratorScript = resolve('dist/factorio-inference-orchestrator.mjs');
+  if (!existsSync(workerScript) || !existsSync(supervisorScript) || !existsSync(orchestratorScript)) throw Error('Build the Factorio worker, supervisor and orchestrator bundles first');
   const promptFiles = plan.workers.map(worker => {
     const file = process.env.FACTORIO_PROMPT_DIR ? resolve(process.env.FACTORIO_PROMPT_DIR, `agent-${worker.index}.txt`) : process.env.FACTORIO_PROMPT_FILE;
     if (file && !existsSync(file)) throw Error(`Missing prompt file for actor ${worker.actorId}`);
@@ -37,7 +39,7 @@ async function main() {
   if (existsSync(planPath) && JSON.stringify(JSON.parse(readFileSync(planPath, 'utf8'))) !== JSON.stringify(savedPlan)) throw Error('Run ID already has a different actor/model/budget mapping; choose a new run ID');
   if (!existsSync(planPath)) writeFileSync(planPath, JSON.stringify(savedPlan, null, 2), { flag: 'wx', mode: 0o600 });
   const tokenPath = join(directory, 'operator.token');
-  const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
+  const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? manifest.boardHost ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
     token: existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8') : undefined,
     onToken: token => writeFileSync(tokenPath, token, { mode: 0o600 }) });
   const children: ChildProcess[] = [];
@@ -50,7 +52,7 @@ async function main() {
     while (!board.ready && !stopping) { if (Date.now() >= until) throw Error('Board connection unavailable'); await new Promise(r => setTimeout(r, 200)); }
     if (stopping) return;
     const operator = `${runId}-operator`;
-    await board.register(operator, 'operator', `Ten inference actors; ${plan.provider}/${plan.model}`);
+    await board.register(operator, 'operator', `Five ${plan.actorModel} low-effort actors; one ${plan.orchestrator.model} high-effort board-only orchestrator`);
     if (goal === 'rocket' && !board.snapshot().tasks.some(t => t.id === `${runId}.goal-rocket`)) {
       await board.createTask(operator, { id: `${runId}.goal-rocket`, title: 'Beat Factorio: launch a rocket', area: 'factorio-goal',
         details: `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. Agents create subtasks and resource requests. push when finished`, priority: 'high' });
@@ -61,16 +63,26 @@ async function main() {
       if (!existing) await board.createTask(operator, { id: worker.taskId, title: goal === 'rocket' ? `Actor ${worker.actorId}: contribute to rocket launch` : `Actor ${worker.actorId}: collect five iron plates`,
         area: 'factorio-inference', details: `Run ${runId}; world ${manifest.worldId}; actor ${worker.actorId}; parent goal ${runId}.goal-rocket. Cooperate through subtasks, resource requests and peer messages. push when finished` });
     }
-    const results = plan.workers.map(worker => {
+    const results: Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>[] = plan.workers.map(worker => {
       const promptFile = promptFiles[worker.index - 1];
       const log = openSync(join(directory, `agent-${worker.index}.log`), 'a', 0o600);
       const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
-        env: { ...process.env, FACTORIO_TASK_ID: worker.taskId, ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
+        env: { ...process.env, AGENT_MODEL: plan.actorModel, AGENT_EFFORT: plan.actorEffort, FACTORIO_TASK_ID: worker.taskId,
+          ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
       closeSync(log); children.push(child);
-      return new Promise<{ actorId: number; code: number | null; signal?: string | null }>((resolveResult, reject) => {
-        child.once('error', reject); child.once('exit', (code, signal) => resolveResult({ actorId: worker.actorId, code, signal }));
+      return new Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>((resolveResult, reject) => {
+        child.once('error', reject); child.once('exit', (code, signal) => resolveResult({ role: 'actor', actorId: worker.actorId, code, signal }));
       });
     });
+    const coordinatorLog = openSync(join(directory, 'orchestrator.log'), 'a', 0o600);
+    const orchestrator = spawn(process.execPath, [orchestratorScript, world, runId], {
+      env: { ...process.env, AGENT_MODEL: plan.orchestrator.model, AGENT_EFFORT: plan.orchestrator.effort,
+        FACTORIO_ORCHESTRATOR_MAX_CALLS: String(plan.orchestrator.maxCalls), FACTORIO_RUN_MS: String(plan.runMs) },
+      stdio: ['ignore', coordinatorLog, coordinatorLog] });
+    closeSync(coordinatorLog); children.push(orchestrator);
+    results.push(new Promise<{ role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null }>((resolveResult, reject) => {
+      orchestrator.once('error', reject); orchestrator.once('exit', (code, signal) => resolveResult({ role: 'orchestrator', code, signal }));
+    }));
     const deadline = setTimeout(stop, plan.runMs + 5000);
     try { const completed = await Promise.all(results); console.log(JSON.stringify({ runId, results: completed, logs: directory })); if (completed.some(r => r.code !== 0)) process.exitCode = 1; }
     finally { clearTimeout(deadline); }

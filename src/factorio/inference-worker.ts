@@ -292,7 +292,7 @@ export async function inferenceWorkerMain(): Promise<void> {
   const state: InferenceState = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : { version: 1, scope, calls: 0, tick: 0, lastResult: null, pending: null, decision: null };
   const provider = process.env.AGENT_BRAIN;
   if (provider !== 'claude' && provider !== 'codex') throw Error('AGENT_BRAIN must explicitly select claude or codex');
-  const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
+  const board = new MessageBoardClient({ uri: process.env.BOARD_URI ?? manifest.boardHost ?? 'ws://127.0.0.1:3000', database: process.env.BOARD_DATABASE ?? 'quant-swarm-factorio-coord',
     token: existsSync(tokenPath) ? readFileSync(tokenPath, 'utf8') : undefined, onToken: token => atomicSaveToken(tokenPath, token) });
   const controller = new AbortController();
   const stop = () => { controller.abort(new Error('Worker stopped')); board.stop(); };

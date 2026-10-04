@@ -63,8 +63,19 @@ local function agents()
   table.sort(scripted,function(a,b) return a.unit_number<b.unit_number end)
   return scripted
 end
+script.on_configuration_changed(function()
+  local scripted=agents();storage.qs_busy=storage.qs_busy or {};storage.qs_receipts=storage.qs_receipts or {}
+  storage.qs_task_labels=storage.qs_task_labels or {}
+  for i=#scripted,6,-1 do
+    local entity=scripted[i];local operation=storage.qs_busy[entity.unit_number]
+    if operation and storage.qs_receipts[operation] and storage.qs_receipts[operation].status=="pending" then
+      entity.walking_state={walking=false,direction=defines.direction.north};finish(operation,"failed","Actor removed by five-agent roster update")
+    end
+    storage.qs_busy[entity.unit_number]=nil;storage.qs_task_labels[entity.unit_number]=nil;entity.destroy()
+  end
+end)
 local function agent_by_index(index)
-  bounded(index,1,10);local e=agents()[index]
+  bounded(index,1,5);local e=agents()[index]
   if not e then error("Unknown agent number") end
   return e
 end
@@ -317,7 +328,7 @@ remote.add_interface("agent_swarm", {
     for _,e in pairs(game.surfaces[1].find_entities_filtered{name="wooden-chest"}) do
       local c=contents(e);c.unit=e.unit_number;c.x=e.position.x;c.y=e.position.y;chests[#chests+1]=c
     end
-    return {version="0.1.0",tick=game.tick,actors=actors,world=world(),chests=chests,furnaces=#game.surfaces[1].find_entities_filtered{name="stone-furnace"},paused=storage.qs_paused or false,
+    return {version="0.1.1",tick=game.tick,actors=actors,actorCount=#actors,world=world(),chests=chests,furnaces=#game.surfaces[1].find_entities_filtered{name="stone-furnace"},paused=storage.qs_paused or false,
       rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
   end
 })

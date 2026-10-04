@@ -12,6 +12,8 @@ import { join } from 'node:path';
 
 const suites = [
   'src/factorio/inference.test.ts',
+  'src/factorio/inference-launch.test.ts',
+  'src/factorio/orchestrator.test.ts',
   'src/factorio/inference-worker.test.ts',
 ];
 

@@ -9,7 +9,7 @@ script.on_init(function()
   local spawn=surface.find_non_colliding_position("character",{0,0},64,1)
   if not spawn then error("No safe spawn") end
   storage.qs_spawn=spawn
-  for i=1,10 do
+  for i=1,AGENT_COUNT do
     local p=surface.find_non_colliding_position("character",{spawn.x+i*2,spawn.y},32,0.5)
     local actor=surface.create_entity{name="character",position=p,force="player"}
     if not actor then error("Failed actor spawn") end

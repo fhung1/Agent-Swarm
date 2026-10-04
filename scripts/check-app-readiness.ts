@@ -125,7 +125,7 @@ function sourcePaths(app: ApplicationId): string[] {
     'src/application-readiness.ts', 'src/application-readiness.test.ts'];
   if (app === 'factorio') return [...common, 'config/factorio-pilot.json',
     'factorio/LOCAL_DEMO.md', 'factorio/README.md', 'factorio/bridge.py', 'factorio/check-production.py',
-    'factorio/check-runtime.py', 'factorio/install.sh', 'factorio/mod/agent-swarm_0.1.0', 'factorio/runtime.py',
+    'factorio/check-runtime.py', 'factorio/install.sh', 'factorio/mod/agent-swarm_0.1.1', 'factorio/runtime.py',
     'factorio/scenario.lua', 'factorio/status.py', 'factorio/verify-demo.py', 'factorio/verify-live.py',
     'factorio/worker-bridge.py', 'src/factorio',
     'scripts/check-factorio.ts', 'scripts/check-factorio.py'];

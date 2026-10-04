@@ -34,7 +34,7 @@ with tempfile.TemporaryDirectory(prefix='qs-factorio-check-') as directory:
                     if time.monotonic()>deadline: raise
                     time.sleep(.2)
             manifest=json.loads((world/'manifest.json').read_text())
-            assert len(observed['actors'])==10 and len({a['unit'] for a in observed['actors']})==10
+            assert len(observed['actors'])==5 and len({a['unit'] for a in observed['actors']})==5
             assert observed['world']['worldId']==manifest['worldId']
             assert observed['world']['historyId']==manifest['historyId']
             assert observed['world']['seed']==config['seed']
@@ -54,6 +54,6 @@ with tempfile.TemporaryDirectory(prefix='qs-factorio-check-') as directory:
             except subprocess.TimeoutExpired: os.killpg(child.pid,signal.SIGKILL);child.wait();raise
         assert child.returncode==0,(parent/'server.log').read_text()
     run('preflight','--world',str(world))
-    (world/'mods/agent-swarm_0.1.0/control.lua').write_text('-- tampered')
+    (world/'mods/agent-swarm_0.1.1/control.lua').write_text('-- tampered')
     run('preflight','--world',str(world),ok=False)
-    print('PASS: Factorio 2.0.77; ten actors; declared 50 ore/20 coal/two furnaces; IDs/seed; running ticks; existing-save/port/hash refusal; clean stop')
+    print('PASS: Factorio 2.0.77; five actors; declared 50 ore/20 coal/two furnaces; IDs/seed; running ticks; existing-save/port/hash refusal; clean stop')

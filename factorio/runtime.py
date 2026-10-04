@@ -47,13 +47,13 @@ def main():
     args=parser.parse_args(); world=pathlib.Path(args.world).resolve()
     if args.command=='init':
         config=json.loads(pathlib.Path(args.config).read_text())
-        if config['version']!=VERSION or config['agentCount']!=10 or config['scenario'] not in ['cooperative-starter','freeplay']: raise ValueError('Unsupported pilot contract')
+        if config['version']!=VERSION or config['agentCount']!=5 or config['scenario'] not in ['cooperative-starter','freeplay']: raise ValueError('Unsupported pilot contract')
         if type(config['seed']) is not int or not 0<=config['seed']<=4294967295: raise ValueError('Invalid seed')
         exe,version=binary(); ports(config)
         world.mkdir(parents=True,exist_ok=False)
         os.chmod(world,0o700)
         mods=world/'mods'; mods.mkdir()
-        source=ROOT/'factorio/mod/agent-swarm_0.1.0'
+        source=ROOT/'factorio/mod/agent-swarm_0.1.1'
         shutil.copytree(source,mods/source.name)
         modlist={'mods':[{'name':'base','enabled':True},{'name':'quality','enabled':False},{'name':'space-age','enabled':False},{'name':'elevated-rails','enabled':False},{'name':'agent-swarm','enabled':True}]}
         (mods/'mod-list.json').write_text(json.dumps(modlist,indent=2))
@@ -68,7 +68,7 @@ def main():
         shutil.copyfile(ROOT/'factorio/scenario.lua',scenario/'control.lua')
         (scenario/'description.json').write_text(json.dumps({'name':'Quant Swarm '+config['scenario']}))
         (scenario/'pilot.json').write_text(json.dumps(manifest))
-        (scenario/'control.lua').write_text((scenario/'control.lua').read_text().replace('SCENARIO_NAME',config['scenario']).replace('424242',str(config['seed'])).replace('WORLD_ID',manifest['worldId']).replace('HISTORY_ID',manifest['historyId']))
+        (scenario/'control.lua').write_text((scenario/'control.lua').read_text().replace('SCENARIO_NAME',config['scenario']).replace('AGENT_COUNT',str(config['agentCount'])).replace('424242',str(config['seed'])).replace('WORLD_ID',manifest['worldId']).replace('HISTORY_ID',manifest['historyId']))
         subprocess.run([str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(mods),'--map-gen-settings',str(world/'map-gen.json'),'--create',str(world/'world.zip')],check=True,stdout=(world/'create.log').open('w'),stderr=subprocess.STDOUT)
         # convert scenario with declared layout into save; map generation uses seed through scenario Lua
         subprocess.run([str(exe),'--config',str(world/'runtime.cfg'),'--mod-directory',str(mods),'--map-gen-settings',str(world/'map-gen.json'),'--scenario2map','qs-pilot'],check=True,stdout=(world/'scenario.log').open('w'),stderr=subprocess.STDOUT)
@@ -78,7 +78,7 @@ def main():
         print(json.dumps(manifest,indent=2)); return
     manifest=json.loads((world/'manifest.json').read_text())
     if manifest['version']!=VERSION: raise ValueError('World version mismatch')
-    if digest_tree(world/'mods/agent-swarm_0.1.0')!=manifest['bridgeSha256']: raise ValueError('World bridge hash mismatch')
+    if digest_tree(world/'mods/agent-swarm_0.1.1')!=manifest['bridgeSha256']: raise ValueError('World bridge hash mismatch')
     if not (world/'world.zip').is_file(): raise ValueError('World save missing')
     if args.command=='inspect': print(json.dumps(manifest,indent=2)); return
     exe,version=binary(); ports(manifest)

@@ -22,7 +22,7 @@ Keep `start` running. Inspect from another terminal:
 python3 factorio/status.py --world "$HOME/.local/share/agent-swarm/factorio-test"
 ```
 
-The cooperative fixture declares seed 424242, ten actors, fifty ore, twenty coal and two furnaces. Idle actors do not mean workers are running. `check-production.py` uses one actor in a disposable world, consumes ore/fuel and verifies five engine-produced plates, exact retry, rejected changed requests, pause and saved receipts after restart.
+The cooperative fixture declares seed 424242, five actors, fifty ore, twenty coal and two furnaces. Idle actors do not mean workers are running. `check-production.py` uses one actor in a disposable world, consumes ore/fuel and verifies five engine-produced plates, exact retry, rejected changed requests, pause and saved receipts after restart.
 
 ## Configuration and lifecycle
 
@@ -30,7 +30,7 @@ Default game address: UDP `127.0.0.1:34197`; RCON: TCP `127.0.0.1:27015`. Copy [
 
 `init` refuses an existing directory. Ctrl+C saves/stops the foreground server; `start` resumes the same world. For reset, use a fresh path. Back up the complete world directory only after stopping. Preserve manifests, histories, receipts and private worker state. Never delete a world with workers attached.
 
-A matching viewer joins through Multiplayer → Connect to address. Copy `WORLD/mods/agent-swarm_0.1.0` to the client mods directory; actors are near `(0, 0)`. For remote viewing use an explicit private `gameBind`, such as the Tailscale address, and available game/RCON ports. RCON stays loopback. Graphical joining is a separate acceptance check.
+A matching viewer joins through Multiplayer → Connect to address. Copy `WORLD/mods/agent-swarm_0.1.1` to the client mods directory; actors are near `(0, 0)`. For remote viewing use an explicit private `gameBind`, such as the Tailscale address, and available game/RCON ports. RCON stays loopback. Graphical joining is a separate acceptance check.
 
 ## Bridge limits
 

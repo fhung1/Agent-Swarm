@@ -79,11 +79,11 @@ if __name__=='__main__':
         output=pathlib.Path(args.output).resolve();output.mkdir(parents=True,exist_ok=False)
         (output/'verification.json').write_text(json.dumps(report,indent=2)+'\n')
         world=pathlib.Path(json.loads((pathlib.Path(args.directory)/'demo.json').read_text())['world'])
-        mod=world/'mods/agent-swarm_0.1.0'
-        with zipfile.ZipFile(output/'agent-swarm_0.1.0.zip','w',zipfile.ZIP_DEFLATED) as archive:
+        mod=world/'mods/agent-swarm_0.1.1'
+        with zipfile.ZipFile(output/'agent-swarm_0.1.1.zip','w',zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(mod.rglob('*')):
                 if path.is_file():archive.write(path,path.relative_to(mod.parent))
-        (output/'SHA256SUMS').write_text(hashlib.sha256((output/'agent-swarm_0.1.0.zip').read_bytes()).hexdigest()+'  agent-swarm_0.1.0.zip\n')
+        (output/'SHA256SUMS').write_text(hashlib.sha256((output/'agent-swarm_0.1.1.zip').read_bytes()).hexdigest()+'  agent-swarm_0.1.1.zip\n')
         print(f"PASS: {report['participants']} participants, {report['tasks']} tasks, {report['actualIronPlates']} engine plates, {len(report['resourceReceipts'])} matched engine/board resource receipts")
         print('Viewer mod and verification report:',output)
     except (ValueError,OSError,subprocess.SubprocessError,KeyError) as error:print('Verification failed:',error,file=sys.stderr);sys.exit(1)

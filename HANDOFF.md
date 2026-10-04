@@ -1,8 +1,12 @@
 # Factorio handoff
 
+## Five players plus board-only coordinator — codex-factorio-demo, 2026-10-03
+
+`factorio-five-actors-astra-orchestrator-20261003`: reduced the fresh saved world to five visible scripted actors (units 12–16), all `gpt-6-astra` low effort. Added a separate `gpt-6-astra` high-effort orchestrator with only message-board access; it claimed the rocket goal, created a run-scoped task for Actor 2, and sent actor-directed messages. Active live run: `freeplay-astra-orchestrated-2`, Factorio `127.0.0.1:34197`, board `http://127.0.0.1:4185/?board=factorio&dbPort=3004`. The old ten-actor save is preserved at `.game-runs/freeplay-astra-start-1-ten-agent-checkpoint`. Live board topology verified. Some worker action attempts still fail (mining, movement, unavailable recipe); no rocket launch verified. `python3 factorio/check-runtime.py`, root typecheck, focused tests (32 total), and Python compile checks pass. Direct push and final board result pending.
+
 ## Current focus
 
-Factorio only: ten individually prompted workers sharing a gameplay board in a private world. The live Development board owns assignments; do not restore cleared historical tasks automatically. Current live world is `.game-runs/freeplay-astra-start-1`, reset to empty-inventory freeplay at the operator's request. The prior progressed save remains at `.game-runs/freeplay-astra-1`.
+Factorio only: five `gpt-6-astra` low-effort game actors share a gameplay board and are directed by one `gpt-6-astra` high-effort board-only orchestrator. The live Development board owns assignments; do not restore cleared historical tasks automatically. Current live world is `.game-runs/freeplay-astra-start-1`, reset to empty-inventory freeplay at the operator's request. The original ten-actor save and earlier progressed save are preserved separately.
 
 ## Freeplay work — codex-factorio-demo, 2026-10-03
 
@@ -10,7 +14,7 @@ Factorio only: ten individually prompted workers sharing a gameplay board in a p
 
 ## Fresh start and operator view — codex-factorio-demo, 2026-10-03
 
-The current Factorio 2.0.77 world at `127.0.0.1:34197` is fresh freeplay with ten actors and zero fixture inventory. Ten `gpt-6-astra` workers are running from the same world, using gameplay DB `quant-swarm-factorio-coord` at port 3004 (dashboard: http://127.0.0.1:4185/?board=factorio&dbPort=3004). The graphical Factorio client is connected on workspace 3. Verified live board claims and observed agents mining wood/ore and crafting/placing chests. Their task titles appear above them and are added to their moving chart tags. The human player is spawned at world start and receives full Factorio admin on join; `/qs help` lists in-game observe/pause/resume and bounded agent commands. `python3 factorio/check-runtime.py`, `node scripts/check-factorio-inference.ts` (25 tests: 7 decision-contract and 18 worker), `npx tsc --noEmit`, Python compile checks and `git diff --check` passed. Implementation pushed to `main` as `a1d477e`. The original progressed save is preserved separately. Still no claim of rocket victory; later research/machine progression is missing.
+At that earlier checkpoint, the current Factorio 2.0.77 world at `127.0.0.1:34197` had ten actors and zero fixture inventory. The graphical Factorio client was connected on workspace 3. The player had full Factorio admin access and `/qs help` exposed the in-game commands. This ten-actor topology was superseded by the five-actor plus Astra High orchestrator setup above. Implementation was pushed to `main` as `a1d477e`; the original progressed save remains preserved separately.
 
 ## Prompted demo checkpoint — codex-factorio-demo, 2026-10-03
 
@@ -18,7 +22,7 @@ The current Factorio 2.0.77 world at `127.0.0.1:34197` is fresh freeplay with te
 
 ## Implemented and checked
 
-- Runtime/bridge: Factorio 2.0.77, ten scripted actors, bounded movement/transfers, private RCON and disposable engine checks.
+- Runtime/bridge: Factorio 2.0.77, five active scripted actors, bounded movement/transfers, private RCON and disposable engine checks.
 - Historical fixture: ten rules workers produced fifty plates with matching game/board receipts. [Evidence and limits](docs/factorio-live-verification.md).
 - Inference: scoped decision contract, durable worker and ten-process launcher; deterministic checks cover malformed output, ownership/pause, budgets, uncertain receipts and false completion. [Run guide](docs/factorio-inference.md).
 - Boards: atomic claims, reservations, archived task dependencies, live priorities and responsive dashboards. Blank browser names are assigned automatically; bots choose priorities using [the policy](docs/task-priorities.md).
