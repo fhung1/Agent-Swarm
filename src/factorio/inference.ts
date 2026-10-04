@@ -87,8 +87,41 @@ export function selectPeerMessages(rows: readonly { id: bigint | string | number
 
 export function buildFactorioPrompt(context: FactorioContext): string {
   if (!context.objective.trim() || context.objective.length > 4000 || context.operatorPrompt.length > 8000) throw Error('Invalid objective/operator prompt size');
-  const { messages, ...required } = context;
-  const base = JSON.stringify(required);
+  const { messages, ...source } = context;
+  // Never trim identity, objective, own inventory, reservations, or the last
+  // action outcome. Spatial lists and duplicate task descriptions are optional
+  // detail; expose their omission instead of stopping actors near dense ore.
+  const required = structuredClone(source);
+  const record = (value: unknown): Record<string, unknown> | undefined =>
+    value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  const observation = record(required.observation), status = record(required.status);
+  const omissions: Record<string, number> = {};
+  const trim = (parent: Record<string, unknown> | undefined, key: string, count: number, label: string) => {
+    const list = parent?.[key];
+    if (parent && Array.isArray(list) && list.length > count) {
+      omissions[label] = (omissions[label] ?? 0) + list.length - count;
+      parent[key] = list.slice(0, count);
+    }
+  };
+  let base = JSON.stringify(required);
+  if (base.length > 24000 && Array.isArray(required.tasks)) {
+    required.tasks = required.tasks.map(task => {
+      const row = record(task);
+      if (!row || typeof row.details !== 'string' || row.details.length <= 300) return task;
+      omissions.taskDescriptionCharacters = (omissions.taskDescriptionCharacters ?? 0) + row.details.length - 300;
+      return {...row, details: row.details.slice(0, 300), detailsTruncated: true};
+    });
+    base = JSON.stringify(required);
+  }
+  for (const count of [48, 32, 16, 8]) {
+    if (base.length <= 23500) break;
+    // The engine sorts nearby entities by distance, so reachable targets remain.
+    trim(observation, 'nearby', count, 'nearbyEntities');
+    trim(status, 'productionSites', count, 'productionSites');
+    base = JSON.stringify(required);
+  }
+  const compacted = {...required, omittedContext: omissions};
+  base = JSON.stringify(compacted);
   if (base.length > 24000) throw Error('Required Factorio context exceeds 24000 characters');
   const recent = messages.slice(-20);
   const kept: PeerMessage[] = [];
@@ -98,7 +131,7 @@ export function buildFactorioPrompt(context: FactorioContext): string {
     if (size > 4000 || used + size > 30000) continue;
     kept.unshift(message); used += size;
   }
-  return JSON.stringify({ ...required, messages: kept, omittedMessages: messages.length - kept.length });
+  return JSON.stringify({ ...compacted, messages: kept, omittedMessages: messages.length - kept.length });
 }
 
 /** Invalid structured decisions are returned to the worker as bounded retry feedback. */

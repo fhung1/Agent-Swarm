@@ -1,5 +1,9 @@
 # Factorio handoff
 
+## Actor context overflow recovery — codex, 2026-10-04
+
+All five `iron-zero-20261004` actors exited when dense nearby-entity observations plus duplicated task details exceeded the 24,000-character required prompt limit. At diagnosis they had moved toward resources; actor 12 had gathered wood/crafted a chest, with $1.45 charged. Stopped the launcher, compacted optional nearby/production listings and repeated task descriptions with explicit omission counts, preserving scope, objective, own inventory, reservations and last outcome. Root typecheck and worker bundle pass; no additional tests run. Resumed the SAME save, task identities, journals, deadline and $100 ledger. At tick 23151 all five positions advanced, actor 14 had two iron ore and actor 12 had 14 wood plus a chest; 107 calls, $1.652329 charged, ledger not halted. Some mining attempts return failed receipts and are handled by the worker; no new context-overflow exits observed. Live factory construction remains in progress.
+
 ## Empty-inventory automation correction — codex, 2026-10-04
 
 Operator clarified that no equipment or materials may be supplied. Stopped `iron-auto-20261004` and preserved its save and ledger; replaced the kit-specific prompts/objective with gather → bootstrap smelt → craft → assemble → unattended production. Manual gathering/feeding is allowed only as bootstrap work. Burner production requires fresh machine-mined coal during each proof window. The kit scenario remains an optional disposable fixture only.
