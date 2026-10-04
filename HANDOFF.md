@@ -779,6 +779,19 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - `git diff --check` and source/runtime copy hash comparison passed. No tests
   were run per operator preference. Push this follow-up when finished.
 
+## codex — Cover blocked lab-feed waypoints within action reach (2026-10-04)
+
+- After the two-tile arrival fix loaded, actor 16 still timed out walking to a
+  lab-feed waypoint from 3.1 tiles away. The lab feed can be manipulated using
+  the bridge's six-tile interaction reach, so this short direct route is blocked
+  by hub geometry rather than a need to stand on the target coordinate.
+- Raised the move-arrival tolerance to 3.5 tiles and synchronized the current
+  run's server/client mod copies. Update the server manifest hash before a
+  same-save reload, preserving the existing world and history IDs. The running
+  processes still need that reload to load this version.
+- `git diff --check` and source/runtime copy hash comparison passed; no tests
+  were run per operator preference. Push when finished.
+
 ## codex — Keep live dashboard redraws from interrupting scroll (2026-10-04)
 
 - The message-board dashboard replaces its full DOM on every subscription
