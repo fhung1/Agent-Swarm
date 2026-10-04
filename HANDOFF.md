@@ -766,6 +766,19 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   next load. Keep current research running instead of restarting just to apply
   the fix. Push the source and handoff when finished.
 
+## codex — Extend move arrival to cover occupied entity footprints (2026-10-04)
+
+- Follow-up live evidence: actor 13, carrying 89 logistic science packs, timed
+  out moving toward lab 763 after stopping 1.4 tiles from its center. The lab
+  held only 24 automation packs; `automation-2` was stalled at 50%. Astra issued
+  a revised science-delivery task. A one-tile threshold was insufficient.
+- Extended the bounded move-arrival radius to two tiles, still within the
+  bridge's six-tile action reach, and synchronized the source plus the current
+  run's server/client mod copies. The running Factorio process retains old Lua
+  until same-save reload. No restart was performed while the save was active.
+- `git diff --check` and source/runtime copy hash comparison passed. No tests
+  were run per operator preference. Push this follow-up when finished.
+
 ## codex — Keep live dashboard redraws from interrupting scroll (2026-10-04)
 
 - The message-board dashboard replaces its full DOM on every subscription

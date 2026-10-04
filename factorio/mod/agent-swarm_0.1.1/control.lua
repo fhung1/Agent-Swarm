@@ -7,8 +7,8 @@ local function actor(id)
   error("Unknown scripted actor")
 end
 local function distance(a,b) return ((a.x-b.x)^2+(a.y-b.y)^2)^0.5 end
--- Entity centers may be obstructed; treat a character within one tile as arrived.
-local move_arrival_radius=1
+-- Entity centers may be obstructed; keep arrival inside the bridge's six-tile interaction reach.
+local move_arrival_radius=2
 local function bounded(v,min,max)
   if type(v)~="number" or v~=v or v<min or v>max or v%1~=0 then error("Invalid integer bound") end
   return v
