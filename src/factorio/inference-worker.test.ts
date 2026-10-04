@@ -84,3 +84,8 @@ test('pause applied during inference prevents a proposed mutation', async () => 
   await assert.rejects(runInferenceWorker(f.options), /ownership lost/);
   assert.equal(f.mutations(), 0);
 });
+test('completed task restart checks real inventory before accepting completion', async () => {
+  const f = fixture(); f.task.status = 'done'; f.observation.inventory.ironPlate = 0;
+  await assert.rejects(runInferenceWorker(f.options), /disagrees with live actor/);
+  assert.equal(f.options.state.calls, 0);
+});
