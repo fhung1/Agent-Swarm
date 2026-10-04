@@ -1,5 +1,13 @@
 # Factorio handoff
 
+## Run spend ceiling and overseer-created actor tasks — codex, 2026-10-03
+
+Implemented a shared per-run spend ledger for the Astra overseer and five Luna workers. The launcher hard-limits the configured run cap to $500, reserves worst-case cost before each call using the pinned OpenAI Standard rate card plus 10%, reconciles reported token usage, and preserves uncertain reservations across worker restart. Model audit messages expose the cap and current charged/reserved estimate. Restart with the same run ID requires the original plan and ledger.
+
+Startup now creates only the rocket goal, starts the overseer, and waits for its five actor-specific subtasks plus directed board messages before launching workers. Actor task IDs point at those overseer-created rows. Completion of the root goal now requires a worker completion record that reports an engine rocket-launch event. Movement prompts prefer a 600-tick bound for multi-tile travel and require mining targets to be observed within reach.
+
+The user then asked to leave everything stopped. Stopped Factorio server/client, Factorio dashboard service, and gameplay SpacetimeDB on port 3004; no inference workers were running. Shared Development SpacetimeDB on port 3000 remains running. Do not restart the demo without new user steering. Preserve the existing world/board history; a new run ID needs a fresh isolated gameplay DB because the old board retains six participants under its cap of eight. Checks: `npx tsc --noEmit`, `git diff --check`, and all four inference/launcher esbuild bundles pass. Did not run tests or provider calls. Runtime preflight was attempted after shutdown but port 27015 remained in TCP TIME_WAIT; no process was listening on the Factorio/RCON/dashboard/gameplay DB ports. Recheck ports before the next launch. Code commit: `9850e2e`.
+
 ## Luna actors with Astra overseer — codex, 2026-10-03
 
 Task `factorio-luna-actors`; model split support pushed to `main` as `c70acad`. `FACTORIO_ACTOR_MODEL=gpt-6-luna` now selects the five low-effort workers while `AGENT_MODEL=gpt-6-astra` remains the board-only high-effort overseer. Reused the saved freeplay world without resetting it. New isolated Factorio board and run `freeplay-luna-astra-20261003`; the matching 2.0.77 Steam GUI joined the server, and the Factorio dashboard is open at `http://127.0.0.1:4185/?board=factorio` (workspace 2; game client workspace 3).
