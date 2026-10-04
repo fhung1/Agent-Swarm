@@ -21,7 +21,8 @@ async function main() {
   if (!process.env[providerKey]) throw Error(`Configure ${providerKey} securely in the worker environment before --start`);
   if (status.paused) throw Error('Game world is paused');
   const workerScript = resolve('dist/factorio-inference-worker.mjs');
-  if (!existsSync(workerScript)) throw Error('Build dist/factorio-inference-worker.mjs first');
+  const supervisorScript = resolve('dist/factorio-inference-supervisor.mjs');
+  if (!existsSync(workerScript) || !existsSync(supervisorScript)) throw Error('Build dist/factorio-inference-worker.mjs and dist/factorio-inference-supervisor.mjs first');
   const promptFiles = plan.workers.map(worker => {
     const file = process.env.FACTORIO_PROMPT_DIR ? resolve(process.env.FACTORIO_PROMPT_DIR, `agent-${worker.index}.txt`) : process.env.FACTORIO_PROMPT_FILE;
     if (file && !existsSync(file)) throw Error(`Missing prompt file for actor ${worker.actorId}`);
@@ -56,7 +57,7 @@ async function main() {
     const results = plan.workers.map(worker => {
       const promptFile = promptFiles[worker.index - 1];
       const log = openSync(join(directory, `agent-${worker.index}.log`), 'a', 0o600);
-      const child = spawn(process.execPath, [workerScript, world, String(worker.index), String(worker.actorId), runId], {
+      const child = spawn(process.execPath, [supervisorScript, world, String(worker.index), String(worker.actorId), runId, workerScript], {
         env: { ...process.env, FACTORIO_TASK_ID: worker.taskId, ...(promptFile ? { FACTORIO_PROMPT_FILE: promptFile } : {}) }, stdio: ['ignore', log, log] });
       closeSync(log); children.push(child);
       return new Promise<{ actorId: number; code: number | null; signal?: string | null }>((resolveResult, reject) => {
