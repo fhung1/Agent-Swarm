@@ -26,6 +26,11 @@ export function credentialsFromEnv(): AlpacaCredentials {
   return { apiKey: requiredEnv('ALPACA_API_KEY'), apiSecret: requiredEnv('ALPACA_API_SECRET') };
 }
 
+/** Read adapters use a separately provisioned credential; order credentials stay in executor only. */
+export function readCredentialsFromEnv(): AlpacaCredentials {
+  return { apiKey: requiredEnv('ALPACA_READ_API_KEY'), apiSecret: requiredEnv('ALPACA_READ_API_SECRET') };
+}
+
 export function parseFeed(value: string): Feed {
   if (!(ALLOWED_FEEDS as readonly string[]).includes(value)) {
     throw new Error(`ALPACA_DATA_FEED must be one of: ${ALLOWED_FEEDS.join(', ')}`);

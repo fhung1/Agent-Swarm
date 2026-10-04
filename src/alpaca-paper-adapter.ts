@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { DbConnection } from './module_bindings/index.js';
 import {
-  amountField, credentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getOpenOrders, getPositions, object, parseFeed,
+  amountField, readCredentialsFromEnv, dailyPnlField, getAccount, getLatestQuotes, getOpenOrders, getPositions, object, parseFeed,
   parseQuote, requiredEnv, textField, type Feed,
 } from './alpaca-client.js';
 
@@ -85,7 +85,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const credentials = credentialsFromEnv();
+    const credentials = readCredentialsFromEnv();
     const feed = parseFeed(requiredEnv('ALPACA_DATA_FEED'));
     const symbols = parseSymbols(requiredEnv('ALPACA_SYMBOLS'));
 
