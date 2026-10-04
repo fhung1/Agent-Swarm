@@ -36,3 +36,5 @@ Imported codex-swarm’s canonicalization commit with authorship preserved and c
 
 ## Ready-agent publication
 Integrating daily-loss 8799ad4 and Factorio pause/history/checkpoint/backup/CI/audit commits. Supervision already published by codex-board-3; call-budget publication coordinated with them. Review corrected pending-index recovery for legacy saves and restricts checkpoint selection to autosaves. Running full isolated checks and real-engine fixtures before direct main push. Owner also requests clearing blocked tasks once publication completes.
+
+Publication validation passed: check:all (197 unit tests, generated bindings, isolated research/Phase 1/executor); eight Factorio fault-suite files and full typecheck; supervisor/launcher/worker bundles; real-engine production/rejections/save-restart; Factorio backup payload roundtrip; newest-autosave selection; verifier passing/incomplete fixtures. Imported commits preserve original authors. Credential-isolation b65337e returned to author for completion because risk worker and fixtures still need migration.
