@@ -241,10 +241,13 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         await post(`${id}-task`, output.kind, { taskId, ...request });
         state.lastResult = { kind: output.kind, taskId }; state.decision = null; o.save(state);
       } else if (output.kind === 'claim_subtask' || output.kind === 'finish_subtask') {
-        const task = board.snapshot().tasks.find(t => t.id === output.message && t.id.startsWith(`${scope.runId}.subtask-`) &&
-          !t.id.startsWith(`${scope.runId}.subtask-orchestrator-`));
+        const task = board.snapshot().tasks.find(t => t.id === output.message && t.id.startsWith(`${scope.runId}.subtask-`));
         if (!task) { state.lastResult = { error: 'Subtask missing from this run' }; state.decision = null; o.save(state); continue; }
         if (task.id === o.taskId) { state.lastResult = { error: 'The assigned goal task requires verified objective completion, not finish_subtask' }; state.decision = null; o.save(state); continue; }
+        if (Array.from({length: 5}, (_, i) => `${scope.runId}.subtask-orchestrator-${i + 1}`).includes(task.id)) {
+          state.lastResult = {error: 'Initial actor assignments are protected; use later coordinator-created subtasks for incremental work'};
+          state.decision = null; o.save(state); continue;
+        }
         if (output.kind === 'claim_subtask') {
           if (task.status === 'open') await board.claimTask(scope.sender, task.id);
           else if (task.assignee !== scope.sender) { state.lastResult = { error: 'Subtask already claimed', assignee: task.assignee }; state.decision = null; o.save(state); continue; }

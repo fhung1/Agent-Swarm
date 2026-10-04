@@ -184,3 +184,22 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   deadlines; coordinator restart uses the updated bundle. Article excerpts omit
   infobox/templates and may describe newer releases, so precise recipe availability
   must still be checked against live game state.
+
+
+## codex — Active run monitor fixes (2026-10-04)
+
+- Operator requested software-only monitoring; all resource/layout/task strategy
+  remains with Astra. Found Astra stopped on a >30k context while actors continued.
+  Added bounded overseer prompt construction, shedding older messages/references
+  before optional task details/sites, with explicit omission counts. Identity,
+  objective, actor state and automation proof are retained.
+- Found worker subtask lookup excluded every orchestrator-created task. Later
+  coordinator subtasks now use normal claim/receipt/ownership checks; the original
+  five actor assignments remain protected with clear error feedback.
+- Root/database TypeScript check and worker/overseer bundles pass. No tests were
+  requested or run. Resumed the same run after a brief mutation pause, preserving
+  save, ledger, counters and deadlines. No gameplay directives were issued.
+- Continue watching coordinator call progression, actor failures and service health.
+  Rejected placements/transfers alone are game outcomes, not evidence of a bridge
+  bug. Existing fixed deadline is still present; operator wanted spend-only runs,
+  so do not mistake a deadline stop for a $100 budget exhaustion.
