@@ -7,6 +7,8 @@ local function actor(id)
   error("Unknown scripted actor")
 end
 local function distance(a,b) return ((a.x-b.x)^2+(a.y-b.y)^2)^0.5 end
+-- Entity centers may be obstructed; treat a character within one tile as arrived.
+local move_arrival_radius=1
 local function bounded(v,min,max)
   if type(v)~="number" or v~=v or v<min or v>max or v%1~=0 then error("Invalid integer bound") end
   return v
@@ -627,7 +629,7 @@ script.on_event(defines.events.on_tick,function()
         if not ok then finish(id,"failed","Actor lost")
         elseif storage.qs_paused then
           a.walking_state={walking=false,direction=defines.direction.north};finish(id,"failed","Paused during movement")
-        elseif distance(a.position,receipt.target)<0.5 then
+        elseif distance(a.position,receipt.target)<move_arrival_radius then
           a.walking_state={walking=false,direction=defines.direction.north};finish(id,"completed","Arrived")
         elseif game.tick>=receipt.deadline then
           a.walking_state={walking=false,direction=defines.direction.north};finish(id,"failed","Movement timeout")

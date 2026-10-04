@@ -750,3 +750,18 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   and zero rocket launches. Do not reset or resume this ledger; a new run needs
   explicit spend authorization. Implementation commit `bb4cec7` is pushed to
   `main`.
+
+## codex — Avoid move timeouts at obstructed target centers (2026-10-04)
+
+- Live receipts repeatedly timed out while actor 12 stopped about 0.7 tiles
+  from chest 525's occupied center. The bridge only accepted arrival within
+  0.5 tiles, despite interaction commands allowing a six-tile reach. Other
+  actors and Astra continued running; `automation-2` reached 43.4% at tick
+  934,742, with the run unpaused and its $150 cap not exhausted.
+- Raised the move-arrival tolerance to one tile so an inaccessible entity
+  center does not strand a worker that is already adjacent. `git diff --check`
+  passed; no tests were run per operator preference.
+- Updated the source plus the current run's server and GUI mod copies. The live
+  processes keep the old Lua in memory; the saved world will use the fix on its
+  next load. Keep current research running instead of restarting just to apply
+  the fix. Push the source and handoff when finished.
