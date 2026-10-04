@@ -137,3 +137,9 @@ test('local evidence survives duplicated task descriptions and large global site
  assert.equal(data.objective,context.objective);
  assert.ok(prompt.length<30000);
 });
+
+test('assignment protocol defines recency without overriding engine safety', () => {
+ assert.match(FACTORIO_SYSTEM,/Numeric message IDs increase with recency/);
+ assert.match(FACTORIO_SYSTEM,/older broadcast holds/);
+ assert.match(FACTORIO_SYSTEM,/never overrides engine pause, ownership, reservations, budget/);
+});

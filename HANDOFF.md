@@ -344,3 +344,12 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Same live snapshots now retain 16 entities under the same limit. Typecheck and
   14 inference tests pass, including retaining a local list amid large duplicate
   task/site data. Deploying same run; no strategy or world changes.
+
+## codex — Coordinator assignment ordering (2026-10-04)
+
+- Actor1 explicitly reported old global hold vs newer direct assignment conflict
+  despite visible numeric message IDs. Clarified chronological gameplay routing:
+  newer coordinator assignments supersede conflicting older holds/task text.
+  Unrelated constraints and engine pause/ownership/budget checks remain binding.
+- Typecheck and 15 inference tests pass. Prompt assertions check the protocol;
+  live model behavior still requires monitoring. Same save/run redeployed.
