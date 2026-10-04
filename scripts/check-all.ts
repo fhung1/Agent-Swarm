@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
 
 // Every database mutation runs against this invocation's temporary server and CLI config.
 // Provider credentials are removed so acceptance checks cannot accidentally use them.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const env: NodeJS.ProcessEnv = { ...process.env, PATH: `${process.env.PATH ?? ''}:${join(homedir(), '.local', 'bin')}` };
+const env: NodeJS.ProcessEnv = { ...process.env,
+  PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}:${join(homedir(), '.local', 'bin')}` };
 for (const name of Object.keys(env)) if (/^(ALPACA_|ANTHROPIC_|OPENAI_|AGENT_|RUN_ID$|MAX_ORDER_NOTIONAL$)/.test(name)) delete env[name];
 const cli = process.env.SPACETIME_CLI ?? 'spacetime';
 const children = new Set<ChildProcess>();
@@ -102,11 +104,24 @@ async function main(): Promise<void> {
     '--out-dir', bindings, '--no-config', '--yes'], 'Verify generated bindings', 180_000, true);
   checkBindings(bindings);
   await run(join(root, 'node_modules/.bin/tsc'), ['--noEmit', '--target', 'ES2022', '--module', 'ESNext',
-    '--moduleResolution', 'bundler', '--strict', '--skipLibCheck', '--types', 'node', 'scripts/check-all.ts'], 'Typecheck check runner');
+    '--moduleResolution', 'bundler', '--strict', '--skipLibCheck', '--types', 'node', '--allowImportingTsExtensions',
+    'scripts/check-all.ts', 'scripts/check-app-readiness.ts'], 'Typecheck check runners');
   await run('npm', ['run', 'typecheck'], 'Typecheck workers and module');
   await run(join(root, 'node_modules/.bin/tsc'), ['--noEmit', '-p', 'dashboard/tsconfig.json'], 'Typecheck dashboard');
   await run('npm', ['run', 'build'], 'Build workers and adapters');
-  await run('npm', ['test'], 'Unit tests');
+  const testEntries = files(join(root, 'src')).filter(path => path.endsWith('.test.ts')).map(path => join('src', path));
+  if (!testEntries.length) throw new Error('No TypeScript unit-test entries were found.');
+  const testBundles = join(directory, 'unit-tests');
+  const bundledTests: string[] = [];
+  for (const entry of testEntries) {
+    const output = join(testBundles, entry.slice('src/'.length).replace(/\.test\.ts$/, '.test.js'));
+    mkdirSync(dirname(output), { recursive: true });
+    await build({ entryPoints: [join(root, entry)], outfile: output, bundle: true, platform: 'node', format: 'esm',
+      define: { 'import.meta.url': JSON.stringify(pathToFileURL(join(root, entry)).href) } });
+    bundledTests.push(output);
+  }
+  if (!bundledTests.length) throw new Error('Unit-test bundling produced no runnable entries.');
+  await run(process.execPath, ['--test', ...bundledTests], 'Run unit tests');
   await run(join(root, 'node_modules/.bin/esbuild'), ['dashboard/app.ts', '--bundle', '--platform=browser',
     '--format=esm', `--outfile=${join(directory, 'dashboard.js')}`], 'Build dashboard');
 
@@ -153,10 +168,23 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => {
   if (server) terminate(server, 'SIGTERM');
 });
 
-try { await main(); }
-catch (error) { console.error(`[check:all] ${String(error)}`); process.exitCode = 1; }
-finally {
-  await Promise.all([...children].map(stop));
-  if (server) await stop(server);
-  if (directory) rmSync(directory, { recursive: true, force: true });
+if (process.argv.includes('--app') || process.argv.includes('--help') || process.argv.includes('--readiness-help')) {
+  if (Number(process.versions.node.split('.')[0]) < 24) {
+    console.error('[check:all] Application readiness modes require Node.js 24 or newer.');
+    process.exitCode = 1;
+  } else {
+    const result = spawnSync(process.execPath, [join(root, 'scripts/check-app-readiness.ts'), ...process.argv.slice(2)], {
+      cwd: root, env: process.env, stdio: 'inherit', windowsHide: true,
+    });
+    if (result.error) { console.error(`[check:all] Could not start application readiness runner: ${String(result.error)}`); process.exitCode = 1; }
+    else process.exitCode = result.status ?? 1;
+  }
+} else {
+  try { await main(); }
+  catch (error) { console.error(`[check:all] ${String(error)}`); process.exitCode = 1; }
+  finally {
+    await Promise.all([...children].map(stop));
+    if (server) await stop(server);
+    if (directory) rmSync(directory, { recursive: true, force: true });
+  }
 }
