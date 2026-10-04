@@ -15,3 +15,6 @@ Validation passed: all 30 remaining documentation files have no removed-topic re
 ## Current: factorio-stack-review
 
 Reviewing main at `a9a9c9a` in an isolated worktree. Scope: Factorio runtime/bridge, inference workers, shared database/client, dashboards, deployment/recovery and acceptance coverage. No implementation edits. Completed review: 15 prioritized findings in [the report](../factorio-stack-review.md). Reproduced cross-language hash divergence, rejection quarantine, movement during pause and SIGKILL receipt rollback with unchanged history. Passed 36 Factorio units, 16 inference checks, board integration, root/dashboard/module typechecks and real-engine production/graceful restart. No provider calls or implementation fixes. Next: encoding/rejections, recovery/supervision, leases and inference-specific acceptance before live release. Pushed review commit is recorded on task `factorio-stack-review`.
+
+
+Review follow-up: all 15 findings are posted as open Factorio tasks on Development, each with evidence, acceptance requirements and **push when finished**. Priorities: 6 High, 7 Normal, 2 Low. Existing assignments were preserved; freeplay capability work depends on `factorio-ci-fault-acceptance`. Start with `factorio-wire-canonicalization` and `factorio-rejection-receipts`, then recovery/supervision, lease renewal and the inference verifier.
