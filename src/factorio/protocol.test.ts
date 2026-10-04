@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { encodeOperation, validateCommand, type Operation } from './protocol.ts';
 const operation: Operation = { version: 1, worldId: 'world-1', historyId: 'history-1', operationId: 'take-1', actorId: 12,
   command: { kind: 'take', targetId: 20, item: 'iron-ore', quantity: 5 } };
@@ -18,4 +23,38 @@ test('envelopes reject injected identifiers and extra fields', () => {
   assert.throws(() => encodeOperation({ ...operation, operationId: '\"; game.print(1)' }));
   assert.throws(() => encodeOperation({ ...operation, actorId: 0 }));
   assert.throws(() => encodeOperation({ ...operation, extra: true } as Operation));
+});
+test('Python bridge and TypeScript share normalized wire bytes and digest vectors', () => {
+  const world = mkdtempSync(resolve(tmpdir(), 'factorio-wire-'));
+  const bridge = resolve(dirname(fileURLToPath(import.meta.url)), '../../factorio/bridge.py');
+  try {
+    writeFileSync(resolve(world, 'manifest.json'), JSON.stringify({ worldId: 'world-1', historyId: 'history-1' }));
+    for (const command of [
+      { kind: 'move' as const, x: 0.000001, y: -0, maxTicks: 10 },
+      // This is an observed Factorio position, represented exactly by the wire grid.
+      { kind: 'move' as const, x: 8.6796875, y: -12.3456789, maxTicks: 600 },
+      { kind: 'take' as const, targetId: 20, item: 'iron-ore' as const, quantity: 5 },
+    ]) {
+      const operation: Operation = { version: 1, worldId: 'world-1', historyId: 'history-1', operationId: 'vector-1', actorId: 12, command };
+      const python = execFileSync('python3', ['-c',
+        "import json,pathlib,sys;sys.path.insert(0,'factorio');import bridge;print(bridge.encode(pathlib.Path(sys.argv[1]),12,'vector-1',json.loads(sys.argv[2])))",
+        world, JSON.stringify(command)], { cwd: resolve(dirname(fileURLToPath(import.meta.url)), '../..'), encoding: 'utf8' }).trim();
+      assert.equal(python, encodeOperation(operation).request);
+      assert.match(python, /"digest":"[a-f0-9]{64}"/);
+    }
+  } finally { rmSync(world, { recursive: true, force: true }); }
+});
+test('coordinates outside the exact eight-decimal wire grid are rejected by both sides', () => {
+  for (const x of [0.000000001, 1.0000000000000002]) {
+    assert.throws(() => validateCommand({ kind: 'move', x, y: 0, maxTicks: 10 }));
+  }
+  const world = mkdtempSync(resolve(tmpdir(), 'factorio-wire-'));
+  try {
+    writeFileSync(resolve(world, 'manifest.json'), JSON.stringify({ worldId: 'world-1', historyId: 'history-1' }));
+    for (const x of [0.000000001, 1.0000000000000002]) {
+      assert.throws(() => execFileSync('python3', ['-c',
+        "import pathlib,sys;sys.path.insert(0,'factorio');import bridge;bridge.encode(pathlib.Path(sys.argv[1]),12,'vector-1',{'kind':'move','x':float(sys.argv[2]),'y':0,'maxTicks':10})",
+        world, String(x)], { cwd: resolve(dirname(fileURLToPath(import.meta.url)), '../..'), encoding: 'utf8', stdio: 'pipe' }));
+    }
+  } finally { rmSync(world, { recursive: true, force: true }); }
 });

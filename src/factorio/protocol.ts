@@ -11,6 +11,7 @@ export interface Receipt {
   actorId: number; status: 'pending' | 'completed' | 'failed'; startTick: number; endTick?: number;
   detail?: string; quantity?: number; item?: string; targetId?: number;
 }
+const coordinateScale = 100_000_000;
 function integer(value: unknown, min: number, max: number): asserts value is number {
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) throw new Error('Invalid integer bound');
 }
@@ -22,13 +23,27 @@ export function validateCommand(value: unknown): Command {
   const c = value as Record<string, unknown>;
   if (c.kind === 'move') {
     exact(c, ['kind', 'x', 'y', 'maxTicks']);
-    for (const key of ['x', 'y']) if (typeof c[key] !== 'number' || !Number.isFinite(c[key]) || Math.abs(c[key] as number) > 1_000_000) throw new Error('Invalid position');
+    for (const key of ['x', 'y']) {
+      const coordinate = c[key];
+      if (typeof coordinate !== 'number' || !Number.isFinite(coordinate) || Math.abs(coordinate) > 1_000_000 ||
+          !Number.isSafeInteger(coordinate * coordinateScale)) {
+        throw new Error('Invalid position');
+      }
+    }
     integer(c.maxTicks, 1, 600);
   } else if (c.kind === 'take' || c.kind === 'put') {
     exact(c, ['kind', 'targetId', 'item', 'quantity']); integer(c.targetId, 1, 2_147_483_647); integer(c.quantity, 1, 20);
     if (!['iron-ore', 'coal', 'iron-plate'].includes(String(c.item))) throw new Error('Unsupported item');
   } else throw new Error('Unsupported command');
   return value as Command;
+}
+function normalizeCommand(command: Command): Command {
+  if (command.kind !== 'move') return command;
+  const coordinate = (value: number): number => {
+    const normalized = Math.round(value * coordinateScale) / coordinateScale;
+    return Object.is(normalized, -0) ? 0 : normalized;
+  };
+  return { ...command, x: coordinate(command.x), y: coordinate(command.y) };
 }
 export function canonical(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -42,6 +57,10 @@ export function encodeOperation(operation: Operation): { digest: string; request
     if (typeof operation[key] !== 'string' || !/^[A-Za-z0-9_.:-]{1,96}$/.test(operation[key])) throw new Error(`Invalid ${key}`);
   }
   integer(operation.actorId, 1, 2_147_483_647); validateCommand(operation.command);
-  const digest = createHash('sha256').update(canonical(operation)).digest('hex');
-  return { digest, request: canonical({ ...operation, digest }) };
+  // Coordinate values use an exact eight-decimal grid. Both the TypeScript worker and
+  // Python bridge serialize this normalized operation, never language-specific
+  // exponent notation, before calculating the receipt digest.
+  const normalized = { ...operation, command: normalizeCommand(operation.command) };
+  const digest = createHash('sha256').update(canonical(normalized)).digest('hex');
+  return { digest, request: canonical({ ...normalized, digest }) };
 }
