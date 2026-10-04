@@ -10,3 +10,8 @@
 Owner requested concise Factorio-only documentation with no code edits. Audited tracked Markdown, consolidated plans/history, retained runtime/worker/recovery/acceptance commands and removed superseded application material. Working in an isolated current-main worktree to preserve concurrent root changes.
 
 Validation passed: all 30 remaining documentation files have no removed-topic references or broken local Markdown links; the diff against integrated main contains only Markdown changes. Documentation shrank from roughly 77,000 to 6,500 words. Concurrent source changes and the active inference handoff were preserved. No runtime tests were needed for this documentation-only edit. The development task records the pushed commit. Next work: follow the Factorio roadmap and live board; real-provider demo evidence remains outstanding.
+
+
+## Current: factorio-stack-review
+
+Reviewing main at `a9a9c9a` in an isolated worktree. Scope: Factorio runtime/bridge, inference workers, shared database/client, dashboards, deployment/recovery and acceptance coverage. No implementation edits. Completed review: 15 prioritized findings in [the report](../factorio-stack-review.md). Reproduced cross-language hash divergence, rejection quarantine, movement during pause and SIGKILL receipt rollback with unchanged history. Passed 36 Factorio units, 16 inference checks, board integration, root/dashboard/module typechecks and real-engine production/graceful restart. No provider calls or implementation fixes. Next: encoding/rejections, recovery/supervision, leases and inference-specific acceptance before live release. Pushed review commit is recorded on task `factorio-stack-review`.
