@@ -42,6 +42,24 @@ export function assertTaskOwnership(snapshot: BoardSnapshot, taskId: string, sen
   const task = snapshot.tasks.find(t => t.id === taskId);
   if (!task || task.status !== 'claimed' || task.assignee !== sender) throw Error('Task ownership lost');
 }
+/** Only a scoped, directed coordinator announcement can change an actor's assignment. */
+export function latestActorAssignment(snapshot: BoardSnapshot, scope: FactorioScope, anchorTaskId: string): BoardSnapshot['tasks'][number] | undefined {
+  const coordinator = `${scope.runId}-orchestrator`;
+  const announcements = snapshot.messages.filter(row => row.sender === coordinator && row.recipient === scope.sender)
+    .sort((a, b) => BigInt(a.id) > BigInt(b.id) ? -1 : BigInt(a.id) < BigInt(b.id) ? 1 : 0);
+  for (const row of announcements) {
+    let body: Record<string, any>;
+    try { body = JSON.parse(row.body); } catch { continue; }
+    if (body.version !== 1 || body.sender !== coordinator || body.runId !== scope.runId ||
+      body.worldId !== scope.worldId || body.historyId !== scope.historyId || body.kind !== 'orchestrator_task') continue;
+    const taskId = body.payload?.taskId;
+    if (typeof taskId !== 'string' || taskId === anchorTaskId || !taskId.startsWith(`${scope.runId}.subtask-orchestrator-`)) continue;
+    const task = snapshot.tasks.find(t => t.id === taskId && t.area === 'factorio-orchestration' &&
+      (t.status === 'open' || (t.status === 'claimed' && t.assignee === scope.sender)));
+    if (task) return task;
+  }
+  return undefined;
+}
 function checkReceipt(value: unknown, pending: NonNullable<InferenceState['pending']>, scope: FactorioScope, tick: number): Receipt {
   const r = value as Receipt;
   if (!r || r.operationId !== pending.id || r.digest !== pending.digest || r.worldId !== scope.worldId ||
@@ -63,9 +81,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
   const waitReady = async () => { while (!board.ready) { withinRun(); await sleep(250); } };
   const snapshot = () => { if (!board.ready) throw Error('Board disconnected'); const s = board.snapshot(); assertTaskOwnership(s, o.taskId, scope.sender); return s; };
   let lastTaskLabel = '';
-  const publishTaskLabel = async () => {
-    const tasks = board.snapshot().tasks.filter(t => t.status === 'claimed' && t.assignee === scope.sender);
-    const active = tasks.find(t => t.id.startsWith(`${scope.runId}.subtask-`)) ?? tasks.find(t => t.id === o.taskId);
+  const publishTaskLabel = async (active: BoardSnapshot['tasks'][number] | undefined) => {
     let label = '';
     for (const character of Array.from((active?.title ?? 'Waiting for task').replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim())) {
       if (Buffer.byteLength(label + character, 'utf8') > 72) break;
@@ -133,7 +149,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       withinRun(); await sleep(100);
     }
     snapshot();
-    await publishTaskLabel();
+    await publishTaskLabel(initial);
     if (state.pending) {
       const observed = await observe();
       const receipt = checkReceipt(await o.game({ kind: 'receipt', operation: state.pending.id }), state.pending, scope, 0);
@@ -153,7 +169,11 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)) leases.track(reservation.path);
     leases.start();
     while (true) {
-      withinRun(); await waitReady(); snapshot(); await publishTaskLabel();
+      withinRun(); await waitReady();
+      const boardState = snapshot();
+      const assignment = latestActorAssignment(boardState, scope, o.taskId);
+      if (assignment?.status === 'open') await board.claimTask(scope.sender, assignment.id);
+      await publishTaskLabel(assignment ?? boardState.tasks.find(t => t.id === o.taskId));
       let observed = await observe();
       if (observed.paused) { await sleep(500); continue; }
       await leases.refresh();
@@ -161,7 +181,9 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         if (o.maxCalls > 0 && state.calls >= o.maxCalls) throw Error('Inference call budget exhausted');
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
-        const context = { ...scope, objective: assignedObjective || o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
+        const currentObjective = assignment ? [assignment.title, assignment.details].filter(Boolean).join('\n')
+          : o.goal === 'rocket' ? o.objective : assignedObjective || o.objective;
+        const context = { ...scope, objective: currentObjective, operatorPrompt: o.operatorPrompt(), observation: observed,
           status: await o.game({ kind: 'status' }), reservations: board.snapshot().reservations
             .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
             .map(r => ({ path: r.path, holder: r.holder })),

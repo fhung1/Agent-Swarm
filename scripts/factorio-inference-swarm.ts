@@ -1,6 +1,7 @@
 import { selectRunDeadline } from '../src/factorio/run-duration.ts';
 import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync, copyFileSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { MessageBoardClient } from '../message-board/client.ts';
 import { inferenceLaunchPlan, inferenceTeamSucceeded } from '../src/factorio/inference-launch.ts';
@@ -39,8 +40,24 @@ async function main() {
   });
   const directory = join(world, 'inference', runId); mkdirSync(directory, { recursive: true, mode: 0o700 });
   const planPath = join(directory, 'plan.json');
-  const savedPlan = { worldId: manifest.worldId, historyId: manifest.historyId, goal, ...plan };
-  if (existsSync(planPath) && JSON.stringify(JSON.parse(readFileSync(planPath, 'utf8'))) !== JSON.stringify(savedPlan)) throw Error('Run ID already has a different actor/model/budget mapping; choose a new run ID');
+  const previousPlan = existsSync(planPath) ? JSON.parse(readFileSync(planPath, 'utf8')) : null;
+  const defaultGoalTaskId = `${runId}.goal-${goal}`;
+  const goalTaskId = process.env.FACTORIO_GOAL_TASK_ID ?? previousPlan?.goalTaskId ?? defaultGoalTaskId;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(goalTaskId)) throw Error('Invalid Factorio goal task ID');
+  const savedPlan = { worldId: manifest.worldId, historyId: manifest.historyId, goal, ...plan,
+    ...(goalTaskId !== defaultGoalTaskId ? {goalTaskId} : {}) };
+  const samePlan = previousPlan && isDeepStrictEqual(previousPlan, savedPlan);
+  const previousMapping = { ...savedPlan, goal: 'plates' } as Record<string, unknown>;
+  delete previousMapping.goalTaskId;
+  const advancingGoal = previousPlan && !samePlan && goal === 'rocket' && previousPlan.goal === 'plates' &&
+    goalTaskId !== defaultGoalTaskId && isDeepStrictEqual(previousPlan, previousMapping);
+  if (previousPlan && !samePlan && !advancingGoal) {
+    const differing = [...new Set([...Object.keys(previousPlan), ...Object.keys(previousMapping)])]
+      .filter(key => !isDeepStrictEqual(previousPlan[key], previousMapping[key]));
+    const onlyOld = Object.keys(previousPlan).filter(key => !Object.hasOwn(previousMapping, key));
+    const onlyNew = Object.keys(previousMapping).filter(key => !Object.hasOwn(previousPlan, key));
+    throw Error(`Run ID already has a different actor/model/budget mapping (values: ${differing.join(',')}; old: ${onlyOld.join(',')}; new: ${onlyNew.join(',')}); choose a new run ID`);
+  }
   const spendFile = join(directory, 'run-spend.json');
   if (existsSync(planPath) && !existsSync(spendFile)) throw Error('Run spend ledger is missing; refusing to restart without its spend history');
   const spend = createFactorioSpendGuard({ path: spendFile, runId, worldId: manifest.worldId, historyId: manifest.historyId, capUsd: plan.maxRunSpendUsd });
@@ -88,6 +105,25 @@ async function main() {
     const until = Date.now() + 30000;
     while (!board.ready && !stopping) { if (Date.now() >= until) throw Error('Board connection unavailable'); await new Promise(r => setTimeout(r, 200)); }
     if (stopping) return;
+    if (advancingGoal) {
+      const snapshot = board.snapshot(), tasks = snapshot.tasks;
+      const ironProof = snapshot.messages.some(row => {
+        if (row.sender !== plan.orchestrator.sender) return false;
+        try {
+          const body = JSON.parse(row.body);
+          return body.runId === runId && body.worldId === manifest.worldId && body.historyId === manifest.historyId &&
+            body.kind === 'goal_completion' && body.payload?.automation?.verified === true;
+        } catch { return false; }
+      });
+      if (!tasks.some(task => task.id === `${runId}.goal-plates` && task.status === 'done') ||
+          !ironProof || !tasks.some(task => task.id === goalTaskId && task.status === 'open')) {
+        throw Error('Rocket continuation requires a completed iron goal and an open operator rocket task on this board');
+      }
+      copyFileSync(planPath, join(directory, 'plan-plates.json'));
+      const nextPath = join(directory, 'plan-next.json');
+      writeFileSync(nextPath, JSON.stringify(savedPlan, null, 2), { mode: 0o600 });
+      renameSync(nextPath, planPath);
+    }
     // Bootstrap and create initial tasks using the orchestrator identity. Its
     // worker reuses the saved token, so setup does not add a seventh row.
     try { await board.bootstrapOperator(); } catch (error) {
@@ -95,8 +131,8 @@ async function main() {
     }
     await board.setParticipantLimit(8);
     await board.register(plan.orchestrator.sender, 'factorio-orchestrator', `Board-only coordinator; five ${plan.actorModel} low-effort game actors; ${plan.orchestrator.model} high effort`);
-    const goalTaskId = `${runId}.goal-${goal}`;
     if (!board.snapshot().tasks.some(t => t.id === goalTaskId)) {
+      if (goalTaskId !== defaultGoalTaskId) throw Error('Operator rocket goal task is missing');
       const title = goal === 'rocket' ? 'Beat Factorio: launch a rocket' : 'Build a fully automated iron plate factory';
       const details = goal === 'rocket'
         ? `World ${manifest.worldId}; history ${manifest.historyId}; zero fixture resources; engine rocket-launch event is the only victory proof. The overseer must create one run-scoped subtask per actor before workers start.`
@@ -131,6 +167,7 @@ async function main() {
     }, 100);
     spendMonitor.unref();
     const baseEnv = { ...process.env, FACTORIO_MAX_CALLS: String(plan.maxCalls ?? 0), FACTORIO_RUN_DEADLINE: String(runDeadline), FACTORIO_RUN_SPEND_FILE: spendFile,
+      FACTORIO_GOAL_TASK_ID: goalTaskId,
       FACTORIO_RUN_BUDGET_USD: plan.maxRunSpendUsd };
     type ChildResult = { role: 'actor' | 'orchestrator'; actorId?: number; code: number | null; signal?: string | null };
     const results: Promise<ChildResult>[] = [];

@@ -2,9 +2,46 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Ask } from '../agents/llm.ts';
 import type { BoardSnapshot } from '../../message-board/client.ts';
-import { runInferenceWorker, validateObservation, type InferenceState, type InferenceWorkerOptions } from './inference-worker.ts';
+import { latestActorAssignment, runInferenceWorker, validateObservation, type InferenceState, type InferenceWorkerOptions } from './inference-worker.ts';
 import { encodeOperation } from './protocol.ts';
 const scope = { runId: 'run', worldId: 'world', historyId: 'history', actorId: 7, sender: 'run-agent-1' };
+test('latest scoped Astra subtask becomes the actor assignment', () => {
+  const task = (id: string, title: string) => ({ id, title, area: 'factorio-orchestration', status: 'open', assignee: '' });
+  const row = (id: number, taskId: string, history = scope.historyId, recipient = scope.sender) => ({
+    id: BigInt(id), sender: 'run-orchestrator', recipient, taskId,
+    body: JSON.stringify({version:1, runId:scope.runId, worldId:scope.worldId, historyId:history,
+      sender:'run-orchestrator', kind:'orchestrator_task', payload:{taskId}}), createdAt:{} });
+  const first = task('run.subtask-orchestrator-10', 'Existing role');
+  const latest = task('run.subtask-orchestrator-12', 'New role');
+  const snapshot = {tasks:[first, latest], messages:[row(4,latest.id), row(5,first.id,'old-history'),
+    row(3,first.id), row(6,first.id,scope.historyId,'run-agent-2')]} as unknown as BoardSnapshot;
+  assert.equal(latestActorAssignment(snapshot, scope, 'run.subtask-orchestrator-1')?.id, latest.id);
+});
+test('worker claims a new Astra assignment and uses its title in the role and prompt', async () => {
+  const actor = 'run-agent-1', anchorId = 'run.subtask-orchestrator-1', nextId = 'run.subtask-orchestrator-6';
+  const tasks = Array.from({length:5}, (_, i) => ({id:`run.subtask-orchestrator-${i+1}`,
+    title:`Original role ${i+1}`, details:'Old iron work', area:'factorio-orchestration', status:'claimed', assignee:`run-agent-${i+1}`}));
+  tasks.push({id:nextId,title:'New rocket role',details:'Build from the saved factory',area:'factorio-orchestration',status:'open',assignee:''});
+  const announcements = tasks.map((task, i) => ({id:BigInt(i+1),sender:'run-orchestrator',recipient:i<5?`run-agent-${i+1}`:actor,
+    taskId:task.id,createdAt:{},body:JSON.stringify({version:1,runId:'run',worldId:'world',historyId:'history',sender:'run-orchestrator',
+      kind:'orchestrator_task',payload:{taskId:task.id,title:task.title,details:task.details}})}));
+  const board = {ready:true,snapshot:() => ({tasks,messages:announcements,reservations:[],participants:[]}) as unknown as BoardSnapshot,
+    register:async()=>{},post:async()=>{},createTask:async()=>{},
+    claimTask:async (_sender:string,id:string)=>{const task=tasks.find(t=>t.id===id)!;task.status='claimed';task.assignee=actor;},
+    updateTask:async()=>{},reserve:async()=>{},releaseReservation:async()=>{}};
+  const labels:string[]=[];
+  const state:InferenceState={version:1,scope:{runId:'run',worldId:'world',historyId:'history',actorId:7,sender:actor},
+    calls:0,tick:0,lastResult:null,pending:null,decision:null};
+  const observation={actorId:7,tick:100,x:0,y:0,world:{worldId:'world',historyId:'history'},paused:false,inventory:{items:{}},nearby:[]};
+  const options:InferenceWorkerOptions={scope:state.scope,taskId:anchorId,objective:'Launch a rocket',operatorPrompt:()=>'',
+    goal:'rocket',maxCalls:1,deadline:Date.now()+5000,timeoutMs:1000,requiredPlates:0,board,state,save:()=>{},sleep:async()=>{},
+    game:request=>{if(request.kind==='task_label')labels.push(String(request.label));return observation;},
+    ask:(async (_schema,_system,prompt)=>{assert.match(JSON.parse(prompt).objective,/New rocket role/);
+      return {kind:'wait',command:null,message:'Await next step',recipient:'',waitMs:1};}) as Ask};
+  await assert.rejects(runInferenceWorker(options),/budget exhausted/);
+  assert.equal(tasks.at(-1)?.assignee,actor);
+  assert.deepEqual(labels,['Original role 1','New rocket role']);
+});
 function fixture() {
   const state: InferenceState = { version: 1, scope, calls: 0, tick: 0, lastResult: null, pending: null, decision: null };
   const events: { kind: string; payload: unknown }[] = [];

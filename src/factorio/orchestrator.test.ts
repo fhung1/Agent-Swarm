@@ -54,12 +54,42 @@ test('board orchestrator directs a player agent and closes the goal only on work
     prompt = input;
     return { kind: 'direct', recipient: agents[0]!, message: 'Mine iron and report the deposit.', title: '', details: '', dependsOn: '' };
   }) as Ask;
-  await runFactorioOrchestrator(f.options);
+  let tick = 0;
+  await runFactorioOrchestrator({...f.options, readGameStatus: () => ({tick: ++tick, paused: false,
+    world: {worldId, historyId}, rocketLaunches: f.worker.status === 'done' ? 1 : 0})});
   assert.equal(JSON.parse(prompt).agents.length, 5);
   assert.deepEqual(f.posted.map(row => row.recipient), ['', agents[0], '']);
   assert.ok(f.posted.every(row => row.taskId === f.goal.id));
   assert.equal(f.goal.status, 'done');
   assert.equal(f.state.calls, 1);
+});
+
+test('rocket completion ignores a worker claim until the engine records a launch', async () => {
+  const f = fixture(); f.options.maxCalls = 1;
+  f.messages.push({id: 1n, sender: agents[0]!, recipient: '', taskId: f.worker.id,
+    body: JSON.stringify({version:1, runId, worldId, historyId, sender:agents[0], kind:'completion',
+      payload:{taskId:f.worker.id, rocketLaunches:1, tick:123}}),
+    createdAt:{} as BoardSnapshot['messages'][number]['createdAt']});
+  await assert.rejects(runFactorioOrchestrator({...f.options,
+    readGameStatus: () => ({tick: 124, paused:false, world:{worldId,historyId}, rocketLaunches:0})}), /call limit exhausted/);
+  assert.notEqual(f.goal.status, 'done');
+});
+
+test('Astra can inspect the operator goal even when its ID is outside the run prefix', async () => {
+  const f = fixture();
+  f.goal.id = 'factorio-launch-a-rocket-operator';
+  f.options.goalTaskId = f.goal.id;
+  let calls = 0;
+  f.options.ask = (async (_schema, _system, prompt) => {
+    calls++;
+    if (calls === 1) return {kind:'inspect', recipient:'', message:JSON.stringify({kind:'task',id:f.goal.id}), title:'', details:'', dependsOn:''};
+    assert.equal(JSON.parse(prompt).toolResult.result.id, f.goal.id);
+    return {kind:'direct', recipient:agents[0], message:'Continue toward rocket launch.', title:'', details:'', dependsOn:''};
+  }) as Ask;
+  let tick = 0;
+  await runFactorioOrchestrator({...f.options, readGameStatus:() => ({tick:++tick, paused:false,
+    world:{worldId,historyId}, rocketLaunches:f.worker.status==='done' ? 1 : 0})});
+  assert.equal(calls,2);
 });
 
 test('board orchestrator creates a run-scoped subtask without a game-action API', async () => {
@@ -102,7 +132,9 @@ test('stalled inspection cycle returns a loop signal and lets Astra issue its ow
       ? {kind:'inspect', recipient:'', message:'{"kind":"research"}', title:'', details:'', dependsOn:''}
       : {kind:'direct', recipient:agents[0], message:'Choose a module location and begin construction.', title:'', details:'', dependsOn:''};
   }) as Ask;
-  await runFactorioOrchestrator(f.options);
+  let tick = 0;
+  await runFactorioOrchestrator({...f.options, readGameStatus: () => ({tick: ++tick, paused:false,
+    world:{worldId,historyId}, rocketLaunches:f.worker.status === 'done' ? 1 : 0})});
   assert.equal(calls, 2);
   assert.ok(f.posted.some(row => JSON.parse(row.body).kind === 'inspection_result' && /Inspection loop/.test(row.body)));
   assert.ok(f.posted.some(row => row.recipient === agents[0] && JSON.parse(row.body).kind === 'chat'));
@@ -120,7 +152,9 @@ test('overseer receives read-only global survey without a character or mutation 
     assert.match(system, /cannot execute game actions/);
     return { kind: 'direct', recipient: agents[0], message: 'Mine 25 iron ore at the mapped deposit.', title: '', details: '', dependsOn: '' };
   }) as Ask;
-  await runFactorioOrchestrator({ ...f.options, readGameStatus: () => gameStatus });
+  let ticks = 49;
+  await runFactorioOrchestrator({ ...f.options, readGameStatus: () => ({...gameStatus, tick:++ticks,
+    rocketLaunches:f.worker.status === 'done' ? 1 : 0}) });
   assert.equal(f.state.calls, 1);
 });
 
@@ -138,7 +172,8 @@ test('overseer does not call the model while authoritative game status is paused
     return { kind: 'direct', recipient: agents[0], message: 'Gather iron.', title: '', details: '', dependsOn: '' };
   }) as Ask;
   await runFactorioOrchestrator({ ...f.options,
-    readGameStatus: () => ({ tick: ++reads, paused: reads === 1, world: { worldId, historyId } }) });
+    readGameStatus: () => ({ tick: ++reads, paused: reads === 1, world: { worldId, historyId },
+      rocketLaunches:f.worker.status === 'done' ? 1 : 0 }) });
   assert.equal(f.state.calls, 1);
 });
 
