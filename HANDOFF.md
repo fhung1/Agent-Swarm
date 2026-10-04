@@ -500,3 +500,15 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   has a fixture that does not satisfy the five initial-task startup barrier;
   its unrelated cases time out when run together. The two new reassignment
   cases pass independently, and the live claim verifies the deployed path.
+
+## codex — Overseer assignment brief (2026-10-04)
+
+- Source commit `cebb3b9` loads Astra's own `assignments` plan section alongside
+  `current` in its compact briefing. The live Astra had repeatedly paid for
+  `read_plan assignments` despite the section being only 1,214 characters.
+  Astra still authors and updates every plan section and gameplay assignment.
+- Rebuilt the overseer bundle and restarted the same rocket run roles. World
+  tick advanced beyond 323,845; all six inference roles and the unpaused game
+  were present after restart, and the same $100 ledger stayed active.
+- Root typecheck, a direct bundled `planBrief` check and `git diff --check`
+  passed. No game inventory or board task was changed by this code change.
