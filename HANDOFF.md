@@ -627,3 +627,23 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   placed-site count remains 71, so continue watching for factory expansion.
 - esbuild bundle and `git diff --check` passed; no test suite run per operator
   preference. Commit and push, then keep monitoring the live run.
+
+## codex — Trim Luna worker inputs to Astra's current task (2026-10-04)
+
+- Removed the repeated operator-wide prompt, global game status, broad task and
+  budget metadata, and stale peer history from Luna inputs. Each call now gets
+  the current Astra assignment, actor inventory, at most ten nearest observed
+  entities, the compact last result, and only task-relevant water or reservation
+  evidence. The system rules now direct each actor to choose one bounded next
+  action. Worker context has a 6,000-byte hard cap; `inference_audit.promptBytes`
+  records its actual UTF-8 size.
+- Rebuilt the worker and restarted the same `iron-modular-20261004` run in place.
+  World, history, assignments, journals, message board and $100 spend ledger were
+  preserved. Live audits show 2,512–3,899 bytes across the five Luna workers,
+  down from the earlier 8.7–9.1 KB. No tests were run; `npm run typecheck` and
+  `git diff --check` passed.
+- At tick 631,446 the game was unpaused, all five actor call counters had advanced
+  and no action was pending. Steel processing was at 92.9%, 81 production sites
+  were present, and no rocket launch was recorded. The ledger showed $62.244
+  charged, $19.166 reserved, and $18.590 available. Commit `7b2c846` is pushed
+  to `main`; keep monitoring and leave gameplay choices to Astra.
