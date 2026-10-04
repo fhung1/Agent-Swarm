@@ -6,4 +6,6 @@ Task: `trading-team-roles` (claimed as `codex-factor`). Push when finished.
 
 Checks: Node 24 full unit suite 143/143 pass; TypeScript root and module typecheck pass; worker build and diff check pass. The role flow has not been run against a live model or Alpaca account; that is covered by dependent board acceptance tasks.
 
-Next: Commit and push, record board result, and release locks. The deployment must publish the updated module before enabling new role counts.
+Publication: feature commit `ee1c49d` pushed to `origin/main` after rebasing the Factorio recovery commits.
+
+Status: implementation and checks complete. Next: run dependent `trading-model-acceptance` against real configured model workers, then publish the updated module before enabling specialist role counts in a live paper run.
