@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSyn
 import { dirname, join, resolve } from 'node:path';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask } from '../agents/llm.ts';
-import { buildFactorioPrompt, decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
+import { buildFactorioPrompt, decideFactorio, FACTORIO_SYSTEM, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
 import { ResourceLeases, ResourceRenewalUncertain } from './resource-leases.ts';
 import { createFactorioSpendGuard, FACTORIO_MAX_OUTPUT_TOKENS, type FactorioSpendGuard } from './run-spend.ts';
@@ -218,12 +218,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           : assignedObjective || 'Wait for Astra to assign a concrete next task.';
         const boardContext = board.snapshot();
         const context = { ...scope, objective: currentObjective, observation: observed,
-          reservations: boardContext.reservations
-            .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
-            .map(r => ({ path: r.path, holder: r.holder })),
           messages: selectPeerMessages(boardContext.messages, scope), lastResult: state.lastResult,
           recipients: { overseer: `${scope.runId}-orchestrator` } };
-        const promptBytes = Buffer.byteLength(buildFactorioPrompt(context), 'utf8');
+        const contextBytes = Buffer.byteLength(buildFactorioPrompt(context), 'utf8');
+        const promptBytes = Buffer.byteLength(FACTORIO_SYSTEM, 'utf8') + contextBytes;
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
         let spend: { reservedUsd?: string; chargedUsd?: string } = {};
@@ -235,7 +233,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         } catch (error) {
           if (!(error instanceof InvalidFactorioDecisionError)) throw error;
           await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-            usageKnown: Boolean(usage), promptBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
+            usageKnown: Boolean(usage), promptBytes, contextBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
             reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
           const reason = error.feedback;
           await post(`${id}-rejected`, 'decision_rejected', { reason });
@@ -243,7 +241,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           continue;
         }
         await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
-          usageKnown: Boolean(usage), promptBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
+          usageKnown: Boolean(usage), promptBytes, contextBytes, remainingCalls: o.maxCalls === 0 ? null : Math.max(0, o.maxCalls - state.calls),
           reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
         state.decision = { id, output }; o.save(state);
       }

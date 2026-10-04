@@ -725,3 +725,27 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   launcher, and launcher dry-run passed. No tests were run per operator
   preference. Continue only with an operator-authorized budget/run; never clear
   this halted ledger or exceed the $100 ceiling.
+
+## codex — Trim Luna input to one current step (2026-10-04)
+
+- Reworked the worker prompt to keep Astra's active assignment, actor position,
+  up to two nearby entities, four task-relevant carried items, a brief failure
+  reason, and a short directed Astra note. Routine reservations, belt and fluid
+  layouts, broad entity inventories, and unrelated crafting-queue data are no
+  longer sent to Luna. Relevant machine fuel/status and water-task shoreline
+  evidence remain available. The system instructions fell from 1,478 to 901
+  UTF-8 bytes. The combined system plus JSON context has a 3,000-byte ceiling.
+- A stress-shaped prompt measurement with 40 nearby entities, 40 inventory
+  names, long failure text, a full recipe and crafting queue serialized to 2,611
+  combined bytes: two entities and four carried items were retained. Inference
+  audit records now distinguish the combined prompt bytes from JSON context
+  bytes. Typecheck, worker bundle build, prompt bundle build, and `git diff
+  --check` passed; no tests were run by operator preference.
+- This source change is not loaded in the current run. The `iron-modular-20261004`
+  $100 ledger is halted at $99.459196 charged plus reserved, with $0.540804
+  remaining. The graphical client and Factorio server are running, but the world
+  is paused at tick 815,157; five worker journals have no pending operations,
+  and no worker or overseer processes are running. The engine reports 94
+  production sites, 16 furnaces, `automation-2` at zero progress, `needsFuel`,
+  and zero rocket launches. Do not reset or resume this ledger; a new run needs
+  explicit spend authorization.
