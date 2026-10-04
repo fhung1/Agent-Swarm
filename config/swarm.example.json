@@ -6,6 +6,8 @@
   "agents": {
     "coordinator": { "count": 1, "brain": "claude" },
     "analyst": { "count": 2, "brain": "claude" },
+    "valuation": { "count": 0, "brain": "claude" },
+    "portfolio": { "count": 0, "brain": "claude" },
     "skeptic": { "count": 1, "brain": "codex", "effort": "medium" },
     "risk": { "count": 1 },
     "executor": { "count": 1 }

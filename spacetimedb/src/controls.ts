@@ -76,7 +76,7 @@ export const recordDecisionInput = spacetimedb.reducer({ id: t.string(), runId: 
   for (const id of parseRefs(value.critiqueRefs)) {
     const critique = ctx.db.message.id.find(id);
     if (!critique || critique.runId !== value.runId || critique.symbol !== thesis.symbol ||
-        critique.kind !== 'challenge' || critique.evidenceRef !== value.thesisId) throw new SenderError('Invalid critique');
+        !['challenge', 'valuation', 'portfolio'].includes(critique.kind) || critique.evidenceRef !== value.thesisId) throw new SenderError('Invalid critique');
   }
   const previous = ctx.db.decisionInput.id.find(value.id);
   if (previous) {
@@ -94,7 +94,7 @@ export const recordDecisionInput = spacetimedb.reducer({ id: t.string(), runId: 
 
 export const beginInference = spacetimedb.reducer({ id: t.string(), runId: t.string(), workId: t.string(), model: t.string(),
   promptVersion: t.string(), inputRefs: t.string(), reservedTokens: t.u32() }, (ctx, value) => {
-  requireRole(ctx, ['analyst', 'skeptic', 'coordinator']); requireRun(ctx, value.runId); requireId(value.id); requireId(value.workId);
+  requireRole(ctx, ['analyst', 'valuation', 'portfolio', 'skeptic', 'coordinator']); requireRun(ctx, value.runId); requireId(value.id); requireId(value.workId);
   requireText(value.model, 'Model', 128); requireText(value.promptVersion, 'Prompt version', 64);
   if (value.inputRefs.length > 4096 || value.reservedTokens < 16_000) throw new SenderError('Invalid inference reservation');
   if (ctx.db.inferenceAttempt.id.find(value.id)) throw new SenderError('Inference attempt exists');
@@ -118,7 +118,7 @@ export const beginInference = spacetimedb.reducer({ id: t.string(), runId: t.str
     actualModel: '', outputJson: '', startedAt: ctx.timestamp, expiresAt: new Timestamp(ctx.timestamp.microsSinceUnixEpoch + 180_000_000n) });
 });
 export const finishInference = spacetimedb.reducer({ id: t.string(), tokensUsed: t.u32(), succeeded: t.bool(), model: t.string(), outputJson: t.string() }, (ctx, value) => {
-  requireRole(ctx, ['analyst', 'skeptic', 'coordinator']);
+  requireRole(ctx, ['analyst', 'valuation', 'portfolio', 'skeptic', 'coordinator']);
   requireText(value.model, 'Actual model', 128);
   if (value.outputJson.length > 32768 || (value.succeeded && !value.outputJson)) throw new SenderError('Invalid inference output size');
   const attempt = ctx.db.inferenceAttempt.id.find(value.id);

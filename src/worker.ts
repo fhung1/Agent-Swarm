@@ -4,7 +4,8 @@ import { recordId } from './ids.js';
 import { isPermanent } from './work-errors.js';
 import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { createAsker } from './agents/llm.js';
-import { evidenceFor, modelDecide, modelReviewThesis, modelWriteThesis } from './agents/model-handlers.js';
+import { evidenceFor, modelDecide, modelReviewThesis, modelSpecialistReport, modelWriteThesis } from './agents/model-handlers.js';
+import { toSpecialistMessageArgs } from './agents/roles.js';
 
 const name = process.env.AGENT_NAME ?? 'analyst-a';
 const runId = process.env.RUN_ID ?? 'demo';
@@ -19,6 +20,8 @@ const STALE_SOURCE_DAYS = 400;
 const brain = process.env.AGENT_BRAIN ?? 'rules';
 if (brain !== 'rules' && brain !== 'claude' && brain !== 'codex') throw new Error('AGENT_BRAIN must be rules, claude, or codex');
 const ask = brain === 'rules' ? undefined : createAsker(brain);
+const teamValuation = process.env.TEAM_VALUATION === '1';
+const teamPortfolio = process.env.TEAM_PORTFOLIO === '1';
 
 if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(name) ||
     !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runId)) {
@@ -71,6 +74,7 @@ function runTasks(conn: DbConnection): Task[] {
 
 function handlerRole(task: Task): string | undefined {
   if (task.kind === 'thesis') return 'analyst';
+  if (task.kind === 'valuation' || task.kind === 'portfolio') return task.kind;
   if (task.kind === 'review') return 'skeptic';
   return undefined;
 }
@@ -82,7 +86,7 @@ function scan(conn: DbConnection): void {
     for (const controller of controllers.values()) controller.abort();
     return;
   }
-  if (!role || !['analyst', 'skeptic', 'coordinator'].includes(role)) return;
+  if (!role || !['analyst', 'valuation', 'portfolio', 'skeptic', 'coordinator'].includes(role)) return;
   if (role === 'coordinator') coordinate(conn);
   for (const task of runTasks(conn)) {
     if (processing.has(task.id) || controllers.size >= MAX_CONCURRENT_TASKS || (retryAt.get(task.id) ?? 0) > Date.now()) continue;
@@ -120,8 +124,12 @@ async function runTask(conn: DbConnection, task: Task, claim: boolean): Promise<
     controller.signal.throwIfAborted();
     if (conn.db.myRun.id.find(runId)?.status !== 'active') return;
     const outcome = ask
-      ? task.kind === 'thesis' ? await modelWriteThesis(ask, conn, task, runId, controller.signal) : await modelReviewThesis(ask, conn, task, runId, controller.signal)
-      : task.kind === 'thesis' ? await writeThesis(conn, task) : await reviewThesis(conn, task);
+      ? task.kind === 'thesis' ? await modelWriteThesis(ask, conn, task, runId, controller.signal)
+        : task.kind === 'review' ? await modelReviewThesis(ask, conn, task, runId, controller.signal)
+        : await modelSpecialistReport(ask, conn, task, runId, controller.signal)
+      : task.kind === 'thesis' ? await writeThesis(conn, task)
+        : task.kind === 'review' ? await reviewThesis(conn, task)
+        : await rulesSpecialistReport(conn, task);
     controller.signal.throwIfAborted();
     if (outcome.ok) await conn.reducers.completeTask({ id: task.id, result: outcome.text });
     else await conn.reducers.failTask({ id: task.id, reason: outcome.text });
@@ -145,6 +153,23 @@ async function runTask(conn: DbConnection, task: Task, claim: boolean): Promise<
     if (renewTimer) clearInterval(renewTimer);
     if (connection === conn) processing.delete(task.id);
   }
+}
+
+async function rulesSpecialistReport(conn: DbConnection, task: Task): Promise<Outcome> {
+  const kind = task.kind as 'valuation' | 'portfolio';
+  const thesisId = conn.db.myTask.id.find(task.dependsOn)?.result ?? '';
+  if (!conn.db.myThesis.id.find(thesisId)) return { ok: false, text: 'Specialist thesis missing' };
+  const messageId = recordId('', task.id, '.report');
+  if (!conn.db.myMessage.id.find(messageId)) {
+    const output = kind === 'valuation'
+      ? { status: 'insufficient' as const, bear_value: null, base_value: null, bull_value: null,
+          assumptions: 'Rule worker does not estimate intrinsic value', risks: 'Model valuation unavailable', evidence_ids: [] }
+      : { status: 'insufficient' as const, exposure: 'Rule worker does not assess portfolio exposure',
+          liquidity: 'Unavailable', concentration: 'Unavailable', recommendation: 'No trade recommendation', evidence_ids: [] };
+    await conn.reducers.postMessage(toSpecialistMessageArgs(kind, output,
+      { messageId, runId, taskId: task.id, symbol: task.symbol, thesisId }, new Set()));
+  }
+  return { ok: true, text: messageId };
 }
 
 function clip(text: string, max = 4000): string {
@@ -217,6 +242,20 @@ function coordinate(conn: DbConnection): void {
   for (const task of runTasks(conn)) {
     if (task.status !== 'completed') continue;
     if (task.kind === 'thesis') {
+      const specialists = [teamValuation ? 'valuation' : '', teamPortfolio ? 'portfolio' : ''].filter(Boolean);
+      for (const kind of specialists) {
+        const id = recordId(`${kind}.`, task.id);
+        if (conn.db.myTask.id.find(id)) continue;
+        void once(`coord:${id}`, async () => {
+          await conn.reducers.createTask({ id, runId, symbol: task.symbol, kind,
+            objective: `${kind} analysis of thesis ${task.result}`, role: kind, dependsOn: task.id });
+          console.log(`Queued ${id}`);
+        });
+      }
+      if (specialists.some(kind => {
+        const state = conn.db.myTask.id.find(recordId(`${kind}.`, task.id))?.status;
+        return state !== 'completed' && state !== 'failed';
+      })) continue;
       const reviewId = recordId('review.', task.id);
       if (conn.db.myTask.id.find(reviewId)) continue;
       void once(`coord:${reviewId}`, async () => {
@@ -236,7 +275,8 @@ function coordinate(conn: DbConnection): void {
         if (ask) {
           const controller = new AbortController();
           controllers.set(decisionId, controller);
-          try { return await modelDecide(ask, conn, task, thesisId, runId, { decisionId, messageId }, controller.signal); }
+          try { return await modelDecide(ask, conn, task, thesisId, runId, { decisionId, messageId }, controller.signal,
+            { valuation: teamValuation, portfolio: teamPortfolio }); }
           finally { if (controllers.get(decisionId) === controller) controllers.delete(decisionId); }
         }
         const passed = task.result.startsWith('pass');
@@ -331,6 +371,7 @@ function connect(): void {
           'SELECT * FROM my_decision_input',
           'SELECT * FROM my_run_config',
           'SELECT * FROM my_risk_policy',
+          'SELECT * FROM my_account_snapshot',
           'SELECT * FROM my_inference_attempt',
         ]);
     })

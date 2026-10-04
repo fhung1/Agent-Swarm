@@ -11,6 +11,7 @@ export interface ThesisView {
   assumptions: string; invalidation: string; evidenceRefs: string;
 }
 export interface CritiqueView { id: string; body: string }
+export interface TeamReportView { id: string; kind: 'valuation' | 'portfolio'; body: string }
 
 const MAX_TEXT = 4096;
 const MAX_REFS = 50; // parseRefs limit in the module.
@@ -99,9 +100,10 @@ Cited evidence: ${thesis.evidenceRefs}
 
 export function skepticPrompt(
   thesis: ThesisView, sources: SourceView[], facts: FactView[], observations: ObservationView[] = [],
-  omitted?: EvidenceOmissions,
+  omitted?: EvidenceOmissions, reports: TeamReportView[] = [],
 ): string {
-  return `${thesisBlock(thesis)}\n\n${evidenceText(sources, facts, observations, omitted)}`;
+  const specialist = reports.map(report => `<${report.kind} id="${report.id}">${report.body}</${report.kind}>`).join('\n');
+  return `${thesisBlock(thesis)}\n${specialist}\n\n${evidenceText(sources, facts, observations, omitted)}`;
 }
 
 const MAX_LIST_ITEMS = 5;
@@ -133,6 +135,58 @@ export function toCritiqueMessageArgs(
   };
 }
 
+// ── Optional specialists: thesis + scoped evidence → durable typed reports ──
+
+const value = z.string().regex(/^\d+(\.\d{1,4})?$/).nullable();
+export const ValuationOutput = z.object({
+  status: z.enum(['ready', 'insufficient']),
+  bear_value: value, base_value: value, bull_value: value,
+  assumptions: z.string().min(1).max(1200),
+  risks: z.string().min(1).max(800),
+  evidence_ids: z.array(z.string().min(1).max(128)).max(20),
+});
+export type ValuationOutput = z.infer<typeof ValuationOutput>;
+export const PortfolioOutput = z.object({
+  status: z.enum(['ready', 'insufficient']),
+  exposure: z.string().min(1).max(800),
+  liquidity: z.string().min(1).max(800),
+  concentration: z.string().min(1).max(800),
+  recommendation: z.string().min(1).max(800),
+  evidence_ids: z.array(z.string().min(1).max(128)).max(20),
+});
+export type PortfolioOutput = z.infer<typeof PortfolioOutput>;
+
+export const VALUATION_SYSTEM = `You are the valuation analyst for a paper-trading research swarm. Build explicit bear, base, and bull per-share value scenarios from cited facts. Explain assumptions and risk. If inputs cannot support numeric values, mark insufficient and use null values. Never invent a price target.\n${SHARED_RULES}`;
+export const PORTFOLIO_SYSTEM = `You are the portfolio analyst for a paper-trading research swarm. Assess current account exposure, cash, open orders, concentration, quote freshness, and policy against this thesis. State unavailable data. Your report is advice; the deterministic risk gate alone authorizes an order.\n${SHARED_RULES}`;
+
+export function specialistPrompt(thesis: ThesisView, sources: SourceView[], facts: FactView[], observations: ObservationView[],
+  omitted: EvidenceOmissions, context = ''): string {
+  return `${thesisBlock(thesis)}\n${context}\n${evidenceText(sources, facts, observations, omitted)}`;
+}
+
+export function toSpecialistMessageArgs(
+  kind: 'valuation' | 'portfolio', output: ValuationOutput | PortfolioOutput,
+  ids: { messageId: string; runId: string; taskId: string; symbol: string; thesisId: string },
+  allowed: ReadonlySet<string>, contextRef = '',
+) {
+  const cited = [...new Set(output.evidence_ids)];
+  if (cited.some(id => !allowed.has(id))) throw new Error('Specialist report cites unknown evidence');
+  if (kind === 'valuation') {
+    const v = output as ValuationOutput;
+    if (v.status === 'ready') {
+      const numbers = [v.bear_value, v.base_value, v.bull_value].map(Number);
+      if (numbers.some(n => !Number.isFinite(n) || n <= 0) || numbers[0] > numbers[1] || numbers[1] > numbers[2] || !cited.length) {
+        throw new Error('Ready valuation needs ordered positive scenarios and cited evidence');
+      }
+    } else if ([v.bear_value, v.base_value, v.bull_value].some(x => x !== null)) {
+      throw new Error('Insufficient valuation must omit numeric targets');
+    }
+  }
+  const body = requireBounded(JSON.stringify({ ...output, evidence_ids: cited, context_ref: contextRef }), 'Specialist report');
+  return { id: ids.messageId, runId: ids.runId, taskId: ids.taskId, symbol: ids.symbol,
+    recipientRole: 'coordinator', kind, body, evidenceRef: ids.thesisId };
+}
+
 // ── Coordinator: thesis + critiques → decision and optional proposal ─────────
 
 export const CoordinatorOutput = z.object({
@@ -153,6 +207,7 @@ ${SHARED_RULES}`;
 
 export function coordinatorPrompt(
   thesis: ThesisView, critiques: CritiqueView[], quote: ObservationView | undefined, maxOrderNotional: number,
+  reports: TeamReportView[] = [],
 ): string {
   const reviews = critiques.length
     ? critiques.map(c => `<critique id="${c.id}">${c.body}</critique>`).join('\n')
@@ -160,7 +215,8 @@ export function coordinatorPrompt(
   const price = quote
     ? `Latest quote (market observation ${quote.id}): bid ${quote.bidPrice} ask ${quote.askPrice} (${quote.feed}, as of ${quote.asOf})`
     : 'Latest quote: none available; only abstain or revise are possible';
-  return `Order notional cap: $${maxOrderNotional}\n${price}\n\n${thesisBlock(thesis)}\n\n${reviews}`;
+  const specialist = reports.map(report => `<${report.kind} id="${report.id}">${report.body}</${report.kind}>`).join('\n');
+  return `Order notional cap: $${maxOrderNotional}\n${price}\n\n${thesisBlock(thesis)}\n\n${specialist}\n${reviews}`;
 }
 
 const QUANTITY = /^(0|[1-9]\d*)(\.\d{1,6})?$/;

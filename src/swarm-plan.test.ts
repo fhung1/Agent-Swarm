@@ -38,6 +38,26 @@ test('agent counts expand into numbered processes per role', () => {
   assert.deepEqual(processes.find(p => p.role === 'risk')!.secrets, ['ALPACA_API_KEY', 'ALPACA_API_SECRET']);
 });
 
+test('optional specialists receive scoped access and coordinator routing flags', () => {
+  const parsed = config({ coordinator: { count: 1 }, analyst: { count: 1 },
+    valuation: { count: 1, brain: 'codex' }, portfolio: { count: 1, brain: 'codex' }, skeptic: { count: 1 } });
+  const processes = planProcesses(parsed);
+  const portfolio = processes.find(p => p.role === 'portfolio')!;
+  const valuation = processes.find(p => p.role === 'valuation')!;
+  assert.equal(portfolio.accountAccess, true);
+  assert.equal(valuation.accountAccess, false);
+  assert.deepEqual(portfolio.secrets, ['OPENAI_API_KEY']);
+  assert.equal(processes.find(p => p.role === 'coordinator')!.env.TEAM_VALUATION, '1');
+  assert.equal(processes.find(p => p.role === 'coordinator')!.env.TEAM_PORTFOLIO, '1');
+  const env = scopedProcessEnv(portfolio, { ALPACA_API_KEY: 'paper', ALPACA_API_SECRET: 'paper', OPENAI_API_KEY: 'model' });
+  assert.equal(env.ALPACA_API_KEY, undefined);
+  assert.equal(env.OPENAI_API_KEY, 'model');
+  const identities = new Map(processes.map((p, i) => [p.name, `id-${i}`]));
+  const grants = planGrants(parsed, processes, identities, 'owner', 'acct-1', false);
+  assert.equal(grants.filter(command => command.reducer === 'grant_account_access').length, 1);
+  assert.throws(() => config({ coordinator: { count: 1 }, analyst: { count: 0 }, valuation: { count: 1 } }), /need an analyst/);
+});
+
 test('roles that act on the whole run or account are limited to one', () => {
   for (const role of ['coordinator', 'risk', 'executor']) {
     assert.throws(() => config({ [role]: { count: 2 }, ...(role === 'executor' ? { risk: { count: 1 } } : {}) }));

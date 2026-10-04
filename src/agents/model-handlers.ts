@@ -10,8 +10,9 @@ import type { Ask } from './llm.js';
 import { selectEvidence, assertNarrativeCitations, assertPromptBudget } from './evidence.js';
 import {
   ANALYST_SYSTEM, AnalystOutput, COORDINATOR_SYSTEM, CoordinatorOutput, SKEPTIC_SYSTEM, SkepticOutput,
+  VALUATION_SYSTEM, ValuationOutput, PORTFOLIO_SYSTEM, PortfolioOutput, specialistPrompt, toSpecialistMessageArgs,
   analystPrompt, coordinatorPrompt, skepticPrompt, toCritiqueMessageArgs, toDecisionArgs, toProposalArgs,
-  toPublishThesisArgs, type FactView, type ObservationView, type SourceView, type ThesisView,
+  toPublishThesisArgs, type FactView, type ObservationView, type SourceView, type ThesisView, type TeamReportView,
 } from './roles.js';
 
 // Model-backed versions of the worker's placeholder analyst, skeptic, and coordinator steps.
@@ -58,6 +59,58 @@ export function evidenceFor(conn: DbConnection, runId: string, symbol: string) {
   return selectEvidence(sources.map(sourceView),facts.map(factView),observations.map(observationView));
 }
 
+export function teamReports(conn: DbConnection, thesisId: string): TeamReportView[] {
+  return [...conn.db.myMessage.iter()]
+    .filter(m => (m.kind === 'valuation' || m.kind === 'portfolio') && m.evidenceRef === thesisId)
+    .map(m => ({ id: m.id, kind: m.kind as 'valuation' | 'portfolio', body: m.body }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export async function modelSpecialistReport(ask: Ask, conn: DbConnection, task: Task, runId: string,
+  signal?: AbortSignal): Promise<Outcome> {
+  const kind = task.kind as 'valuation' | 'portfolio';
+  if (kind !== 'valuation' && kind !== 'portfolio') throw new Error('Unknown specialist kind');
+  const thesisId = conn.db.myTask.id.find(task.dependsOn)?.result ?? '';
+  const thesis = conn.db.myThesis.id.find(thesisId);
+  if (!thesis || thesis.runId !== runId || thesis.symbol !== task.symbol) return { ok: false, text: 'Specialist thesis missing or mismatched' };
+  const messageId = recordId('', task.id, '.report');
+  if (conn.db.myMessage.id.find(messageId)) return { ok: true, text: messageId };
+  const { sources, facts, observations, omitted, allowedIds, refs } = evidenceFor(conn, runId, task.symbol);
+  let context = '';
+  let contextRef = '';
+  if (kind === 'portfolio') {
+    const policyId = conn.db.myRunConfig.runId.find(runId)?.policyId ?? '';
+    const policy = policyId ? conn.db.myRiskPolicy.id.find(policyId) : undefined;
+    const snapshot = policy ? [...conn.db.myAccountSnapshot.iter()]
+      .filter(row => row.accountId === policy.accountId)
+      .sort((a, b) => Number(b.capturedAt.microsSinceUnixEpoch - a.capturedAt.microsSinceUnixEpoch))[0] : undefined;
+    const ageMs = snapshot ? Date.now() - Number(snapshot.capturedAt.microsSinceUnixEpoch / 1000n) : Infinity;
+    if (!policy || !snapshot || ageMs < 0 || ageMs > 15 * 60_000) {
+      const args = toSpecialistMessageArgs(kind, { status: 'insufficient', exposure: 'Current account snapshot unavailable or stale',
+        liquidity: 'Unavailable', concentration: 'Unavailable', recommendation: 'No trade recommendation without fresh account state',
+        evidence_ids: [] }, { messageId, runId, taskId: task.id, symbol: task.symbol, thesisId }, allowedIds);
+      await conn.reducers.postMessage(args);
+      return { ok: true, text: messageId };
+    }
+    contextRef = snapshot.id;
+    context = `<paper_account_snapshot id="${snapshot.id}" as_of="${snapshot.capturedAt.toISOString()}">` +
+      `Status: ${snapshot.accountStatus}; cash: ${snapshot.cash}; buying power: ${snapshot.buyingPower}; equity: ${snapshot.equity}.\n` +
+      `Positions: ${clip(snapshot.positionsJson, 2500)}\nOpen orders: ${clip(snapshot.openOrdersJson, 2500)}\n` +
+      `Policy: ${clip(policy.policyJson, 2500)}</paper_account_snapshot>`;
+  }
+  const system = kind === 'valuation' ? VALUATION_SYSTEM : PORTFOLIO_SYSTEM;
+  const prompt = specialistPrompt(thesisView(thesis), sources, facts, observations, omitted, context);
+  assertPromptBudget(system, prompt);
+  const inputRefs = [thesisId, refs].filter(Boolean).join(',');
+  const output = kind === 'valuation'
+    ? await accountedAsk(ask, conn, runId, task.id, inputRefs, signal)(ValuationOutput, system, prompt)
+    : await accountedAsk(ask, conn, runId, task.id, inputRefs, signal)(PortfolioOutput, system, prompt);
+  const args = toSpecialistMessageArgs(kind, output, { messageId, runId, taskId: task.id, symbol: task.symbol, thesisId },
+    allowedIds, contextRef);
+  await conn.reducers.postMessage(args);
+  return { ok: true, text: messageId };
+}
+
 export async function modelWriteThesis(ask: Ask, conn: DbConnection, task: Task, runId: string, signal?: AbortSignal): Promise<Outcome> {
   const thesisId = recordId('thesis.', task.id);
   // A resumed task may already have published its thesis; do not pay for a second model call.
@@ -89,7 +142,8 @@ export async function modelReviewThesis(ask: Ask, conn: DbConnection, task: Task
     // The skeptic sees all run evidence for the symbol, so it can point out what the thesis left out.
     const { sources, facts, observations, omitted } = evidenceFor(conn, runId, task.symbol);
     const refs = [thesisId, ...sources.map(s => s.id), ...facts.map(f => f.id), ...observations.map(o => o.id)].join(',');
-    const prompt = skepticPrompt(thesisView(thesis), sources, facts, observations, omitted);
+    const reports = teamReports(conn, thesisId);
+    const prompt = skepticPrompt(thesisView(thesis), sources, facts, observations, omitted, reports);
     assertPromptBudget(SKEPTIC_SYSTEM,prompt);
     const output = await accountedAsk(ask, conn, runId, task.id, refs, signal)(SkepticOutput, SKEPTIC_SYSTEM,prompt);
     const args = toCritiqueMessageArgs(output, { messageId, runId, taskId: task.id, symbol: task.symbol, thesisId });
@@ -107,6 +161,7 @@ export async function modelReviewThesis(ask: Ask, conn: DbConnection, task: Task
 export async function modelDecide(
   ask: Ask, conn: DbConnection, reviewTask: Task, thesisId: string, runId: string,
   ids: { decisionId: string; messageId: string }, signal?: AbortSignal,
+  required: { valuation: boolean; portfolio: boolean } = { valuation: false, portfolio: false },
 ): Promise<void> {
   if ((decideRetryAt.get(ids.decisionId) ?? 0) > Date.now()) return;
   try {
@@ -121,7 +176,7 @@ export async function modelDecide(
       let input = conn.db.myDecisionInput.id.find(ids.decisionId);
       if (!input) {
         const critiques = [...conn.db.myMessage.iter()]
-          .filter(m => m.runId === runId && m.kind === 'challenge' && m.evidenceRef === thesisId)
+          .filter(m => m.runId === runId && ['challenge', 'valuation', 'portfolio'].includes(m.kind) && m.evidenceRef === thesisId)
           .sort((a, b) => a.id.localeCompare(b.id)).slice(0, 20);
         const quote = [...conn.db.myMarketObservation.iter()]
           .filter(o => o.symbol === thesis.symbol && o.asOf.microsSinceUnixEpoch <= BigInt(Date.now()) * 1000n)
@@ -137,13 +192,15 @@ export async function modelDecide(
       const critiques = input.critiqueRefs.split(',').filter(Boolean).map(id => {
         const row = conn.db.myMessage.id.find(id);
         if (!row) throw new Error('Stored decision critique missing');
-        return { id, body: row.body };
+        return { id, kind: row.kind, body: row.body };
       });
+      const reports = critiques.filter(c => c.kind === 'valuation' || c.kind === 'portfolio') as TeamReportView[];
+      const reviews = critiques.filter(c => c.kind === 'challenge');
       const quote = input.quoteId ? conn.db.myMarketObservation.id.find(input.quoteId) : undefined;
       const quoteView = quote ? observationView(quote) : undefined;
       const cap = Number(input.maxOrderNotional);
       const output = await accountedAsk(ask, conn, runId, ids.decisionId, ids.decisionId, signal)(CoordinatorOutput, COORDINATOR_SYSTEM,
-        coordinatorPrompt(thesisView(thesis), critiques, quoteView, cap));
+        coordinatorPrompt(thesisView(thesis), reviews, quoteView, cap, reports));
 
       // Validate the order before recording a trade decision, so an unusable order becomes a revise decision.
       let outcome = output.outcome;
@@ -151,6 +208,10 @@ export async function modelDecide(
       let proposal: ReturnType<typeof toProposalArgs>;
       if (outcome === 'trade') {
         try {
+          for (const kind of ['valuation', 'portfolio'] as const) {
+            if (required[kind] && !reports.some(report => report.kind === kind)) throw new Error(`Required ${kind} report is missing`);
+          }
+          if (reports.some(report => JSON.parse(report.body).status !== 'ready')) throw new Error('Specialist report is insufficient');
           proposal = toProposalArgs(output, { proposalId: recordId('proposal.', thesisId), runId, thesis: thesisView(thesis) },
             quoteView, cap);
         } catch (error) {

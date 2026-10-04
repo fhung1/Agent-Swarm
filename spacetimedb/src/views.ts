@@ -17,7 +17,7 @@ function runs(ctx: Context): string[] {
   return [...ctx.db.runAccess.identity.filter(ctx.sender)].map(row => row.runId);
 }
 function accounts(ctx: Context): string[] {
-  if (!['operator', 'risk', 'executor', 'market_data'].includes(role(ctx) ?? '')) return [];
+  if (!['operator', 'risk', 'executor', 'market_data', 'portfolio'].includes(role(ctx) ?? '')) return [];
   return [...ctx.db.accountAccess.identity.filter(ctx.sender)].map(row => row.accountId);
 }
 function sources(ctx: Context) { return runs(ctx).flatMap(id => [...ctx.db.source.runId.filter(id)]); }
@@ -100,7 +100,8 @@ export const myRunMetric = spacetimedb.view({ name: 'my_run_metric', public: tru
 export const myRunConfig = spacetimedb.view({ name: 'my_run_config', public: true }, t.array(runConfig.rowType), ctx =>
   runs(ctx).flatMap(id => { const row = ctx.db.runConfig.runId.find(id); return row ? [row] : []; }));
 export const myRiskPolicy = spacetimedb.view({ name: 'my_risk_policy', public: true }, t.array(riskPolicy.rowType), ctx =>
-  ['operator', 'risk', 'executor', 'coordinator'].includes(role(ctx) ?? '') ? runs(ctx).flatMap(id => [...ctx.db.riskPolicy.runId.filter(id)]) : []);
+  ['operator', 'risk', 'executor', 'coordinator', 'portfolio'].includes(role(ctx) ?? '') ? runs(ctx).flatMap(id =>
+    [...ctx.db.riskPolicy.runId.filter(id)].filter(policy => role(ctx) !== 'portfolio' || accounts(ctx).includes(policy.accountId))) : []);
 export const myMarketClock = spacetimedb.view({ name: 'my_market_clock', public: true }, t.array(marketClock.rowType), ctx =>
   accounts(ctx).flatMap(id => { const row = ctx.db.marketClock.accountId.find(id); return row ? [row] : []; }));
 export const myRiskReservation = spacetimedb.view({ name: 'my_risk_reservation', public: true }, t.array(riskReservation.rowType), ctx =>

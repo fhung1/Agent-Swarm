@@ -33,6 +33,8 @@ export const SwarmConfigSchema = z.object({
   agents: z.object({
     coordinator: modelAgent(1).default({ count: 1, brain: 'rules' }),
     analyst: modelAgent(20).default({ count: 1, brain: 'rules' }),
+    valuation: modelAgent(20).default({ count: 0, brain: 'rules' }),
+    portfolio: modelAgent(20).default({ count: 0, brain: 'rules' }),
     skeptic: modelAgent(20).default({ count: 1, brain: 'rules' }),
     risk: singleton.default({ count: 0 }),
     executor: singleton.default({ count: 0 }),
@@ -65,7 +67,7 @@ export const SwarmConfigSchema = z.object({
 }).strict();
 
 export type SwarmConfig = z.infer<typeof SwarmConfigSchema>;
-export type Role = 'coordinator' | 'analyst' | 'skeptic' | 'risk' | 'executor' | 'market_data' | 'ingestor';
+export type Role = 'coordinator' | 'analyst' | 'valuation' | 'portfolio' | 'skeptic' | 'risk' | 'executor' | 'market_data' | 'ingestor';
 
 export interface ProcessSpec {
   name: string;
@@ -82,8 +84,11 @@ export interface ProcessSpec {
 
 export function parseSwarmConfig(json: string): SwarmConfig {
   const config = SwarmConfigSchema.parse(JSON.parse(json));
-  if (config.agents.coordinator.count === 0 && config.agents.analyst.count + config.agents.skeptic.count > 0) {
-    throw new Error('Analysts and skeptics need a coordinator to queue reviews and record decisions');
+  if (config.agents.coordinator.count === 0 && config.agents.analyst.count + config.agents.valuation.count + config.agents.portfolio.count + config.agents.skeptic.count > 0) {
+    throw new Error('Research workers need a coordinator to queue reviews and record decisions');
+  }
+  if ((config.agents.valuation.count || config.agents.portfolio.count) && !config.agents.analyst.count) {
+    throw new Error('Specialist workers need an analyst to produce theses');
   }
   if (config.agents.executor.count && !config.agents.risk.count) {
     throw new Error('An executor needs the risk broker: only fresh risk passes can be submitted');
@@ -109,7 +114,7 @@ function brainSecrets(choice: string): string[] {
 export function planProcesses(config: SwarmConfig): ProcessSpec[] {
   const processes: ProcessSpec[] = [];
   const base = { SPACETIMEDB_HOST: config.host, SPACETIMEDB_DB_NAME: config.database };
-  for (const role of ['coordinator', 'analyst', 'skeptic'] as const) {
+  for (const role of ['coordinator', 'analyst', 'valuation', 'portfolio', 'skeptic'] as const) {
     const spec = config.agents[role];
     for (let i = 1; i <= spec.count; i++) {
       processes.push({
@@ -118,8 +123,9 @@ export function planProcesses(config: SwarmConfig): ProcessSpec[] {
           ...base, RUN_ID: config.runId, AUTO_CLAIM: '1', AGENT_BRAIN: spec.brain,
           ...(spec.model ? { AGENT_MODEL: spec.model } : {}), ...(spec.effort ? { AGENT_EFFORT: spec.effort } : {}),
           ...(role === 'coordinator' && config.maxOrderNotional ? { MAX_ORDER_NOTIONAL: String(config.maxOrderNotional) } : {}),
+          ...(role === 'coordinator' ? { TEAM_VALUATION: String(config.agents.valuation.count > 0 ? 1 : 0), TEAM_PORTFOLIO: String(config.agents.portfolio.count > 0 ? 1 : 0) } : {}),
         },
-        secrets: brainSecrets(spec.brain), accountAccess: false, tokenFileEnv: 'AGENT_TOKEN_FILE',
+        secrets: brainSecrets(spec.brain), accountAccess: role === 'portfolio', tokenFileEnv: 'AGENT_TOKEN_FILE',
       });
     }
   }

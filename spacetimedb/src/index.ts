@@ -74,7 +74,7 @@ export const createTask = spacetimedb.reducer(
     requireRole(ctx, ['operator', 'coordinator']);
     requireId(id); requireSymbol(symbol); requireText(kind, 'Kind', 64); requireText(objective, 'Objective');
     requireRun(ctx, runId);
-    if (role && !WORKER_ROLES.includes(role as Role)) throw new SenderError('Task role must be coordinator, analyst, or skeptic');
+    if (role && !WORKER_ROLES.includes(role as Role)) throw new SenderError('Invalid worker task role');
     if (dependsOn) {
       const dependency = ctx.db.task.id.find(dependsOn);
       if (!dependency || dependency.runId !== runId) throw new SenderError('Dependency is not in run');
@@ -96,7 +96,7 @@ export const createTask = spacetimedb.reducer(
 export const claimTask = spacetimedb.reducer(
   { id: t.string(), expectedVersion: t.u64() },
   (ctx, { id, expectedVersion }) => {
-    requireRole(ctx, ['coordinator', 'analyst', 'skeptic']);
+    requireRole(ctx, WORKER_ROLES);
     const existing = ctx.db.task.id.find(id);
     if (!existing) throw new SenderError('Task not found');
     requireRun(ctx, existing.runId);
@@ -112,7 +112,7 @@ export const claimTask = spacetimedb.reducer(
 );
 
 export const renewTaskLease = spacetimedb.reducer({ id: t.string() }, (ctx, { id }) => {
-  requireRole(ctx, ['coordinator', 'analyst', 'skeptic']);
+  requireRole(ctx, WORKER_ROLES);
   const existing = ctx.db.task.id.find(id);
   if (existing) requireRunAccess(ctx, existing.runId);
   if (!existing || existing.status !== 'claimed' || !existing.assignee?.equals(ctx.sender)) throw new SenderError('Task not owned');
@@ -126,7 +126,7 @@ export const renewTaskLease = spacetimedb.reducer({ id: t.string() }, (ctx, { id
 export const completeTask = spacetimedb.reducer(
   { id: t.string(), result: t.string() },
   (ctx, { id, result }) => {
-    requireRole(ctx, ['coordinator', 'analyst', 'skeptic']);
+    requireRole(ctx, WORKER_ROLES);
     requireText(result, 'Result');
     const existing = ctx.db.task.id.find(id);
     if (existing?.status === 'completed' && existing.assignee?.equals(ctx.sender) && existing.result === result) return;
@@ -141,7 +141,7 @@ export const completeTask = spacetimedb.reducer(
 export const failTask = spacetimedb.reducer(
   { id: t.string(), reason: t.string() },
   (ctx, { id, reason }) => {
-    requireRole(ctx, ['coordinator', 'analyst', 'skeptic']);
+    requireRole(ctx, WORKER_ROLES);
     requireText(reason, 'Reason');
     const existing = ctx.db.task.id.find(id);
     if (existing?.status === 'failed' && existing.assignee?.equals(ctx.sender) && existing.result === reason) return;
@@ -168,7 +168,7 @@ export const postMessage = spacetimedb.reducer(
   { id: t.string(), runId: t.string(), taskId: t.string(), symbol: t.string(), recipientRole: t.string(),
     kind: t.string(), body: t.string(), evidenceRef: t.string() },
   (ctx, { id, runId, taskId, symbol, recipientRole, kind, body, evidenceRef }) => {
-    requireRole(ctx, ['operator', 'coordinator', 'analyst', 'skeptic', 'ingestor', 'risk']);
+    requireRole(ctx, ['operator', ...WORKER_ROLES, 'ingestor', 'risk']);
     requireId(id); requireRun(ctx, runId); requireText(body, 'Body');
     if (!MESSAGE_KINDS.includes(kind)) throw new SenderError(`Kind must be one of: ${MESSAGE_KINDS.join(', ')}`);
     if (recipientRole && !ROLES.includes(recipientRole as Role)) throw new SenderError('Unknown recipient role');
@@ -177,6 +177,45 @@ export const postMessage = spacetimedb.reducer(
       const linkedTask = ctx.db.task.id.find(taskId);
       if (linkedTask?.runId !== runId) throw new SenderError('Task is not in run');
       if (symbol && linkedTask.symbol !== symbol) throw new SenderError('Task is for a different symbol');
+    }
+    if (kind === 'valuation' || kind === 'portfolio') {
+      const task = ctx.db.task.id.find(taskId);
+      const thesis = ctx.db.thesis.id.find(evidenceRef);
+      if (ctx.db.agent.identity.find(ctx.sender)?.role !== kind || !task || task.kind !== kind ||
+          task.runId !== runId || task.symbol !== symbol || task.status !== 'claimed' ||
+          !task.assignee?.equals(ctx.sender) || !task.leaseUntil ||
+          task.leaseUntil.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch ||
+          !thesis || thesis.runId !== runId || thesis.symbol !== symbol ||
+          ctx.db.task.id.find(task.dependsOn)?.result !== thesis.id) {
+        throw new SenderError('Specialist report requires its claimed task and thesis');
+      }
+      let report: { status?: string; evidence_ids?: unknown; context_ref?: unknown; bear_value?: unknown; base_value?: unknown; bull_value?: unknown };
+      try { report = JSON.parse(body); } catch { throw new SenderError('Specialist report must be JSON'); }
+      if (!report || !['ready', 'insufficient'].includes(report.status ?? '') ||
+          !Array.isArray(report.evidence_ids) || report.evidence_ids.some(ref => typeof ref !== 'string')) {
+        throw new SenderError('Invalid specialist report');
+      }
+      requireEvidence(ctx, parseRefs(report.evidence_ids.join(',')), symbol, ['source', 'fact', 'market_observation'], runId);
+      if (kind === 'valuation' && report.status === 'ready') {
+        const numbers = [report.bear_value, report.base_value, report.bull_value].map(Number);
+        if (numbers.some(value => !Number.isFinite(value) || value <= 0) || numbers[0] > numbers[1] || numbers[1] > numbers[2] ||
+            report.evidence_ids.length === 0) throw new SenderError('Invalid valuation scenarios');
+      }
+      if (kind === 'valuation' && report.status === 'insufficient' &&
+          [report.bear_value, report.base_value, report.bull_value].some(value => value !== null)) {
+        throw new SenderError('Insufficient valuation cannot carry numeric targets');
+      }
+      if (kind === 'portfolio' && report.status === 'ready') {
+        const snapshot = typeof report.context_ref === 'string' ? ctx.db.accountSnapshot.id.find(report.context_ref) : undefined;
+        const policyId = ctx.db.runConfig.runId.find(runId)?.policyId ?? '';
+        const policy = policyId ? ctx.db.riskPolicy.id.find(policyId) : undefined;
+        if (!snapshot || !ctx.db.accountAccess.id.find(`${ctx.sender.toHexString()}:${snapshot.accountId}`) ||
+            !policy || policy.accountId !== snapshot.accountId ||
+            ctx.timestamp.microsSinceUnixEpoch - snapshot.capturedAt.microsSinceUnixEpoch > 900_000_000n ||
+            snapshot.capturedAt.microsSinceUnixEpoch > ctx.timestamp.microsSinceUnixEpoch) {
+          throw new SenderError('Portfolio report needs a fresh authorized account snapshot');
+        }
+      }
     }
     requireEvidence(ctx, parseRefs(evidenceRef), symbol, ['source', 'fact', 'thesis', 'market_observation'], runId);
     const existing = ctx.db.message.id.find(id);

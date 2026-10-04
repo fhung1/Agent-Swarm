@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toCritiqueMessageArgs, toProposalArgs, toPublishThesisArgs, type CoordinatorOutput, type ThesisView } from './roles.ts';
+import { toCritiqueMessageArgs, toProposalArgs, toPublishThesisArgs, toSpecialistMessageArgs, type CoordinatorOutput, type ThesisView } from './roles.ts';
 
 const thesis: ThesisView = {
   id: 'th-1', runId: 'demo', symbol: 'AAPL', bullCase: 'b', bearCase: 'b',
@@ -63,4 +63,18 @@ test('critique bounds include JSON escaping', () => {
     assert.ok(args.body.length <= 4096);
     assert.equal(JSON.parse(args.body).objections.length, 5);
   }
+});
+
+test('valuation scenarios must be ordered, positive, and cited', () => {
+  const output = { status: 'ready' as const, bear_value: '80', base_value: '100', bull_value: '130',
+    assumptions: 'Stable earnings', risks: 'Margin compression', evidence_ids: ['obs-1'] };
+  const message = toSpecialistMessageArgs('valuation', output,
+    { messageId: 'valuation.t-1.report', runId: 'demo', taskId: 'valuation.t-1', symbol: 'AAPL', thesisId: 'th-1' },
+    new Set(['obs-1']));
+  assert.equal(message.kind, 'valuation');
+  assert.equal(JSON.parse(message.body).base_value, '100');
+  assert.throws(() => toSpecialistMessageArgs('valuation', { ...output, bull_value: '70' },
+    { messageId: 'm', runId: 'demo', taskId: 't', symbol: 'AAPL', thesisId: 'th-1' }, new Set(['obs-1'])), /ordered positive/);
+  assert.throws(() => toSpecialistMessageArgs('valuation', { ...output, evidence_ids: ['invented'] },
+    { messageId: 'm', runId: 'demo', taskId: 't', symbol: 'AAPL', thesisId: 'th-1' }, new Set(['obs-1'])), /unknown evidence/);
 });

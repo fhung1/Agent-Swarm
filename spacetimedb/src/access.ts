@@ -2,8 +2,8 @@ import { SenderError, type InferSchema, type ReducerCtx } from 'spacetimedb/serv
 import spacetimedb from './schema';
 
 export type Ctx = ReducerCtx<InferSchema<typeof spacetimedb>>;
-export type Role = 'operator' | 'coordinator' | 'analyst' | 'skeptic' | 'ingestor' | 'market_data' | 'risk' | 'executor';
-export const ROLES: Role[] = ['operator', 'coordinator', 'analyst', 'skeptic', 'ingestor', 'market_data', 'risk', 'executor'];
+export type Role = 'operator' | 'coordinator' | 'analyst' | 'valuation' | 'portfolio' | 'skeptic' | 'ingestor' | 'market_data' | 'risk' | 'executor';
+export const ROLES: Role[] = ['operator', 'coordinator', 'analyst', 'valuation', 'portfolio', 'skeptic', 'ingestor', 'market_data', 'risk', 'executor'];
 
 export function requireId(value: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) throw new SenderError('Invalid ID');
@@ -29,8 +29,8 @@ export function requireRun(ctx: Ctx, runId: string): void {
   if (!existing || existing.status !== 'active') throw new SenderError('Run is not active');
 }
 
-export const WORKER_ROLES: Role[] = ['coordinator', 'analyst', 'skeptic'];
-export const MESSAGE_KINDS = ['observation', 'claim', 'question', 'challenge', 'answer', 'result', 'decision', 'status'];
+export const WORKER_ROLES: Role[] = ['coordinator', 'analyst', 'valuation', 'portfolio', 'skeptic'];
+export const MESSAGE_KINDS = ['observation', 'claim', 'question', 'challenge', 'answer', 'result', 'decision', 'status', 'valuation', 'portfolio'];
 
 export function requireSymbol(value: string): void {
   if (!/^[A-Z][A-Z0-9.-]{0,15}$/.test(value)) throw new SenderError('Invalid symbol');

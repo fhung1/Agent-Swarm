@@ -81,6 +81,8 @@ For the first paper test, export `ALPACA_API_KEY`, `ALPACA_API_SECRET`, `SEC_USE
 "agents": {
   "coordinator": { "count": 1, "brain": "claude" },
   "analyst": { "count": 3, "brain": "claude" },
+  "valuation": { "count": 1, "brain": "claude" },
+  "portfolio": { "count": 1, "brain": "claude" },
   "skeptic": { "count": 2, "brain": "codex", "effort": "medium" },
   "risk": { "count": 1 },
   "executor": { "count": 1 }
@@ -292,6 +294,8 @@ spacetime sql --server local quant-swarm 'SELECT id, outcome, rationale FROM dec
 #### SEC cache and qualitative excerpts
 
 The SEC ingestor caches verified ticker/submissions/company-facts responses and filing bytes with conditional revalidation and bounded transient retries; see [SEC cache policy](docs/sec-cache.md) for `SEC_CACHE_DIR`, TTLs and retry behavior. Risk-factor and MD&A excerpts are saved with document checksums and manifest offsets. Each found section records at most two deterministic 240-character text fact chunks, while bounded 3,200-character excerpts remain in verified artifacts for analyst/skeptic prompts. Share `SEC_ARTIFACT_DIR` with research workers; missing sections and truncation are explicit. See [qualitative filing evidence](docs/sec-excerpts.md) for limits, real-filing fixtures, artifact verification and isolated ingestion/restart checks.
+
+Optional `valuation` and `portfolio` workers default to zero and are configured like other model roles. They require an analyst and coordinator; portfolio workers get scoped paper-account reads without broker credentials. See [trading team roles](docs/trading-team-roles.md).
 
 ## Model-backed roles
 
