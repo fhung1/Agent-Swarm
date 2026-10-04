@@ -376,3 +376,9 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   conservation. No inference decisions or transport mutations were scripted.
 - Deploying same save with private mod/manifest backup and unchanged run ledger.
   Live completion remains unverified; Astra owns route diagnosis and repairs.
+
+- Deployment follow-up: runtime port preflight rejected TCP TIME_WAIT after clean
+  shutdown despite no listener. Added SO_REUSEADDR for the TCP probe; active
+  listeners remain rejected. Local socket regression passed both cases. Server,
+  GUI and same inference mapping resumed after readiness; live belt761 exposes
+  three coal on lane2. No data reset or cap change.

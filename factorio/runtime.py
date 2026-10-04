@@ -31,6 +31,9 @@ def ports(config):
         value=config[key]
         if type(value) is not int or not 1024 <= value <= 65535: raise ValueError(f'Invalid {key}')
         with socket.socket(socket.AF_INET,kind) as s:
+            # Closed RCON connections may remain in TIME_WAIT after a clean stop.
+            # Reuse permits that case; an active listener still refuses the bind.
+            if kind==socket.SOCK_STREAM: s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
             try: s.bind((game_bind(config) if key=='gamePort' else '127.0.0.1',value))
             except OSError as e: raise ValueError(f'{key} {game_bind(config) if key=="gamePort" else "127.0.0.1"}:{value} unavailable: {e}')
 
