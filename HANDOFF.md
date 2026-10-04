@@ -261,3 +261,21 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
 - Same iron-zero-20261004 run resumed with FACTORIO_RUN_MS=0, one Astra/five Luna,
   unlimited calls. Worker context repair from a6a8f08 is included in this resume.
   No gameplay strategy or physical game operations were authored by the monitor.
+
+## codex — Recover oversized inspection and lease renewal failures (2026-10-04)
+
+- Astra exited when a full inspection exceeded the board's 8000-character message
+  cap. Full inspection stays in its durable journal; board audit now uses an excerpt.
+- Four actors exited on uncertain lease renewal. Game bridge calls now await
+  asynchronous subprocesses so movement cannot block lease heartbeats. Typed
+  transport failures retry through supervisor receipt reconciliation; unknown
+  outcomes quarantine and actual ownership loss stays fatal.
+- Launcher stops siblings and pauses mutations when a role fails permanently or
+  the overseer exits. Corrected zero-duration registration/assignment startup checks.
+- Typecheck and 24 focused orchestrator/recovery/lease/supervisor tests passed.
+  The older inference-worker test fixture lacks the current five-actor assignment
+  contract; its broad suite was stopped, not counted as passing. New async bridge
+  heartbeat regression uses the current recovery fixture.
+- Same save resumed with all five journals advancing and dashboard HTTP 200.
+  All pending operations were null before resume. World/history, counters, plan
+  and $100 ledger retained; no run deadline or call cap. Gameplay remains Astra's.

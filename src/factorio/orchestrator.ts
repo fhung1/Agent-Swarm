@@ -128,7 +128,15 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
     const s = snapshot();
     if (s.messages.some(row => { try { const body = JSON.parse(row.body); return row.sender === scope.sender && body.runId === scope.runId && body.eventId === eventId; } catch { return false; } })) return;
     const { agents: _agents, ...messageScope } = scope;
-    await board.post(scope.sender, JSON.stringify({ version: 1, ...messageScope, eventId, kind, payload }), recipient, o.goalTaskId);
+    const envelope = {version: 1, ...messageScope, eventId, kind, payload};
+    let body = JSON.stringify(envelope);
+    if (body.length > 7800) {
+      // Full inspection remains in the durable local journal/model context.
+      // Board audit size is a separate transport constraint.
+      body = JSON.stringify({...envelope, payload: {omittedFromBoard: true, originalCharacters: body.length,
+        note: 'Full result retained in coordinator journal; board audit excerpt only.', excerpt: JSON.stringify(payload).slice(0, 3000)}});
+    }
+    await board.post(scope.sender, body, recipient, o.goalTaskId);
   };
   await waitReady();
   await board.register(scope.sender, 'factorio-orchestrator', `board-only coordinator; run ${scope.runId}; model ${o.ask.model ?? 'configured'} high effort`);

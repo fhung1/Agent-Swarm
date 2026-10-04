@@ -1,5 +1,5 @@
 import { selectRunDeadline } from '../src/factorio/run-duration.ts';
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { MessageBoardClient } from '../message-board/client.ts';
@@ -75,6 +75,13 @@ async function main() {
       }, 5000);
     }
   };
+  const stopForRoleExit = (reason: string) => {
+    if (stopping) return;
+    console.error(reason);
+    stop();
+    execFile('python3', ['factorio/status.py', '--world', world, '--pause'], {timeout: 25000},
+      error => { if (error) console.error('Could not pause game after role exit:', error.message); });
+  };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   board.start();
   try {
@@ -146,15 +153,17 @@ async function main() {
         let resolved = false;
         child.once('error', () => {
           prematureActorExit = `Actor ${worker.actorId} process failed to start`;
+          stopForRoleExit(prematureActorExit);
           if (!resolved) { resolved = true; resolveResult({ role: 'actor', actorId: worker.actorId, code: 1 }); }
         });
         child.once('exit', (code, signal) => {
+          if (code !== 0) stopForRoleExit(`Actor ${worker.actorId} supervisor exited (${code ?? signal}); stopping team`);
           if (!actorsReady && (code !== null || signal)) prematureActorExit = `Actor ${worker.actorId} exited before overseer assignment`;
           if (!resolved) { resolved = true; resolveResult({ role: 'actor', actorId: worker.actorId, code, signal }); }
         });
       }));
     }
-    const registrationDeadline = Math.min(runDeadline, Date.now() + 30000);
+    const registrationDeadline = Math.min(runDeadline || Infinity, Date.now() + 30000);
     while (!stopping) {
       const registered = targets.every(({ worker }) => board.snapshot().participants.some(participant => participant.name === worker.sender));
       if (registered) break;
@@ -173,14 +182,14 @@ async function main() {
     closeSync(coordinatorLog); children.push(orchestrator);
     let orchestratorExit: { code: number | null; signal: NodeJS.Signals | null } | undefined;
     const orchestratorResult = new Promise<ChildResult>(resolveResult => {
-      orchestrator.once('error', () => { orchestratorExit = { code: 1, signal: null }; resolveResult({ role: 'orchestrator', code: 1 }); });
-      orchestrator.once('exit', (code, signal) => { orchestratorExit = { code, signal }; resolveResult({ role: 'orchestrator', code, signal }); });
+      orchestrator.once('error', () => { orchestratorExit = { code: 1, signal: null }; stopForRoleExit('Astra failed to start; stopping team'); resolveResult({ role: 'orchestrator', code: 1 }); });
+      orchestrator.once('exit', (code, signal) => { orchestratorExit = { code, signal }; stopForRoleExit(`Astra exited (${code ?? signal}); stopping team`); resolveResult({ role: 'orchestrator', code, signal }); });
     });
     results.push(orchestratorResult);
 
     // Hold all actors idle until Astra creates each task and sends its directed
     // announcement. The launcher never creates these actor tasks.
-    const assignmentDeadline = runDeadline;
+    const assignmentDeadline = Math.min(runDeadline || Infinity, Date.now() + 180000);
     while (!stopping) {
       const snapshot = board.snapshot();
       const assigned = targets.every(({ worker, taskId }) => {

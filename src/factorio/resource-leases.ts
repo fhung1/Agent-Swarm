@@ -1,3 +1,4 @@
+export class ResourceRenewalUncertain extends Error {}
 /** Renew resources independently of model latency. Never reacquire a lost lease. */
 export interface ResourceLease {
   path: string; holder: string; taskId: string;
@@ -48,7 +49,7 @@ export class ResourceLeases {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         await Promise.race([this.options.renew(path), new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(Error(`Resource renewal uncertain: ${path}; reconcile before acting`)),
+          timer = setTimeout(() => reject(new ResourceRenewalUncertain(`Resource renewal uncertain: ${path}; reconcile before acting`)),
             this.options.timeoutMs ?? 5_000);
         })]);
       } finally { clearTimeout(timer); }

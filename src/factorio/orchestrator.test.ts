@@ -156,3 +156,17 @@ test('Astra authors durable plan and retrieves a scoped layout without mutating 
   assert.deepEqual(reads,[{kind:'layout',x:3,y:4,radius:8,offset:0}]);assert.ok(saves.length>3);
   assert.ok(f.posted.some(p=>JSON.parse(p.body).kind==='plan_update'));assert.equal(f.created.length,0);
 });
+
+test('large inspection stays in journal while board audit respects message cap', async () => {
+  const f=fixture(); f.options.maxCalls=1;
+  const state: import('./orchestrator.ts').OrchestratorState=f.state;
+  f.options.ask=(async ()=>({kind:'inspect',message:JSON.stringify({kind:'layout',x:0,y:0,radius:8}),recipient:'',title:'',details:'',dependsOn:''})) as Ask;
+  const detail='x'.repeat(11000);
+  await assert.rejects(runFactorioOrchestrator({...f.options,state,
+    readGameStatus:()=>({tick:100,paused:false,world:{worldId,historyId}}),
+    inspectGame:()=>({world:{worldId,historyId},detail})}),/call limit exhausted/);
+  assert.equal((state.toolResult as any).result.detail,detail);
+  const audit=f.posted.find(p=>JSON.parse(p.body).kind==='inspection_result')!;
+  assert.ok(audit.body.length<=8000);
+  assert.equal(JSON.parse(audit.body).payload.omittedFromBoard,true);
+});

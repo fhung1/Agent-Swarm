@@ -1,13 +1,13 @@
 import { deadlineFromDuration, runExpired, remainingRunMs } from './run-duration.ts';
 import { repeatsLatestChat } from './communication.ts';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, fsyncSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { MessageBoardClient, type BoardSnapshot } from '../../message-board/client.ts';
 import { createAsker, type Ask } from '../agents/llm.ts';
 import { decideFactorio, InvalidFactorioDecisionError, selectPeerMessages, type FactorioScope, type FactorioDecision } from './inference.ts';
 import { encodeOperation, type Command, type Receipt } from './protocol.ts';
-import { ResourceLeases } from './resource-leases.ts';
+import { ResourceLeases, ResourceRenewalUncertain } from './resource-leases.ts';
 import { createFactorioSpendGuard, type FactorioSpendGuard } from './run-spend.ts';
 
 export interface Observation {
@@ -63,7 +63,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
   const waitReady = async () => { while (!board.ready) { withinRun(); await sleep(250); } };
   const snapshot = () => { if (!board.ready) throw Error('Board disconnected'); const s = board.snapshot(); assertTaskOwnership(s, o.taskId, scope.sender); return s; };
   let lastTaskLabel = '';
-  const publishTaskLabel = () => {
+  const publishTaskLabel = async () => {
     const tasks = board.snapshot().tasks.filter(t => t.status === 'claimed' && t.assignee === scope.sender);
     const active = tasks.find(t => t.id.startsWith(`${scope.runId}.subtask-`)) ?? tasks.find(t => t.id === o.taskId);
     let label = '';
@@ -72,10 +72,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       label += character;
     }
     label ||= 'Waiting for task';
-    if (label !== lastTaskLabel) { o.game({ kind: 'task_label', actor: scope.actorId, label }); lastTaskLabel = label; }
+    if (label !== lastTaskLabel) { await o.game({ kind: 'task_label', actor: scope.actorId, label }); lastTaskLabel = label; }
   };
-  const observe = () => {
-    const observed = validateObservation(o.game({ kind: 'observe', actor: scope.actorId }), scope, state.tick);
+  const observe = async () => {
+    const observed = validateObservation(await o.game({ kind: 'observe', actor: scope.actorId }), scope, state.tick);
     state.tick = observed.tick; o.save(state); return observed;
   };
   const post = async (id: string, kind: string, payload: unknown, recipient = '') => {
@@ -119,8 +119,8 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     }
     const assignedObjective = [initial.title, initial.details].filter(Boolean).join('\n');
     if (initial.status === 'done' && initial.assignee === scope.sender) {
-      observe();
-      const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
+      await observe();
+      const engineStatus = await o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
       const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
         : engineStatus.automation?.verified === true;
       if (state.pending || !won) throw Error('Completed task disagrees with live actor state');
@@ -133,10 +133,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       withinRun(); await sleep(100);
     }
     snapshot();
-    publishTaskLabel();
+    await publishTaskLabel();
     if (state.pending) {
-      const observed = observe();
-      const receipt = checkReceipt(o.game({ kind: 'receipt', operation: state.pending.id }), state.pending, scope, 0);
+      const observed = await observe();
+      const receipt = checkReceipt(await o.game({ kind: 'receipt', operation: state.pending.id }), state.pending, scope, 0);
       if (receipt.endTick! > observed.tick) throw Error('Receipt from future history');
       state.lastResult = receipt; state.pending = null; state.decision = null; o.save(state);
       await post(receipt.operationId, 'action_result', receipt);
@@ -153,8 +153,8 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)) leases.track(reservation.path);
     leases.start();
     while (true) {
-      withinRun(); await waitReady(); snapshot(); publishTaskLabel();
-      let observed = observe();
+      withinRun(); await waitReady(); snapshot(); await publishTaskLabel();
+      let observed = await observe();
       if (observed.paused) { await sleep(500); continue; }
       await leases.refresh();
       if (!state.decision) {
@@ -162,7 +162,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.calls++; o.save(state);
         const id = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
         const context = { ...scope, objective: assignedObjective || o.objective, operatorPrompt: o.operatorPrompt(), observation: observed,
-          status: o.game({ kind: 'status' }), reservations: board.snapshot().reservations
+          status: await o.game({ kind: 'status' }), reservations: board.snapshot().reservations
             .filter(r => r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)
             .map(r => ({ path: r.path, holder: r.holder })),
           tasks: board.snapshot().tasks.filter(t => t.id.startsWith(`${scope.runId}.`)).slice(0, 40).map(t => ({ id: t.id, title: t.title, details: t.details, status: t.status, assignee: t.assignee, dependsOn: t.dependsOn })),
@@ -193,7 +193,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       }
       const { id, output } = state.decision;
       withinRun(); await waitReady(); snapshot();
-      observed = observe();
+      observed = await observe();
       if (observed.paused) { await sleep(500); continue; }
       await post(`${id}-decision`, 'decision', { actorId: scope.actorId, model: o.ask.model ?? 'injected', output });
       if (output.kind === 'chat') {
@@ -204,7 +204,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         state.lastResult = { kind: 'wait', reason: output.message }; state.decision = null; o.save(state);
         await sleep(output.waitMs);
       } else if (output.kind === 'complete') {
-        const engineStatus = o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
+        const engineStatus = await o.game({ kind: 'status' }) as { rocketLaunches?: number; furnaces?: number; automation?: { verified: boolean } };
         const won = o.goal === 'rocket' ? Number(engineStatus.rocketLaunches) >= 1
           : engineStatus.automation?.verified === true;
         if (!won) {
@@ -307,15 +307,16 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           if (!board.snapshot().reservations.some(r => r.path === reservationPath && r.holder === scope.sender)) throw Error('Reservation not applied');
           leases.track(reservationPath);
         }
-        withinRun(); snapshot(); observed = observe();
+        withinRun(); snapshot(); observed = await observe();
         if (observed.paused) continue;
+        withinRun(); snapshot();
         if (reservationPath && !board.snapshot().reservations.some(r => r.path === reservationPath && r.holder === scope.sender && r.taskId === o.taskId && r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)) throw Error('Reservation expired before mutation');
         const operationId = `${scope.runId}-${scope.sender}-act-${state.calls}`;
         const { digest } = encodeOperation({ version: 1, ...{ worldId: scope.worldId, historyId: scope.historyId }, operationId, actorId: scope.actorId, command });
         state.pending = { id: operationId, command, digest }; o.save(state);
         let receipt: Receipt;
-        try { receipt = checkReceipt(o.game({ kind: 'execute', actor: scope.actorId, operation: operationId, command }), state.pending, scope, state.tick); }
-        catch { receipt = checkReceipt(o.game({ kind: 'receipt', operation: operationId }), state.pending, scope, state.tick); }
+        try { receipt = checkReceipt(await o.game({ kind: 'execute', actor: scope.actorId, operation: operationId, command }), state.pending, scope, state.tick); }
+        catch { receipt = checkReceipt(await o.game({ kind: 'receipt', operation: operationId }), state.pending, scope, state.tick); }
         state.lastResult = receipt; state.tick = receipt.endTick!; state.pending = null; state.decision = null; o.save(state);
         await post(operationId, 'action_result', receipt);
         // Furnaces stay reserved while smelting. Other resources are shared after each transfer.
@@ -380,10 +381,24 @@ export async function inferenceWorkerMain(): Promise<void> {
       maxCalls: Number(process.env.FACTORIO_MAX_CALLS ?? 30), requiredPlates: process.env.FACTORIO_GOAL === 'rocket' ? 0 : Number(process.env.FACTORIO_REQUIRED_PLATES ?? 5),
       goal: process.env.FACTORIO_GOAL === 'rocket' ? 'rocket' : 'plates', deadline,
       timeoutMs: Number(process.env.FACTORIO_INFERENCE_TIMEOUT_MS ?? 60000), ask: createAsker(provider), board,
-      spend, game: request => JSON.parse(execFileSync('python3', ['factorio/worker-bridge.py', world], { input: JSON.stringify(request), encoding: 'utf8', timeout: 25000 })),
+      spend, game: request => new Promise((resolve, reject) => {
+        const child = execFile('python3', ['factorio/worker-bridge.py', world], {encoding:'utf8',timeout:25000,maxBuffer:4*1024*1024}, (error, stdout) => {
+          if (error) { reject(error); return; }
+          try { resolve(JSON.parse(stdout)); } catch (parseError) { reject(parseError); }
+        });
+        child.stdin?.on('error', reject); child.stdin?.end(JSON.stringify(request));
+      }),
       save: value => atomicSave(statePath, value), signal: controller.signal });
   } finally { board.stop(); unlinkSync(processPath); }
 }
 function atomicSaveToken(path: string, token: string): void {
   const temporary = `${path}.tmp`; writeFileSync(temporary, token, { mode: 0o600 }); renameSync(temporary, path);
+}
+
+/** Only transient board/renewal transport errors restart; unknown game effects quarantine. */
+export function inferenceFailureExitCode(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes('Unknown game outcome') || message.includes('Receipt from future history')) return 78;
+  if (error instanceof ResourceRenewalUncertain || message === 'Board disconnected') return 75;
+  return 1;
 }

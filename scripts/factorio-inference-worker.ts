@@ -1,2 +1,2 @@
-import { inferenceWorkerMain } from '../src/factorio/inference-worker.ts';
-inferenceWorkerMain().catch(error => { console.error(error); process.exitCode = 1; });
+import { inferenceWorkerMain, inferenceFailureExitCode } from '../src/factorio/inference-worker.ts';
+inferenceWorkerMain().catch(error => { console.error(error); process.exitCode = inferenceFailureExitCode(error); });

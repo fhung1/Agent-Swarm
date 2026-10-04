@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runInferenceWorker, type InferenceWorkerOptions } from './inference-worker.ts';
+import { inferenceFailureExitCode, runInferenceWorker, type InferenceWorkerOptions } from './inference-worker.ts';
 
 function fixture(pending = false) {
   const scope = { runId: 'recovery', worldId: 'world', historyId: 'history', actorId: 12, sender: 'recovery-agent-1' };
@@ -53,4 +53,33 @@ test('restart resolves a completed transfer before inference and never resubmits
   assert.equal(f.counts().mutations, 0);
   assert.equal(f.counts().renewals, 0);
   assert.equal(f.counts().calls, 1);
+});
+
+
+test('only reconcilable transport failures retry; unknown outcomes quarantine', async () => {
+  const {ResourceRenewalUncertain} = await import('./resource-leases.ts');
+  assert.equal(inferenceFailureExitCode(new ResourceRenewalUncertain('renewal uncertain')), 75);
+  assert.equal(inferenceFailureExitCode(new Error('Board disconnected')), 75);
+  assert.equal(inferenceFailureExitCode(new Error('Unknown game outcome: transfer')), 78);
+  assert.equal(inferenceFailureExitCode(new Error('Resource lease lost')), 1);
+});
+
+test('lease heartbeats continue during asynchronous game reads', async () => {
+  const f=fixture(); let renewals=0;
+  const reservation={path:'world/world/entity/247',holder:f.options.scope.sender,taskId:f.options.taskId,
+    expiresAt:{microsSinceUnixEpoch:BigInt(Date.now()+1000)*1000n}};
+  const snapshot=f.options.board.snapshot;
+  f.options.board.snapshot=()=>({...snapshot(),reservations:[reservation]}) as any;
+  f.options.board.reserve=async()=>{renewals++;reservation.expiresAt.microsSinceUnixEpoch=BigInt(Date.now()+1000)*1000n;};
+  f.options.leaseRenewalMs=10;
+  const game=f.options.game;
+  f.options.game=async request=>{
+    await new Promise(resolve=>setTimeout(resolve,80));
+    return game(request);
+  };
+  await runInferenceWorker(f.options);
+  assert.ok(renewals>=3);
+  const count=renewals;
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(renewals,count);
 });
