@@ -238,7 +238,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
           await post(`${id}-audit`, 'inference_audit', { model: actualModel, usage: usage ?? null,
             usageKnown: Boolean(usage), promptChars: JSON.stringify(context).length, remainingCalls: context.budget.remainingCalls,
             reservedUsd: spend.reservedUsd, chargedUsd: spend.chargedUsd, runSpend: o.spend?.snapshot() });
-          const reason = 'The previous model response exceeded the decision schema; use shorter bounded fields and retry.';
+          const reason = 'The previous model response was invalid or incomplete; return one minimal valid decision JSON without explanation and retry.';
           await post(`${id}-rejected`, 'decision_rejected', { reason });
           state.lastResult = { kind: 'invalid_model_output', reason }; state.decision = null; o.save(state);
           continue;

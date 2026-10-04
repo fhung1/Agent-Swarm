@@ -5,7 +5,7 @@ const transientCodes = new Set([
   'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET',
 ]);
 
-/** Recognize transport failures wrapped by SDK and fetch error causes. */
+/** Recognize provider transport failures and request timeouts wrapped by SDK. */
 export function isTransientTransportFailure(error: unknown): boolean {
   const seen = new Set<object>();
   let current: unknown = error;
@@ -14,6 +14,8 @@ export function isTransientTransportFailure(error: unknown): boolean {
     const value = current as { code?: unknown; cause?: unknown; name?: unknown; message?: unknown };
     if (typeof value.code === 'string' && transientCodes.has(value.code)) return true;
     if (typeof value.name === 'string' && /^(APIConnectionError|APIConnectionError2)$/.test(value.name)) return true;
+    if ((value.name === 'TimeoutError' || value.name === 'AbortError') &&
+      typeof value.message === 'string' && /timeout/i.test(value.message)) return true;
     current = value.cause;
   }
   return false;

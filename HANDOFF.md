@@ -609,3 +609,21 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   ($44.962 charged, $15.198 reserved, $39.840 remaining). Rocket launches remain
   zero. esbuild and `git diff --check` passed; no test suite run per operator
   preference. Commit and push this guard, then keep monitoring Astra's run.
+
+## codex — Retry incomplete and timed-out model calls (2026-10-04)
+
+- The next fleet halt was Luna 1 receiving an incomplete structured response at
+  `max_output_tokens`; the short-response retry then hit the 120-second provider
+  timeout. Both currently stopped that worker with exit code 1 and caused the
+  launcher to pause the game.
+- Incomplete/truncated structured outputs now become local corrective feedback
+  and retry without applying any partial action. Provider request timeouts are
+  classified as transient exit 75, allowing the existing supervisor to retry
+  from saved actor state; no uncertain game action is replayed.
+- Rebuilt and resumed the same run, world, board and spend ledger. At tick
+  534,641 the game was unpaused; all five actor states were advancing, research
+  progress had moved from 0.700 to 0.736, and the $100 ledger showed $47.594
+  charged, $16.704 reserved, $35.702 available. Rocket launches remain zero;
+  placed-site count remains 71, so continue watching for factory expansion.
+- esbuild bundle and `git diff --check` passed; no test suite run per operator
+  preference. Commit and push, then keep monitoring the live run.
