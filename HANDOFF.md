@@ -696,3 +696,32 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   instructions that `recipient` is nonempty only for directed chat. Do not
   alter or release uncertain spend reservations. `npm run typecheck`, worker
   esbuild and `git diff --check` passed; no tests run per operator preference.
+
+## codex — Retry Astra transport failures under the same run cap (2026-10-04)
+
+- Commit `c2744df` adds a persisted Astra supervisor with the existing bounded
+  exponential retry policy (maximum eight transport retries), preserving the
+  orchestrator journal, plan and original deadline. The launcher now stops the
+  fleet only after supervisor exhaustion or the shared spend guard. Factorio
+  requests use a 4,096-token output limit and reserve that exact limit; this
+  lets the worst case at the 40 KB input bound fit within the $0.815502 that
+  remained at recovery time. The compact worker rules now say only chat may
+  carry a recipient.
+- Resumed the same paused world, history, board and $100 ledger. All five actor
+  journals advanced; board evidence shows completed moves, crafts and transfers
+  (including coal delivery), while the factory reached 94 sites. Astra remained
+  stable under supervision. The run then halted on a denied worst-case
+  reservation, as configured: $77.654106 charged + $21.805090 reserved =
+  $99.459196 total, with $0.540804 still unreserved. Ledger `halted=true`;
+  there are no agent processes and the game is paused at tick 795,785. Engine
+  status is 16 furnaces, 94 sites, no rocket launch, `automation-2` at zero
+  progress, and automation verification false (`needsFuel=true`). No uncertain
+  reservations were altered.
+- Live board inspection still found malformed chat recipients, so a follow-up
+  source change constrains recipient format and tells workers to broadcast with
+  an empty recipient or use Astra's exact name. This last prompt correction was
+  built but could not be loaded before the spend guard halted the run.
+- `npm run typecheck`, esbuild for worker, both supervisors, orchestrator and
+  launcher, and launcher dry-run passed. No tests were run per operator
+  preference. Continue only with an operator-authorized budget/run; never clear
+  this halted ledger or exceed the $100 ceiling.
