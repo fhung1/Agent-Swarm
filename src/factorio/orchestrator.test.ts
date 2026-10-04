@@ -87,3 +87,35 @@ test('orchestrator only consumes protocol messages from the same run and history
     { runId, worldId, historyId, sender, agents });
   assert.deepEqual(selected.map(message => message.id), ['1']);
 });
+
+
+test('overseer receives read-only global survey without a character or mutation API', async () => {
+  const f = fixture();
+  const gameStatus = { tick: 50, paused: false, world: { worldId, historyId },
+    resourceMap: { deposits: [{ resource: 'iron-ore', x: 140, y: 80 }] } };
+  f.options.ask = (async (_schema, system, input) => {
+    assert.deepEqual(JSON.parse(input).gameStatus, gameStatus);
+    assert.match(system, /cannot execute game actions/);
+    return { kind: 'direct', recipient: agents[0], message: 'Mine 25 iron ore at the mapped deposit.', title: '', details: '', dependsOn: '' };
+  }) as Ask;
+  await runFactorioOrchestrator({ ...f.options, readGameStatus: () => gameStatus });
+  assert.equal(f.state.calls, 1);
+});
+
+test('overseer rejects a resource survey from another saved world before spending', async () => {
+  const f = fixture();
+  await assert.rejects(runFactorioOrchestrator({ ...f.options,
+    readGameStatus: () => ({ tick: 50, paused: false, world: { worldId: 'foreign', historyId } }) }), /invalid overseer game status/);
+  assert.equal(f.state.calls, 0);
+});
+
+test('overseer does not call the model while authoritative game status is paused', async () => {
+  const f = fixture(); let reads = 0;
+  f.options.ask = (async () => {
+    assert.ok(reads >= 2);
+    return { kind: 'direct', recipient: agents[0], message: 'Gather iron.', title: '', details: '', dependsOn: '' };
+  }) as Ask;
+  await runFactorioOrchestrator({ ...f.options,
+    readGameStatus: () => ({ tick: ++reads, paused: reads === 1, world: { worldId, historyId } }) });
+  assert.equal(f.state.calls, 1);
+});

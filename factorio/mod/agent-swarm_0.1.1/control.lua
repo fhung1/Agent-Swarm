@@ -40,6 +40,62 @@ local function observation(id,radius)
   end
   return {actorId=id,x=a.position.x,y=a.position.y,inventory=contents(a),nearby=entries,omitted=omitted,tick=game.tick,world=world(),paused=storage.qs_paused or false}
 end
+-- Read-only survey of generated terrain; never grants items or generates chunks.
+-- Cache the scan, and send compact resource cells rather than every ore tile.
+local survey_cache=nil
+local function resource_map()
+  if survey_cache and game.tick-survey_cache.tick<600 then return survey_cache end
+  local surface=game.surfaces[1];local spawn=world().spawn
+  local groups={};local totals={};local generated={};local chunks={}
+  for chunk in surface.get_chunks() do
+    if surface.is_chunk_generated(chunk) then
+      generated[chunk.x..":"..chunk.y]=true;chunks[#chunks+1]={x=chunk.x,y=chunk.y}
+    end
+  end
+  for _,e in pairs(surface.find_entities_filtered{type={"resource","tree"}}) do
+    if e.valid then
+      local name=e.type=="tree" and "wood" or e.name
+      local key=name..":"..math.floor(e.position.x/32)..":"..math.floor(e.position.y/32)
+      local amount=e.type=="resource" and e.amount or 1
+      totals[name]=(totals[name] or 0)+amount
+      local g=groups[key]
+      if not g then
+        g={id=key,resource=name,name=e.name,x=e.position.x,y=e.position.y,amount=0,entities=0,distance=distance(spawn,e.position)}
+        groups[key]=g
+      end
+      g.amount=g.amount+amount;g.entities=g.entities+1
+      if distance(spawn,e.position)<g.distance then
+        g.x=e.position.x;g.y=e.position.y;g.name=e.name;g.distance=distance(spawn,e.position)
+      end
+    end
+  end
+  local sorted={};for _,g in pairs(groups) do sorted[#sorted+1]=g end
+  table.sort(sorted,function(a,b) if a.distance==b.distance then return a.id<b.id end;return a.distance<b.distance end)
+  local deposits={};local counts={};local omitted=0
+  for _,g in ipairs(sorted) do
+    if (counts[g.resource] or 0)<6 and #deposits<36 then
+      counts[g.resource]=(counts[g.resource] or 0)+1;g.distance=math.floor(g.distance);deposits[#deposits+1]=g
+    else omitted=omitted+1 end
+  end
+  local frontier={};local seen={}
+  for _,c in ipairs(chunks) do
+    for _,d in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do
+      local x=c.x+d[1];local y=c.y+d[2];local key=x..":"..y
+      if not generated[key] and not seen[key] then
+        seen[key]=true;frontier[#frontier+1]={x=x*32+16,y=y*32+16}
+      end
+    end
+  end
+  table.sort(frontier,function(a,b)
+    local da=distance(spawn,a);local db=distance(spawn,b)
+    if da==db then if a.x==b.x then return a.y<b.y end;return a.x<b.x end;return da<db
+  end)
+  local targets={};for i=1,math.min(8,#frontier) do targets[#targets+1]=frontier[i] end
+  survey_cache={tick=game.tick,coverage="all-generated-terrain",cellSize=32,generatedChunks=#chunks,
+    totals=totals,deposits=deposits,omittedCells=omitted,frontiers=targets,
+    note="Targets are real entity positions; approach and observe before mining. Wood amount counts trees. Up to six nearest cells per resource; ungenerated terrain is unknown."}
+  return survey_cache
+end
 local function finish(id,status,detail)
   local receipt=storage.qs_receipts[id]
   receipt.status=status;receipt.detail=detail;receipt.endTick=game.tick
@@ -328,7 +384,13 @@ remote.add_interface("agent_swarm", {
     for _,e in pairs(game.surfaces[1].find_entities_filtered{name="wooden-chest"}) do
       local c=contents(e);c.unit=e.unit_number;c.x=e.position.x;c.y=e.position.y;chests[#chests+1]=c
     end
+    local productionSites={};local omittedSites=0
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{type="furnace"}) do
+      if #productionSites<16 then
+        productionSites[#productionSites+1]={unit=e.unit_number,name=e.name,x=e.position.x,y=e.position.y,inventory=contents(e)}
+      else omittedSites=omittedSites+1 end
+    end
     return {version="0.1.1",tick=game.tick,actors=actors,actorCount=#actors,world=world(),chests=chests,furnaces=#game.surfaces[1].find_entities_filtered{name="stone-furnace"},paused=storage.qs_paused or false,
-      rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
+      productionSites=productionSites,omittedSites=omittedSites,resourceMap=resource_map(),rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
   end
 })

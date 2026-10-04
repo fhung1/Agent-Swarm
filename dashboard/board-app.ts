@@ -43,7 +43,10 @@ type FactorioAgent = { index: number; actorId: number; sender: string; taskId: s
 type FactorioRun = { runId: string; goal: string; provider: string; model: string; mode: string; maxCalls: number | null; totalCallLimit: number | null;
   runMs: number | null; maxRunSpendUsd: string | null; spend: { capUsd: string; chargedUsd: string; reservedUsd: string; remainingUsd: string; halted: boolean } | null; workers: FactorioAgent[] };
 type FactorioActor = { unit: number; x: number; y: number; inventory: { ironOre: number; coal: number; ironPlate: number; items: Record<string, number> } };
-type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
+type FactorioSnapshot = { checkedAt: string; controlsEnabled: boolean; game: { resourceMap?: ResourceSurvey; tick: number; paused: boolean; world: { worldId: string; historyId: string; scenario: string; seed: number; spawn: { x: number; y: number } }; actors: FactorioActor[]; chests: Array<{ unit: number; x: number; y: number; ironOre: number; coal: number; ironPlate: number; items: Record<string, number> }>; furnaces: number; rocketLaunches: number; lastRocketTick?: number }; run: FactorioRun | null };
+type ResourceSurvey = { tick: number; generatedChunks: number; totals: Record<string, number>; omittedCells: number;
+  deposits: Array<{ id: string; resource: string; name: string; x: number; y: number; amount: number; distance: number }>; frontiers: Array<{x: number; y: number}> };
+let mapExpanded = false;
 let factorioSnapshot: FactorioSnapshot | null = null;
 let factorioStatusError = 'Waiting for the Factorio server status…';
 let factorioControlPending = false;
@@ -257,6 +260,25 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
   if (factorioControlMessage) put(section, node('p', factorioControlMessage.startsWith('Paused') || factorioControlMessage.startsWith('Resumed') ? 'muted small' : 'error', factorioControlMessage));
   put(section, node('p', 'muted small', 'Pause blocks new game mutations. Message-board coordination remains available.'));
 
+  const survey = game.resourceMap;
+  if (survey) {
+    const map = node('div', 'factorio-actors');
+    put(map, node('h3', '', 'Shared resource map'), node('p', 'muted small',
+      `Read-only survey shared with Astra and all actors · ${survey.generatedChunks} generated chunks · tick ${survey.tick}. Ungenerated terrain is unknown.`));
+    const totals = node('div', 'factorio-summary');
+    for (const [resource, amount] of Object.entries(survey.totals)) put(totals, field(resource === 'wood' ? 'Trees (wood sources)' : resource, amount.toLocaleString()));
+    put(map, totals);
+    const details = node('details', 'evidence-details'); details.open = mapExpanded;
+    details.addEventListener('toggle', () => { mapExpanded = details.open; });
+    const deposits = Array.isArray(survey.deposits) ? survey.deposits : [];
+    put(details, node('summary', '', `Resource destinations (${deposits.length} cells shown; ${survey.omittedCells} omitted)`));
+    for (const deposit of deposits) put(details, field(deposit.resource,
+      `(${deposit.x.toFixed(1)}, ${deposit.y.toFixed(1)}) · ${deposit.distance} tiles from spawn · ${deposit.amount.toLocaleString()} in cell`));
+    if (!deposits.length) put(details, node('p', 'muted small', 'No resources found in generated terrain. Actors must explore the frontier.'));
+    const frontiers = Array.isArray(survey.frontiers) ? survey.frontiers : [];
+    put(details, field('Exploration frontiers', frontiers.map(p => `(${p.x}, ${p.y})`).join(', ')));
+    put(map, details); put(section, map);
+  }
   const actors = node('div', 'factorio-actors');
   put(actors, node('h3', '', 'Actor state'), node('p', 'muted small', 'Position and inventory are read from the live game server.'));
   if (!game.actors.length) put(actors, node('p', 'empty', 'No scripted actors are present in this world.'));

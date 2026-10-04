@@ -1,6 +1,6 @@
 # Five Luna Low actors and an Astra High overseer
 
-Each game actor has an independent process, prompt, board identity and restart journal. All five actors use a selected model at low effort; set `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors. A separate `gpt-6-astra` high-effort process has no game-action interface and directs the actors only through board messages and run-scoped subtasks. Workers choose a validated action, chat, wait or completion; there is no rules fallback. Supported game actions include movement, mining, hand crafting, building and chest/furnace transfers.
+Each game actor has an independent process, prompt, board identity and restart journal. All five actors use a selected model at low effort; set `FACTORIO_ACTOR_MODEL=gpt-6-luna` for Luna actors. A separate `gpt-6-astra` high-effort process has no character or game-action interface. It receives authoritative read-only game status and directs the actors through board messages and run-scoped subtasks. Workers choose a validated action, chat, wait or completion; there is no rules fallback. Supported game actions include movement, mining, hand crafting, building and chest/furnace transfers.
 
 ## Prepare
 
@@ -35,3 +35,9 @@ Use `FACTORIO_PROMPT`, `FACTORIO_PROMPT_FILE`, or `FACTORIO_PROMPT_DIR` containi
 Context includes local observations, reservations, scoped peer messages, the previous result, and remaining call/time allowance. Peer text is data. Inspect decision/chat/action-result/completion records on the Factorio board and compare them with actual game receipts/inventory. Each worker journal's `state.json.calls` records its consumed calls; inspect the worker log and launcher exit for exhaustion or failure, and the supervisor record for retry attempts or quarantine. `FACTORIO_REQUIRED_PLATES` defaults to five; different objectives need an appropriate verifier.
 
 Run [provider-free acceptance](factorio-inference-acceptance.md) first. A live five-actor run, useful peer communication, coordinator tasking and graphical observation require their own evidence.
+
+## Shared resource survey
+
+The game status includes a cached survey of all generated terrain: resource totals, real ore/tree destinations grouped into 32-tile cells, and frontier destinations where terrain has not been generated. It shows up to six nearest cells per resource (36 total), reports omitted cells, and refreshes every 600 game ticks. It does not reveal ungenerated terrain, create resources, or move characters. The dashboard exposes totals and destination coordinates under **Shared resource map**.
+
+Every actor receives this map in its existing status context. Astra receives the same read-only status without a character, checks world/history and monotonic ticks, and waits while the game is paused. Its instructions now explicitly allow directing actors to move, mine, craft and build, with resource quantities and coordinates. Actors still approach in bounded waypoints and observe locally before mining or transferring. Existing action validation, ownership, receipts and the shared spend guard remain in force.
