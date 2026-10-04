@@ -97,6 +97,37 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     const observed = validateObservation(await o.game({ kind: 'observe', actor: scope.actorId }), scope, state.tick);
     state.tick = observed.tick; o.save(state); return observed;
   };
+  const reconcileReceipt = async (pending: NonNullable<InferenceState['pending']>, submittedTick: number, first?: unknown): Promise<Receipt> => {
+    let response = first, polls = 0;
+    let deadlineTick = submittedTick + (pending.command.kind === 'move' ? pending.command.maxTicks + 120 : 120);
+    let lastTick = -1, lastProgressAt = Date.now();
+    while (true) {
+      withinRun(); await waitReady(); snapshot();
+      let observed = await observe();
+      if (observed.tick !== lastTick) { lastTick = observed.tick; lastProgressAt = Date.now(); }
+      if (response === undefined) response = await o.game({ kind: 'receipt', operation: pending.id });
+      if (response !== null && response !== undefined) {
+        const r = response as Receipt & { deadline?: number };
+        if (r.operationId !== pending.id || r.digest !== pending.digest || r.worldId !== scope.worldId ||
+            r.historyId !== scope.historyId || r.actorId !== scope.actorId) throw Error('Unknown game outcome: foreign receipt');
+        if (r.status === 'completed' || r.status === 'failed') {
+          const final = checkReceipt(r, pending, scope, submittedTick);
+          if (final.endTick! > observed.tick) observed = await observe();
+          if (final.endTick! > observed.tick) throw Error('Receipt from future history');
+          return final;
+        }
+        if (r.status !== 'pending' || pending.command.kind !== 'move' || !Number.isSafeInteger(r.startTick) ||
+            r.startTick < submittedTick || !Number.isSafeInteger(r.deadline) || r.deadline! < r.startTick ||
+            r.deadline! > r.startTick + pending.command.maxTicks) throw Error('Unknown game outcome: invalid pending receipt');
+        deadlineTick = r.deadline! + 120;
+      }
+      polls++;
+      if ((pending.command.kind !== 'move' && polls >= 3) || observed.tick > deadlineTick ||
+          (!observed.paused && Date.now() - lastProgressAt > 30_000)) throw Error('Unknown game outcome: no final receipt after bounded reconciliation');
+      response = undefined;
+      await sleep(250);
+    }
+  };
   const post = async (id: string, kind: string, payload: unknown, recipient = '') => {
     const s = snapshot();
     if (s.messages.some(m => { try { const e = JSON.parse(m.body); return m.sender === scope.sender && e.runId === scope.runId && e.worldId === scope.worldId && e.historyId === scope.historyId && e.eventId === id; } catch { return false; } })) return;
@@ -154,9 +185,7 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     snapshot();
     await publishTaskLabel(initial);
     if (state.pending) {
-      const observed = await observe();
-      const receipt = checkReceipt(await o.game({ kind: 'receipt', operation: state.pending.id }), state.pending, scope, 0);
-      if (receipt.endTick! > observed.tick) throw Error('Receipt from future history');
+      const receipt = await reconcileReceipt(state.pending, state.tick);
       state.lastResult = receipt; state.pending = null; state.decision = null; o.save(state);
       await post(receipt.operationId, 'action_result', receipt);
     }
@@ -345,9 +374,10 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         const operationId = `${scope.runId}-${scope.sender}-act-${state.calls}`;
         const { digest } = encodeOperation({ version: 1, ...{ worldId: scope.worldId, historyId: scope.historyId }, operationId, actorId: scope.actorId, command });
         state.pending = { id: operationId, command, digest }; o.save(state);
-        let receipt: Receipt;
-        try { receipt = checkReceipt(await o.game({ kind: 'execute', actor: scope.actorId, operation: operationId, command }), state.pending, scope, state.tick); }
-        catch { receipt = checkReceipt(await o.game({ kind: 'receipt', operation: operationId }), state.pending, scope, state.tick); }
+        let first: unknown;
+        try { first = await o.game({ kind: 'execute', actor: scope.actorId, operation: operationId, command }); }
+        catch { /* The request may have reached the game. Poll its receipt; never replay. */ }
+        const receipt = await reconcileReceipt(state.pending, state.tick, first);
         state.lastResult = receipt; state.tick = receipt.endTick!; state.pending = null; state.decision = null; o.save(state);
         await post(operationId, 'action_result', receipt);
         // Furnaces stay reserved while smelting. Other resources are shared after each transfer.

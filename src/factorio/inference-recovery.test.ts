@@ -36,8 +36,40 @@ test('restart ignores expired own leases without renewing or replaying transfers
 test('expired lease does not bypass reconciliation of an unknown transfer', async () => {
   const f = fixture(true);
   await assert.rejects(runInferenceWorker(f.options), /Unknown game outcome/);
-  assert.deepEqual(f.counts(), { renewals: 0, calls: 0, mutations: 0, receipts: 1 });
+  assert.deepEqual(f.counts(), { renewals: 0, calls: 0, mutations: 0, receipts: 3 });
   assert.equal(f.options.state.pending?.id, 'transfer');
+});
+
+test('restart waits for an in-flight move to finish without submitting it again', async () => {
+  const f = fixture(true);
+  const pending = f.options.state.pending!;
+  pending.command = {kind:'move',x:1,y:0,maxTicks:600};
+  let receiptReads = 0;
+  const original = f.options.game;
+  f.options.sleep = async () => {};
+  f.options.game = request => request.kind === 'receipt' ? {
+    version:1, operationId:pending.id, digest:pending.digest, worldId:f.options.scope.worldId,
+    historyId:f.options.scope.historyId, actorId:f.options.scope.actorId,
+    status:++receiptReads < 3 ? 'pending' : 'completed', startTick:90, deadline:690,
+    ...(receiptReads >= 3 ? {endTick:100,detail:'Arrived'} : {}),
+  } : original(request);
+  await runInferenceWorker(f.options);
+  assert.equal(receiptReads,3);
+  assert.equal(f.options.state.pending,null);
+  assert.equal(f.counts().mutations,0);
+  assert.equal(f.counts().calls,1);
+});
+
+test('foreign in-flight move receipt remains quarantined', async () => {
+  const f = fixture(true);
+  const pending = f.options.state.pending!;
+  pending.command = {kind:'move',x:1,y:0,maxTicks:600};
+  f.options.game = request => request.kind === 'receipt' ? {
+    version:1,operationId:pending.id,digest:'wrong',worldId:f.options.scope.worldId,
+    historyId:f.options.scope.historyId,actorId:f.options.scope.actorId,status:'pending',startTick:90,deadline:690,
+  } : ({actorId:12,tick:100,x:0,y:0,world:f.options.scope,paused:false,inventory:{},nearby:[]});
+  await assert.rejects(runInferenceWorker(f.options),/Unknown game outcome: foreign receipt/);
+  assert.equal(f.options.state.pending?.id,pending.id);
 });
 
 test('restart resolves a completed transfer before inference and never resubmits it', async () => {
