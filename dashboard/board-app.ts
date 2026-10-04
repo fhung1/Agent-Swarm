@@ -69,9 +69,12 @@ function pill(text: string): HTMLElement { return node('span', `pill ${text}`, t
 function when(value: { toDate(): Date }): string { return value.toDate().toLocaleString(); }
 function millis(value: { toDate(): Date }): number { return value.toDate().getTime(); }
 function showLayout(layout: HTMLElement, sidebar: HTMLElement): void {
-  const scrollTop = root.querySelector<HTMLElement>('.board-layout .sidebar')?.scrollTop ?? 0;
+  const previous = root.querySelector<HTMLElement>('.message-board-layout');
+  const sidebarScrollTop = previous?.querySelector<HTMLElement>('.sidebar')?.scrollTop ?? 0;
+  const mainScrollTop = previous?.querySelector<HTMLElement>('.main')?.scrollTop ?? 0;
   root.replaceChildren(layout);
-  sidebar.scrollTop = scrollTop;
+  sidebar.scrollTop = sidebarScrollTop;
+  layout.querySelector<HTMLElement>('.main')!.scrollTop = mainScrollTop;
 }
 function queueRender(): void {
   if (queued) return;
@@ -145,7 +148,7 @@ function render(): void {
   const messages = snapshot.messages.sort((a, b) => millis(b.createdAt) - millis(a.createdAt) || (b.id > a.id ? 1 : b.id < a.id ? -1 : 0));
   const locks = snapshot.reservations.filter(lock => millis(lock.expiresAt) > Date.now()).sort((a, b) => a.path.localeCompare(b.path));
   const shownTasks = tasks.filter(task => filter === 'all' || (filter === 'active' ? ['open', 'claimed', 'blocked'].includes(task.status) : task.status === filter));
-  const layout = node('div', 'layout board-layout');
+  const layout = node('div', 'layout board-layout message-board-layout');
   const sidebar = node('aside', 'sidebar');
   const brand = node('div', 'side-brand');
   put(brand, node('div', 'brand-mark', 'MB'), 'MESSAGE BOARD');
