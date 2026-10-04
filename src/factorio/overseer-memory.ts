@@ -38,6 +38,7 @@ export function compactGameStatus(status: Record<string, any>, previous: Record<
     detailNotice: 'Coordinates, full inventories/recipes, deposits, research prerequisites and layouts are available through inspect. No listed change does not mean a machine is working.'}};
 }
 export function planBrief(plan: OverseerPlan = {}) {
-  return {current: plan.current, sections: Object.entries(plan).map(([section, value]) => ({section, revision: value.revision, updatedTick: value.updatedTick})),
-    note: 'Only current is loaded automatically. Use read_plan for other sections; write_plan authors/replaces one section. No plan has been authored until you write it.'};
+  return {current: plan.current, assignments: plan.assignments,
+    sections: Object.entries(plan).map(([section, value]) => ({section, revision: value.revision, updatedTick: value.updatedTick})),
+    note: 'Current and assignments are loaded automatically when authored. Use read_plan for other sections; write_plan authors/replaces one section.'};
 }
