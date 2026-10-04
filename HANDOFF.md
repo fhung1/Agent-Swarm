@@ -673,3 +673,26 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   orchestrator passed. No tests were run per operator preference. Commits
   `5993357` and `73a50d3` are pushed to `main`; continue monitoring the same run
   and leave gameplay choices to Astra.
+
+## codex — Correct Luna decision validation feedback (2026-10-04)
+
+- Board audit found repeated actor decisions rejected as `Invalid integer bound`
+  and `Only chat may carry recipient`. The provider schema allowed unrestricted
+  integers even though the Factorio validator limits transfer/pickup quantities
+  to 1–100, mine/craft to 1–20, target IDs to positive 32-bit IDs and move
+  timeouts to 1–600. Commit `8f21ede` aligns those schema bounds and cardinal
+  build directions; commit `2f87ba2` forwards a short allowlisted validator
+  reason to the immediate retry without exposing raw model output.
+- Rebuilt and restarted on the same save/board/ledger. Counters advanced and
+  the old integer-bound feedback cleared for actors 2, 3 and 4. The run then
+  stopped because Astra hit a transient provider network error and exited 75;
+  the launcher treated that as fatal and paused the game. Current engine status
+  is paused at tick 751,508 with 94 production sites, 16 furnaces, research
+  `automation-2` stalled, and zero rocket launches. The $100 ledger is not
+  halted; it has $77.392845 charged, $21.791653 reserved and $0.815502 remaining.
+- No agents are currently running. Next: make the launcher supervise Astra's
+  transient exit-75 failures like it already supervises actor workers, preserve
+  the same run state, and resume only within the existing ledger. Add clear
+  instructions that `recipient` is nonempty only for directed chat. Do not
+  alter or release uncertain spend reservations. `npm run typecheck`, worker
+  esbuild and `git diff --check` passed; no tests run per operator preference.
