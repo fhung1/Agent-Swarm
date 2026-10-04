@@ -133,9 +133,6 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     }
     snapshot();
     publishTaskLabel();
-    for (const reservation of board.snapshot().reservations.filter(r => r.holder === scope.sender &&
-      r.taskId === o.taskId && r.path.startsWith(`world/${scope.worldId}/`))) leases.track(reservation.path);
-    leases.start();
     if (state.pending) {
       const observed = observe();
       const receipt = checkReceipt(o.game({ kind: 'receipt', operation: state.pending.id }), state.pending, scope, 0);
@@ -148,6 +145,12 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
     if (previousReceipt?.operationId && previousReceipt.worldId === scope.worldId && previousReceipt.historyId === scope.historyId && previousReceipt.actorId === scope.actorId) {
       await post(previousReceipt.operationId, 'action_result', previousReceipt);
     }
+    // Reconcile uncertain game outcomes before restoring any resource ownership.
+    // Expired rows are history, not leases: new actions acquire them atomically.
+    for (const reservation of board.snapshot().reservations.filter(r => r.holder === scope.sender &&
+      r.taskId === o.taskId && r.path.startsWith(`world/${scope.worldId}/`) &&
+      r.expiresAt.microsSinceUnixEpoch > BigInt(Date.now()) * 1000n)) leases.track(reservation.path);
+    leases.start();
     while (true) {
       withinRun(); await waitReady(); snapshot(); publishTaskLabel();
       let observed = observe();
@@ -262,7 +265,9 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
       } else {
         const command = output.command!;
         let reservationPath: string | undefined;
-        if (command.kind === 'take' || command.kind === 'put') {
+        if (command.kind === 'research') {
+          reservationPath = `world/${scope.worldId}/force/player/research`;
+        } else if (command.kind === 'take' || command.kind === 'put' || command.kind === 'set_recipe') {
           const target = observed.nearby.find(e => e.unit === command.targetId);
           if (!target || Math.hypot(observed.x - target.x, observed.y - target.y) > 5) {
             state.lastResult = { error: 'Target not observed within reach; move closer first' }; state.decision = null; o.save(state); continue;

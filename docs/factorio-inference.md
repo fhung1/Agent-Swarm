@@ -99,7 +99,41 @@ full-capacity rejection, immutable replay, ownership/range/pause rejection,
 observations, chest/furnace routing, real fueled production and mining receipts.
 It must never target the live inference save.
 
-This covers the planned burner-based iron factory. Selecting assembler recipes,
-choosing research, circuit programming and advanced machine configuration are
-not implemented by this bridge; a broader factory/rocket objective needs those
-capabilities added and independently verified.
+## Research and assembly
+
+`research {technology}` selects an available science technology. It rejects locked
+prerequisites and switching away from different active research. Selection does
+not complete research: powered labs must consume the required science packs.
+`status.research` reports active progress, available science technologies, earned
+technologies and automatic production triggers (for example, smelting fifty iron
+plates unlocks steam power). Trigger technologies are earned in game, not queued.
+
+Factorio 2.0.77 omits production statistics for hand crafts by scripted characters.
+For research-trigger products, the bridge tracks the engine craft queue and exact
+inventory increase, excluding further inventory actions until it finishes. Only
+verified output is reported to the engine production statistics, which applies
+normal research prerequisites. Cancelled/unverified output gets no credit. The
+tracker persists across saves; observations expose `triggerCraftPending` and
+`craftingQueue`, and status retains the last verification evidence.
+
+`set_recipe {targetId,recipe}` configures a nearby friendly assembler with an
+unlocked recipe supported by its crafting category. Before changing recipes,
+empty its input/output, modules and fluids and finish the current craft. Selecting
+the same recipe is a no-op, retaining ingredients and progress. This prevents the
+engine's recipe-change item ejection from silently discarding resources.
+
+`put` accepts recipe item ingredients into assembler input and science packs into
+labs; `take` retrieves assembler output or remaining inputs and lab science packs.
+Observations include recipes, ingredients/products, progress and separate assembler
+input/output inventories. Configuration operations use the existing pause,
+reservation and immutable receipt safeguards; research selection is shared peer
+information. `status.recipeCatalog` lists enabled recipe names.
+
+`python3 factorio/check-research-assemblers.py PATH/research-assembler-check/WORLD`
+requires a **disposable world**. It grants explicit test materials/machines/power,
+then verifies engine production triggers, scripted lab crafting, science research,
+actual assembler output, transfer/replay and invalid configuration rejection.
+These fixture checks do not prove inference agents have completed a factory.
+
+Circuit programming, fluid loading by actors, module configuration and other
+advanced machine controls remain outside the bounded action vocabulary.

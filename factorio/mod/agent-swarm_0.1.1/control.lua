@@ -20,6 +20,8 @@ local function contents(e)
   local items={};local inventories={}
   if e.type=="character" then inventories={defines.inventory.character_main}
   elseif e.type=="container" then inventories={defines.inventory.chest}
+  elseif e.type=="assembling-machine" then inventories={defines.inventory.assembling_machine_input,defines.inventory.assembling_machine_output}
+  elseif e.type=="lab" then inventories={defines.inventory.lab_input}
   elseif e.type=="furnace" then inventories={defines.inventory.furnace_source,defines.inventory.furnace_result,defines.inventory.fuel} end
   for _,index in ipairs(inventories) do
     local inventory=e.get_inventory(index)
@@ -31,14 +33,52 @@ local function contents(e)
   end
   return {ironOre=items["iron-ore"] or 0,coal=items["coal"] or 0,ironPlate=items["iron-plate"] or 0,items=items}
 end
-local machine_types={container=true,furnace=true,["mining-drill"]=true,inserter=true,["transport-belt"]=true,["electric-pole"]=true,["solar-panel"]=true,accumulator=true,boiler=true,generator=true,pipe=true,["pipe-to-ground"]=true,["offshore-pump"]=true,["storage-tank"]=true,["underground-belt"]=true,splitter=true}
+local machine_types={lab=true,["assembling-machine"]=true,container=true,furnace=true,["mining-drill"]=true,inserter=true,["transport-belt"]=true,["electric-pole"]=true,["solar-panel"]=true,accumulator=true,boiler=true,generator=true,pipe=true,["pipe-to-ground"]=true,["offshore-pump"]=true,["storage-tank"]=true,["underground-belt"]=true,splitter=true}
 local status_names={};for name,value in pairs(defines.entity_status) do status_names[value]=name end
+local function inventory_items(inventory)
+  local items={}
+  if inventory then for _,entry in pairs(inventory.get_contents()) do items[entry.name]=(items[entry.name] or 0)+entry.count end end
+  return items
+end
+local function recipe_info(recipe)
+  if not recipe then return nil end
+  return {name=recipe.name,category=recipe.category,ingredients=recipe.ingredients,products=recipe.products,energy=recipe.energy}
+end
+local function research_ready(technology)
+  if not technology.enabled or technology.researched or #technology.research_unit_ingredients==0 then return false end
+  for _,prerequisite in pairs(technology.prerequisites) do if not prerequisite.researched then return false end end
+  return true
+end
+local function research_status(force)
+  local available={};local researched={};local triggers={}
+  for name,t in pairs(force.technologies) do
+    if t.researched then researched[#researched+1]=name
+    elseif t.enabled and t.prototype.research_trigger then
+      local prerequisites={};for _,p in pairs(t.prerequisites) do if not p.researched then prerequisites[#prerequisites+1]=p.name end end
+      table.sort(prerequisites)
+      triggers[#triggers+1]={name=name,trigger=t.prototype.research_trigger,missingPrerequisites=prerequisites}
+    elseif research_ready(t) then available[#available+1]={name=name,units=t.research_unit_count,ingredients=t.research_unit_ingredients} end
+  end
+  table.sort(available,function(a,b)return a.name<b.name end);table.sort(researched);table.sort(triggers,function(a,b)return a.name<b.name end)
+  local omitted=math.max(0,#available-24);while #available>24 do table.remove(available) end
+  local current=force.current_research
+  return {current=current and current.name or nil,progress=current and force.research_progress or 0,available=available,automaticTriggers=triggers,omittedAvailable=omitted,researched=researched}
+end
+local function recipe_catalog(force)
+  local names={};for name,recipe in pairs(force.recipes) do if recipe.enabled and not name:match("^parameter%-%d+$") and name~="recipe-unknown" then names[#names+1]=name end end
+  table.sort(names);local omitted=math.max(0,#names-100);while #names>100 do table.remove(names) end
+  return {enabled=names,omitted=omitted}
+end
 local function machine_state(e)
   local fuel=e.get_fuel_inventory();local burner=e.burner;local fuel_items={}
   if fuel then for _,entry in pairs(fuel.get_contents()) do fuel_items[entry.name]=(fuel_items[entry.name] or 0)+entry.count end end
   return {unit=e.unit_number or 0,name=e.name,type=e.type,x=e.position.x,y=e.position.y,direction=e.direction,status=e.status,statusName=status_names[e.status],energy=e.energy,
     fuel=fuel and {items=fuel_items,burning=burner and burner.currently_burning and burner.currently_burning.name or nil,remainingEnergy=burner and burner.remaining_burning_fuel or 0} or nil,
-    items=(e.type=="container" or e.type=="furnace" or fuel) and contents(e) or nil,
+    items=(e.type=="container" or e.type=="furnace" or e.type=="assembling-machine" or e.type=="lab" or fuel) and contents(e) or nil,
+    recipe=e.type=="assembling-machine" and recipe_info(e.get_recipe()) or nil,
+    craftingProgress=e.type=="assembling-machine" and e.crafting_progress or nil,
+    input=e.type=="assembling-machine" and inventory_items(e.get_inventory(defines.inventory.assembling_machine_input)) or nil,
+    output=e.type=="assembling-machine" and inventory_items(e.get_inventory(defines.inventory.assembling_machine_output)) or nil,
     pickup=e.type=="inserter" and e.pickup_position or nil,drop=(e.type=="inserter" or e.type=="mining-drill") and e.drop_position or nil}
 end
 local function observation(id,radius)
@@ -59,7 +99,7 @@ local function observation(id,radius)
       else omitted=omitted+1 end
     end
   end
-  return {actorId=id,x=a.position.x,y=a.position.y,inventory=contents(a),nearby=entries,omitted=omitted,tick=game.tick,world=world(),paused=storage.qs_paused or false}
+  return {actorId=id,x=a.position.x,y=a.position.y,inventory=contents(a),craftingQueue=a.crafting_queue,triggerCraftPending=storage.qs_trigger_crafts and storage.qs_trigger_crafts[id]~=nil or false,nearby=entries,omitted=omitted,tick=game.tick,world=world(),paused=storage.qs_paused or false}
 end
 -- Read-only survey of generated terrain; never grants items or generates chunks.
 -- Cache the scan, and send compact resource cells rather than every ore tile.
@@ -130,7 +170,7 @@ local function target_for(a,id)
   for _, candidate in pairs(a.surface.find_entities_filtered{position=a.position,radius=6}) do
     if candidate.unit_number==id then e=candidate;break end
   end
-  if not e or not e.valid or e.surface~=a.surface or e.force~=a.force or (e.type~="container" and e.type~="furnace" and not ((e.type=="mining-drill" or e.type=="inserter" or e.type=="boiler") and e.get_fuel_inventory())) then error("Invalid transfer target: "..tostring(e and e.name).."/"..tostring(e and e.type).." force="..tostring(e and e.force.name).." actor="..a.force.name.." surface="..tostring(e and e.surface.index).."/"..a.surface.index) end
+  if not e or not e.valid or e.surface~=a.surface or e.force~=a.force or (e.type~="container" and e.type~="furnace" and e.type~="assembling-machine" and e.type~="lab" and not ((e.type=="mining-drill" or e.type=="inserter" or e.type=="boiler") and e.get_fuel_inventory())) then error("Invalid transfer target: "..tostring(e and e.name).."/"..tostring(e and e.type).." force="..tostring(e and e.force.name).." actor="..a.force.name.." surface="..tostring(e and e.surface.index).."/"..a.surface.index) end
   if distance(a.position,e.position)>6 then error("Transfer out of reach") end
   return e
 end
@@ -242,6 +282,7 @@ submit=function(raw)
     if storage.qs_paused then error("World paused") end
     a=actor(req.actorId)
     if storage.qs_busy[req.actorId] then error("Actor has pending operation") end
+    if storage.qs_trigger_crafts and storage.qs_trigger_crafts[req.actorId] and command.kind~="move" then error("Wait for verified research-trigger crafting to finish") end
     if type(command)~="table" then error("Missing command") end
     -- Validate every argument before recording or mutating resources.
     if command.kind=="move" then
@@ -253,7 +294,20 @@ submit=function(raw)
       exact(command,{"kind","targetId","item","quantity"})
       target=target_for(a,command.targetId);bounded(command.quantity,1,100)
       if type(command.item)~="string" or not command.item:match("^[a-z0-9][a-z0-9-]*$") or #command.item>64 or not prototypes.item[command.item] then error("Invalid item") end
-      if target.type~="container" and target.type~="furnace" then
+      if target.type=="lab" then
+        target_inventory=target.get_inventory(defines.inventory.lab_input)
+        if prototypes.item[command.item].type~="tool" then error("Labs accept science packs only") end
+      elseif target.type=="assembling-machine" then
+        local input=target.get_inventory(defines.inventory.assembling_machine_input)
+        local output=target.get_inventory(defines.inventory.assembling_machine_output)
+        if command.kind=="take" then target_inventory=output.get_item_count(command.item)>=command.quantity and output or input
+        else
+          local recipe=target.get_recipe();local ingredient=false
+          if recipe then for _,entry in pairs(recipe.ingredients) do if entry.type=="item" and entry.name==command.item then ingredient=true end end end
+          if not ingredient then error("Set a recipe and provide only its item ingredients") end
+          target_inventory=input
+        end
+      elseif target.type~="container" and target.type~="furnace" then
         target_inventory=target.get_fuel_inventory()
         if not target_inventory or prototypes.item[command.item].fuel_value<=0 then error("Target accepts fuel items only") end
       end
@@ -276,6 +330,24 @@ submit=function(raw)
         if candidate.valid and (candidate.type=="resource" or candidate.type=="tree") then target=candidate;break end
       end
       if not target or not target.minable then error("Mine target missing or not minable") end
+    elseif command.kind=="research" then
+      exact(command,{"kind","technology"})
+      if type(command.technology)~="string" or not command.technology:match("^[a-z0-9][a-z0-9-]*$") or #command.technology>64 then error("Invalid technology") end
+      local technology=a.force.technologies[command.technology]
+      if not technology or not research_ready(technology) then error("Technology unavailable or prerequisites incomplete") end
+      if a.force.current_research and a.force.current_research.name~=command.technology then error("Another research is active; finish it before selecting another") end
+    elseif command.kind=="set_recipe" then
+      exact(command,{"kind","targetId","recipe"});target=target_for(a,command.targetId)
+      if target.type~="assembling-machine" then error("Recipe target must be an assembler") end
+      if type(command.recipe)~="string" or not command.recipe:match("^[a-z0-9][a-z0-9-]*$") or #command.recipe>64 then error("Invalid recipe") end
+      local recipe=a.force.recipes[command.recipe]
+      if not recipe or not recipe.enabled or not target.prototype.crafting_categories[recipe.category] then error("Recipe locked or incompatible with this machine") end
+      local current=target.get_recipe()
+      if not current or current.name~=recipe.name then
+        if not target.get_inventory(defines.inventory.assembling_machine_input).is_empty() or not target.get_inventory(defines.inventory.assembling_machine_output).is_empty() or target.is_crafting() or target.crafting_progress>0 then error("Empty assembler and finish its current craft before changing recipe") end
+        local modules=target.get_module_inventory();if modules and not modules.is_empty() then error("Remove assembler modules before changing recipe") end
+        for i=1,#target.fluidbox do if target.fluidbox[i] and target.fluidbox[i].amount>0 then error("Drain assembler fluids before changing recipe") end end
+      end
     elseif command.kind=="craft" then
       exact(command,{"kind","recipe","quantity"});bounded(command.quantity,1,20)
       if type(command.recipe)~="string" or not command.recipe:match("^[a-z0-9][a-z0-9-]*$") or #command.recipe>64 or not a.force.recipes[command.recipe] or not a.force.recipes[command.recipe].enabled then error("Recipe unavailable") end
@@ -325,8 +397,44 @@ submit=function(raw)
     receipt.quantity=mined;receipt.item=command.name
     return finish(req.operationId,mined>0 and "completed" or "failed",mined>0 and "Mined in game" or "Mining failed")
   end
+  if command.kind=="research" then
+    local active=a.force.current_research
+    local started=(active and active.name==command.technology) or a.force.add_research(command.technology)
+    receipt.technology=command.technology
+    return finish(req.operationId,started and "completed" or "failed",started and "Research selected; labs must consume science to complete it" or "Engine refused research")
+  end
+  if command.kind=="set_recipe" then
+    local ok,reason=pcall(function()
+      local current=target.get_recipe()
+      if not current or current.name~=command.recipe then target.set_recipe(command.recipe) end
+    end)
+    local recipe=target.get_recipe();local applied=ok and recipe and recipe.name==command.recipe
+    receipt.targetId=target.unit_number;receipt.recipe=command.recipe
+    return finish(req.operationId,applied and "completed" or "failed",applied and "Assembler recipe configured" or tostring(reason or "Engine refused recipe"))
+  end
   if command.kind=="craft" then
+    -- Scripted characters in 2.0.77 craft real items but omit production
+    -- statistics, so craft-item research triggers never see their lab output.
+    -- Track only trigger products, keeping inventory mutations excluded until
+    -- the engine finishes and the complete output is present. Persist this
+    -- evidence across saves; never credit merely queued or cancelled crafts.
+    local products={}
+    for _,technology in pairs(a.force.technologies) do
+      local trigger=technology.prototype.research_trigger
+      if not technology.researched and trigger and trigger.type=="craft-item" then
+        for _,product in pairs(a.force.recipes[command.recipe].products) do
+          if product.type=="item" and product.name==trigger.item.name and product.amount and (not product.probability or product.probability==1) then
+            products[product.name]={before=a.get_item_count(product.name),amount=product.amount}
+          end
+        end
+      end
+    end
+    if next(products) and a.crafting_queue_size>0 then return finish(req.operationId,"failed","Finish existing craft queue before research-trigger crafting") end
     local started=a.begin_crafting{count=command.quantity,recipe=command.recipe}
+    if started>0 and next(products) then
+      storage.qs_trigger_crafts=storage.qs_trigger_crafts or {}
+      storage.qs_trigger_crafts[req.actorId]={operationId=req.operationId,products=products,count=started}
+    end
     receipt.quantity=started;receipt.item=command.recipe
     return finish(req.operationId,started==command.quantity and "completed" or "failed",started==command.quantity and "Craft queued in game" or "Craft queue rejected")
   end
@@ -360,6 +468,22 @@ submit=function(raw)
   return finish(req.operationId,inserted==command.quantity and "completed" or "failed",inserted==command.quantity and "Transferred" or "Capacity changed")
 end
 script.on_event(defines.events.on_tick,function()
+  for actor_id,craft in pairs(storage.qs_trigger_crafts or {}) do
+    local ok,a=pcall(actor,actor_id)
+    if not ok or a.crafting_queue_size==0 then
+      local verified=ok
+      if ok then for name,product in pairs(craft.products) do
+        if a.get_item_count(name)-product.before<product.amount*craft.count then verified=false end
+      end end
+      if verified then
+        for name,product in pairs(craft.products) do
+          a.force.get_item_production_statistics(a.surface).on_flow(name,product.amount*craft.count)
+        end
+      end
+      storage.qs_last_trigger_craft={operationId=craft.operationId,actorId=actor_id,verified=verified,tick=game.tick}
+      storage.qs_trigger_crafts[actor_id]=nil
+    end
+  end
   if game.tick%30==0 then
     local surface=game.surfaces[1];local force=game.forces.player;local tags={};storage.qs_task_labels=storage.qs_task_labels or {}
     for _,tag in pairs(force.find_chart_tags(surface)) do
@@ -437,13 +561,13 @@ remote.add_interface("agent_swarm", {
       local c=contents(e);c.unit=e.unit_number;c.x=e.position.x;c.y=e.position.y;chests[#chests+1]=c
     end
     local productionSites={};local omittedSites=0
-    for _,e in pairs(game.surfaces[1].find_entities_filtered{type={"furnace","mining-drill","inserter","transport-belt","electric-pole","solar-panel","accumulator","boiler","generator","pipe","pipe-to-ground","offshore-pump","storage-tank","underground-belt","splitter"},force="player"}) do
+    for _,e in pairs(game.surfaces[1].find_entities_filtered{type={"lab","assembling-machine","furnace","mining-drill","inserter","transport-belt","electric-pole","solar-panel","accumulator","boiler","generator","pipe","pipe-to-ground","offshore-pump","storage-tank","underground-belt","splitter"},force="player"}) do
       if #productionSites<160 then
         productionSites[#productionSites+1]=machine_state(e)
       else omittedSites=omittedSites+1 end
     end
     return {version="0.1.1",tick=game.tick,actors=actors,actorCount=#actors,world=world(),chests=chests,automation=storage.qs_automation or {verified=false},furnaces=#game.surfaces[1].find_entities_filtered{type="furnace",force="player"},paused=storage.qs_paused or false,
-      productionSites=productionSites,omittedSites=omittedSites,resourceMap=resource_map(),rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
+      lastTriggerCraft=storage.qs_last_trigger_craft,research=research_status(game.forces.player),recipeCatalog=recipe_catalog(game.forces.player),productionSites=productionSites,omittedSites=omittedSites,resourceMap=resource_map(),rocketLaunches=storage.qs_rocket_launches or 0,lastRocketTick=storage.qs_last_rocket_tick}
   end
 })
 

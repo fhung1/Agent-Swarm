@@ -21,6 +21,8 @@ test('commands reject executable text, unexpected fields, invalid names and unbo
     { kind: 'mine', name: 'iron ore', x: 0, y: 0, quantity: 1 },
     { kind: 'mine', name: 'iron-ore', x: 0, y: 0, quantity: 1, targetId: 1 },
     { kind: 'put', targetId: 1, item: 'Rocket Silo', quantity: 1 }, { kind: 'take', targetId: -1, item: 'coal', quantity: 1 },
+    { kind: 'research', technology: 'automation', instant: true }, { kind: 'research', technology: 'bad name' },
+    { kind: 'set_recipe', targetId: 0, recipe: 'iron-gear-wheel' }, { kind: 'set_recipe', targetId: 1, recipe: 'game.print(1)' },
     { kind: 'move', x: 0, y: 0, maxTicks: 10, lua: 'bad' }]) assert.throws(() => validateCommand(command), { name: 'Error' }, JSON.stringify(command));
 });
 test('envelopes reject injected identifiers and extra fields', () => {
@@ -40,6 +42,8 @@ test('Python bridge and TypeScript share normalized wire bytes and digest vector
       // This is an observed Factorio position, represented exactly by the wire grid.
       { kind: 'move' as const, x: 8.6796875, y: -12.3456789, maxTicks: 600 },
       { kind: 'take' as const, targetId: 20, item: 'iron-ore' as const, quantity: 5 },
+      { kind: 'research' as const, technology: 'automation' },
+      { kind: 'set_recipe' as const, targetId: 20, recipe: 'iron-gear-wheel' },
       { kind: 'mine' as const, name: 'iron-ore', x: 8.6796875, y: -12.3456789, quantity: 20 },
     ]) {
       const operation: Operation = { version: 1, worldId: 'world-1', historyId: 'history-1', operationId: 'vector-1', actorId: 12, command };

@@ -128,3 +128,38 @@ Real-provider ten-worker production, useful peer-message consumption, graphical 
 - [Dashboard and documentation](docs/handoffs/codex-queue.md)
 
 Keep future entries brief: task/owner, current status, pushed commit, checks, blockers and next action. Preserve other sessions' unfinished work and coordinate file locks. Commit/push completed work directly to main; no new pull requests.
+
+
+## codex — Research and assembler support (2026-10-04)
+
+- Added strict bounded `research` and `set_recipe` commands across model schema,
+  TypeScript/Python wire validation and game bridge. Research takes a shared force
+  reservation; configuration shares machine reservations. Research selection is
+  useful peer information. No model-supplied Lua/RCON is accepted.
+- Labs accept science packs; assemblers accept configured item ingredients and
+  expose input/output transfers. Recipe changes require empty inventories/fluids,
+  no modules and no active craft; selecting the same recipe preserves resources.
+- Observations show recipes, requirements/products, craft progress, research
+  progress/selectable technologies, automatic trigger prerequisites and enabled
+  recipe names. Added a persistent verified-output tracker for scripted-character
+  crafts, which Factorio 2.0.77 otherwise omits from production statistics. Only
+  finished output present in inventory is credited to normal engine triggers;
+  cancelled crafts receive no credit. No direct research grants.
+- Integrated coaltrace's startup lease patch: reconcile receipts before restoring
+  leases and ignore expired historical reservations. Regression tests came from
+  pushed commit 2e953c5; no uncertain transfer is replayed.
+- Checks: root/database typecheck; 15 protocol/inference/communication tests;
+  7 bundled recovery/lease tests; worker/overseer builds. Direct Node execution
+  of the latter tests requires TS transformation, so esbuild bundles were used.
+  Fresh disposable Factorio 2.0.77 check passed real smelting triggers, cancelled
+  and completed lab crafts, science consumption/completion, assembler production,
+  invalid configuration rejection and immutable receipt replay. Fixture grants
+  exist only in the disposable test world, never the live save.
+- Deployment: preserved iron-zero-20261004 world/history, journals and $100 ledger;
+  maintenance save and old mod backup retained privately. Updated server/viewer
+  mods, rebuilt roles, graphical viewer rejoined InGame; dashboard 4193 HTTP 200.
+  Existing run resumed, $8.847678 charged at restart. No call-count limit. Existing
+  saved run deadline remains in place; budget and deadlines were not reset.
+- Remaining scope: circuit controls, actor fluid transfers and module configuration
+  are not added. Fixture tests do not establish live inference factory completion.
+  Monitor coaltrace's separate live miner verification after this deployment.

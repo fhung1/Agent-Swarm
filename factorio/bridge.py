@@ -56,6 +56,10 @@ def encode(world,actor,operation,command):
         if set(command)!={'kind','recipe','quantity'}: raise ValueError('Unexpected craft fields')
         if type(command['recipe']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['recipe']): raise ValueError('Invalid recipe')
         if type(command['quantity']) is not int or not 1<=command['quantity']<=20: raise ValueError('Invalid quantity')
+    elif kind=='research':
+        if set(command)!={'kind','technology'} or type(command['technology']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['technology']): raise ValueError('Invalid research command')
+    elif kind=='set_recipe':
+        if set(command)!={'kind','targetId','recipe'} or type(command['targetId']) is not int or not 1<=command['targetId']<=2147483647 or type(command['recipe']) is not str or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}',command['recipe']): raise ValueError('Invalid recipe command')
     elif kind=='recover':
         if set(command)!={'kind','targetId'} or type(command['targetId']) is not int or not 1<=command['targetId']<=2147483647: raise ValueError('Invalid recover target')
     elif kind in ['place','build']:

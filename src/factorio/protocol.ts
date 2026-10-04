@@ -7,7 +7,9 @@ export type Command =
   | { kind: 'craft'; recipe: string; quantity: number }
   | { kind: 'place'; item: string; x: number; y: number }
   | { kind: 'build'; item: string; x: number; y: number; direction: number }
-  | { kind: 'recover'; targetId: number };
+  | { kind: 'recover'; targetId: number }
+  | { kind: 'set_recipe'; targetId: number; recipe: string }
+  | { kind: 'research'; technology: string };
 export interface Operation {
   version: 1; worldId: string; historyId: string; operationId: string; actorId: number; command: Command;
 }
@@ -73,6 +75,10 @@ export function validateCommand(value: unknown): Command {
     }
   } else if (c.kind === 'craft') {
     exact(c, ['kind', 'recipe', 'quantity']); itemName(c.recipe); integer(c.quantity, 1, 20);
+  } else if (c.kind === 'research') {
+    exact(c, ['kind', 'technology']); itemName(c.technology);
+  } else if (c.kind === 'set_recipe') {
+    exact(c, ['kind', 'targetId', 'recipe']); integer(c.targetId, 1, 2_147_483_647); itemName(c.recipe);
   } else if (c.kind === 'recover') {
     exact(c, ['kind', 'targetId']); integer(c.targetId, 1, 2_147_483_647);
   } else if (c.kind === 'place' || c.kind === 'build') {

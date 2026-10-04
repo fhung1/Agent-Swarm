@@ -75,3 +75,12 @@ test('construction decisions require cardinal directions and bounded recovery ta
   assert.equal(validateFactorioDecision({...action,command:{kind:'recover',targetId:25}}).kind,'action');
   assert.throws(()=>validateFactorioDecision({...action,command:{kind:'recover',targetId:0}}));
 });
+
+test('research and assembler configuration decisions are bounded', () => {
+  for (const command of [{kind: 'research', technology: 'automation'}, {kind: 'set_recipe', targetId: 42, recipe: 'iron-gear-wheel'}]) {
+    assert.deepEqual(validateFactorioDecision({...wait, kind: 'action', command, waitMs: 0}).command, command);
+  }
+  for (const command of [{kind: 'research', technology: 'automation', instant: true}, {kind: 'set_recipe', targetId: 0, recipe: 'iron-gear-wheel'}]) {
+    assert.throws(() => validateFactorioDecision({...wait, kind: 'action', command, waitMs: 0}));
+  }
+});

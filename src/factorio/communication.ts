@@ -5,8 +5,8 @@ export function isCoordinationKind(kind: string): boolean {
 export function isUsefulPeerEvent(kind: string, payload: unknown): boolean {
   if (isCoordinationKind(kind)) return true;
   if (kind !== 'action_result' || !payload || typeof payload !== 'object') return false;
-  const receipt = payload as {status?: string; item?: string; targetId?: number};
-  return receipt.status === 'failed' || Boolean(receipt.item) || Boolean(receipt.targetId);
+  const receipt = payload as {status?: string; item?: string; targetId?: number; technology?: string};
+  return receipt.status === 'failed' || Boolean(receipt.item) || Boolean(receipt.targetId) || Boolean(receipt.technology);
 }
 /** Suppress an unchanged announcement to the same recipient across restarts. */
 export function repeatsLatestChat(rows: readonly {sender: string; recipient: string; body: string; id: bigint | string | number}[],
