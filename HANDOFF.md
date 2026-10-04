@@ -512,3 +512,24 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   were present after restart, and the same $100 ledger stayed active.
 - Root typecheck, a direct bundled `planBrief` check and `git diff --check`
   passed. No game inventory or board task was changed by this code change.
+
+## codex — Read-only shoreline observations (2026-10-04)
+
+- Source commit `4c06c7c` (pushed on operator request) adds bounded generated-tile
+  samples to actor observations and Astra layout inspection. Samples report
+  water/land/unknown counts, nearest water and exact adjacent shoreline pairs;
+  they do not assert a valid offshore-pump footprint or generate new chunks.
+- A disposable 2.0.77 world proved actor and layout responses with a 16-tile
+  water patch, empty-array normalization, and 121 unknown ungenerated tiles.
+  Root typecheck, Python compile and `git diff --check` passed. Source mod was
+  copied into the operator world with a matching manifest hash after a fresh
+  `/server-save`; original mod and manifest were backed up privately. The
+  same world/history IDs, board and $100 ledger were retained. GUI client
+  connected to the current server with the matching mod checksum.
+- After resuming roles, agent 3's saved move was still in progress. The worker
+  treated a pending receipt as unknown and exit 78 quarantined the supervisor;
+  the launcher stopped all roles and paused the game. The engine later recorded
+  that exact move as failed with `Paused during movement`. This is a separate
+  recovery bug; do not replay the move. Next: wait for final in-flight move
+  receipts during worker recovery, clear quarantine only after checking this
+  authoritative receipt, then resume the same save and ledger.
