@@ -242,3 +242,22 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   a 40-task regression. Reconstructed all five live actor contexts without provider
   calls: 18,827–19,247 characters with disclosed omissions. Updated worker bundle
   pending/resuming within the existing authorized deadline.
+
+
+## codex — Remove inherited time cutoff (2026-10-04)
+
+- Operator explicitly corrected the run to spend-only: no time deadline. Added
+  runMs/deadline zero semantics across launcher, roles and supervisors, including
+  no duration timers and null remaining-time context. Per-request/startup/lease
+  timeouts and all dollar reservations remain enforced. Dashboard says no time
+  limit instead of 0 minutes.
+- Explicitly migrated 12 existing plan/deadline/supervisor files after all roles
+  stopped, with private backups and an audit manifest. Spend ledger SHA-256 stayed
+  identical, cap $100, recorded charges $17.271905 before resume. Existing actor
+  counters/operation IDs, Astra plan and world/history were retained.
+- Root/database typecheck, 21 duration/launch/supervisor/coordinator tests and all
+  four role/launcher builds pass. Bounded historical runs retain normal expiry;
+  changing duration mode without explicit migration is rejected.
+- Same iron-zero-20261004 run resumed with FACTORIO_RUN_MS=0, one Astra/five Luna,
+  unlimited calls. Worker context repair from a6a8f08 is included in this resume.
+  No gameplay strategy or physical game operations were authored by the monitor.

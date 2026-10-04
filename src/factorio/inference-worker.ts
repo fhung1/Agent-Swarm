@@ -1,3 +1,4 @@
+import { deadlineFromDuration, runExpired, remainingRunMs } from './run-duration.ts';
 import { repeatsLatestChat } from './communication.ts';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, fsyncSync, unlinkSync } from 'node:fs';
@@ -53,12 +54,12 @@ function checkReceipt(value: unknown, pending: NonNullable<InferenceState['pendi
  * mutation is journaled before submission. Recovered missing receipts stop the worker. */
 export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<void> {
   const { board, scope, state } = o;
-  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 0 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 0 || !Number.isFinite(o.deadline)) throw Error('Invalid worker limits');
+  if (!Number.isSafeInteger(o.maxCalls) || o.maxCalls < 0 || o.maxCalls > 1000 || !Number.isSafeInteger(o.requiredPlates) || o.requiredPlates < 0 || (!Number.isSafeInteger(o.deadline) || o.deadline < 0)) throw Error('Invalid worker limits');
   if (state.version !== 1 || JSON.stringify(state.scope) !== JSON.stringify(scope) || !Number.isSafeInteger(state.calls) || state.calls < 0 || !Number.isSafeInteger(state.tick) || state.tick < 0) throw Error('Foreign or corrupt inference journal');
   const sleep = o.sleep ?? (ms => new Promise(r => setTimeout(r, ms)));
   const leaseController = new AbortController();
   const signal = o.signal ? AbortSignal.any([o.signal, leaseController.signal]) : leaseController.signal;
-  const withinRun = () => { signal.throwIfAborted(); if (Date.now() >= o.deadline) throw Error('Run deadline reached'); };
+  const withinRun = () => { signal.throwIfAborted(); if (runExpired(o.deadline)) throw Error('Run deadline reached'); };
   const waitReady = async () => { while (!board.ready) { withinRun(); await sleep(250); } };
   const snapshot = () => { if (!board.ready) throw Error('Board disconnected'); const s = board.snapshot(); assertTaskOwnership(s, o.taskId, scope.sender); return s; };
   let lastTaskLabel = '';
@@ -166,13 +167,13 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
             .map(r => ({ path: r.path, holder: r.holder })),
           tasks: board.snapshot().tasks.filter(t => t.id.startsWith(`${scope.runId}.`)).slice(0, 40).map(t => ({ id: t.id, title: t.title, details: t.details, status: t.status, assignee: t.assignee, dependsOn: t.dependsOn })),
           messages: selectPeerMessages(board.snapshot().messages, scope), lastResult: state.lastResult,
-          budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: Math.max(0, o.deadline - Date.now()) } };
+          budget: { remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls, remainingMs: o.deadline === 0 ? null : remainingRunMs(o.deadline) } };
         let usage: import('../agents/llm.ts').AskUsage | undefined;
         let actualModel = o.ask.model ?? 'configured';
         let spend: { reservedUsd?: string; chargedUsd?: string } = {};
         let output: FactorioDecision;
         try {
-          output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())),
+          output = await decideFactorio(o.ask, context, { signal, timeoutMs: Math.min(o.timeoutMs, Math.max(1, remainingRunMs(o.deadline))),
             spend: o.spend, callId: id, onSpend: cost => { spend = { ...spend, ...cost }; },
             onUsage: (reported, model) => { usage = reported; if (model) actualModel = model; } });
         } catch (error) {
@@ -367,7 +368,7 @@ export async function inferenceWorkerMain(): Promise<void> {
   const deadlinePath = join(directory, 'deadline.json');
   const requestedDeadline = Number(process.env.FACTORIO_RUN_DEADLINE);
   const deadline = existsSync(deadlinePath) ? JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline
-    : Number.isFinite(requestedDeadline) && requestedDeadline > Date.now() ? requestedDeadline : Date.now() + Number(process.env.FACTORIO_RUN_MS ?? 900000);
+    : Number.isSafeInteger(requestedDeadline) && requestedDeadline >= 0 ? requestedDeadline : deadlineFromDuration(Number(process.env.FACTORIO_RUN_MS ?? 0));
   if (!existsSync(deadlinePath)) atomicSave(deadlinePath, { deadline });
   board.start();
   try {

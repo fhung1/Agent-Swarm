@@ -19,7 +19,8 @@ test('launcher rejects invalid providers and repeated actors while accepting unl
   assert.throws(() => inferenceLaunchPlan({ ...input, actorIds: Array(5).fill(1) }));
   assert.throws(() => inferenceLaunchPlan({ ...input, model: 'gpt-6-astra-preview' }));
   assert.throws(() => inferenceLaunchPlan({ ...input, maxCalls: Infinity }));
-  assert.throws(() => inferenceLaunchPlan({ ...input, runMs: 0 }));
+  assert.equal(inferenceLaunchPlan({ ...input, runMs: 0 }).runMs,0);
+  assert.throws(() => inferenceLaunchPlan({ ...input, runMs: -1 }));
   assert.throws(() => inferenceLaunchPlan({ ...input, runId: '../world' }));
 });
 test('smoke and production budgets are explicitly separated', () => {

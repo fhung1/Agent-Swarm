@@ -1,3 +1,4 @@
+import { runExpired } from './run-duration.ts';
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, fsyncSync, closeSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -6,9 +7,9 @@ export const RETRYABLE_BOARD_OUTAGE = 75;
 export const UNKNOWN_GAME_OUTCOME = 78;
 export interface RestartState { version: 1; runId: string; attempts: number; deadline: number; quarantined: boolean }
 export function restartDelay(state: RestartState, exitCode: number | null, now: number, maximum = 8): number | null {
-  if (state.quarantined || exitCode !== RETRYABLE_BOARD_OUTAGE || state.attempts >= maximum || now >= state.deadline) return null;
+  if (state.quarantined || exitCode !== RETRYABLE_BOARD_OUTAGE || state.attempts >= maximum || runExpired(state.deadline, now)) return null;
   const delay = Math.min(30_000, 1_000 * 2 ** state.attempts);
-  return now + delay < state.deadline ? delay : null;
+  return !runExpired(state.deadline, now + delay) ? delay : null;
 }
 export function saveRestartState(path: string, state: RestartState): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -57,9 +58,9 @@ export async function supervise(options: { statePath: string; runId: string; dea
     cancelWait?.();
   };
   process.on('SIGTERM', stop); process.on('SIGINT', stop);
-  const deadlineTimer = setTimeout(stop, Math.max(0, Math.min(2_147_483_647, state.deadline - Date.now())));
+  const deadlineTimer = state.deadline === 0 ? undefined : setTimeout(stop, Math.max(0, Math.min(2_147_483_647, state.deadline - Date.now())));
   try {
-    while (!stopped && Date.now() < state.deadline && !state.quarantined) {
+    while (!stopped && !runExpired(state.deadline) && !state.quarantined) {
       const code = await new Promise<number | null>((resolve, reject) => {
         child = spawn(options.command, options.args, { stdio: 'inherit' });
         child.once('error', reject); child.once('exit', resolve);

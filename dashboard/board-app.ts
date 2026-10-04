@@ -359,7 +359,7 @@ function factorioPanel(snapshot: ReturnType<MessageBoardClient['snapshot']>): HT
     const runPanel = panel(`Inference run · ${run.runId}`, client.ready
       ? `${goalLabel} · ${run.provider}/${run.model} · ${done}/${run.workers.length} tasks complete · ${claimed} in progress`
       : `${goalLabel} · ${run.provider}/${run.model} · message board unavailable`);
-    put(runPanel, field('Run limits', `${run.mode} · ${run.runMs === null ? 'duration unavailable' : `${Math.round(run.runMs / 60000)} min`}`));
+    put(runPanel, field('Run limits', `${run.mode} · ${run.runMs === null ? 'duration unavailable' : run.runMs === 0 ? 'no time limit' : `${Math.round(run.runMs / 60000)} min`}`));
     put(runPanel, field('Run spend', run.spend
       ? `${run.spend.halted ? 'STOPPED · ' : ''}${run.spend.chargedUsd} charged · ${run.spend.reservedUsd} reserved · ${run.spend.remainingUsd} remaining of ${run.spend.capUsd}`
       : `${run.maxRunSpendUsd ? `$${run.maxRunSpendUsd} cap` : 'Spend cap unavailable'} · waiting for run ledger`));

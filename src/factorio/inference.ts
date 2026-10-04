@@ -27,7 +27,7 @@ export interface PeerMessage { id: string; sender: string; recipient: string; ki
 export interface FactorioContext extends FactorioScope {
   objective: string; operatorPrompt: string; observation: unknown; status: unknown;
   reservations: unknown; tasks?: unknown; messages: PeerMessage[]; lastResult: unknown;
-  budget?: { remainingCalls: number | null; remainingMs: number };
+  budget?: { remainingCalls: number | null; remainingMs: number | null };
 }
 export const FACTORIO_SYSTEM = `You control exactly one Factorio character in a cooperative swarm.
 Choose one next action from live observations, or send purposeful chat, wait, or report completion.

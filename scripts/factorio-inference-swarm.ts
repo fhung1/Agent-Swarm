@@ -1,3 +1,4 @@
+import { selectRunDeadline } from '../src/factorio/run-duration.ts';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, openSync, closeSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -17,7 +18,7 @@ async function main() {
   const plan = inferenceLaunchPlan({ runId, actorIds: status.actors.map((a: { unit: number }) => a.unit),
     provider: process.env.AGENT_BRAIN ?? '', model: process.env.AGENT_MODEL ?? '',
     ...(process.env.FACTORIO_ACTOR_MODEL ? { actorModel: process.env.FACTORIO_ACTOR_MODEL } : {}),
-    maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS),
+    maxCalls: Number(process.env.FACTORIO_MAX_CALLS), runMs: Number(process.env.FACTORIO_RUN_MS ?? 0),
     ...(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS ? { orchestratorMaxCalls: Number(process.env.FACTORIO_ORCHESTRATOR_MAX_CALLS) } : {}),
     ...(process.env.FACTORIO_RUN_BUDGET_USD ? { maxRunSpendUsd: process.env.FACTORIO_RUN_BUDGET_USD } : {}),
     mode: process.env.FACTORIO_DEMO_MODE as 'smoke' | 'production' | undefined });
@@ -104,11 +105,9 @@ async function main() {
         payload: { capUsd: spend.snapshot().capUsd, priceVersion: plan.spendPriceVersion, actors: plan.actorModel, overseer: plan.orchestrator.model } }), '', goalTaskId);
     }
     const deadlinePath = join(directory, 'orchestrator-deadline.json');
-    const configuredDeadline = Date.now() + plan.runMs;
-    const savedDeadline = existsSync(deadlinePath) ? Number(JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline) : configuredDeadline;
-    if (!Number.isSafeInteger(savedDeadline) || savedDeadline <= Date.now()) throw Error('Persisted run deadline has expired; refusing to extend this run');
-    const runDeadline = Math.min(configuredDeadline, savedDeadline);
-    stopTimer = setTimeout(stop, Math.max(0, plan.runMs));
+    const savedDeadline = existsSync(deadlinePath) ? Number(JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline) : undefined;
+    const runDeadline = selectRunDeadline(plan.runMs, savedDeadline);
+    if (runDeadline !== 0) stopTimer = setTimeout(stop, Math.max(0, runDeadline - Date.now()));
     // A rejected reservation commits halted=true before the requesting worker
     // exits. Watch the atomic ledger so every sibling stops immediately too.
     spendMonitor = setInterval(() => {

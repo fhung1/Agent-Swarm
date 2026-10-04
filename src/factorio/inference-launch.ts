@@ -2,7 +2,7 @@ import { usdToMicros } from '../agents/spend-pricing.ts';
 import { FACTORIO_RUN_SPEND_CAP_USD, FACTORIO_SPEND_PRICE_VERSION } from './run-spend.ts';
 
 export interface InferenceLaunchInput {
-  /** Zero disables call-count limits; the shared spend guard and run deadline still apply. */
+  /** Zero disables call-count limits; the shared spend guard still applies. runMs=0 disables run duration. */
   runId: string; actorIds: number[]; provider: string; model: string; actorModel?: string; maxCalls: number; runMs: number;
   orchestratorMaxCalls?: number; mode?: 'smoke' | 'production'; maxRunSpendUsd?: string;
 }
@@ -14,7 +14,7 @@ export function inferenceLaunchPlan(input: InferenceLaunchInput) {
   }
   if (input.actorIds.length !== 5 || new Set(input.actorIds).size !== 5 || input.actorIds.some(id => !Number.isSafeInteger(id) || id < 1 || id > 2147483647)) throw Error('Exactly five distinct game actors required');
   const mode = input.mode ?? (input.maxCalls > 0 && input.maxCalls <= 3 ? 'smoke' : 'production');
-  if (!['smoke', 'production'].includes(mode) || !Number.isSafeInteger(input.maxCalls) || input.maxCalls < 0 || input.maxCalls > 1000 || !Number.isSafeInteger(input.runMs) || input.runMs < 1000 || input.runMs > 3600000) throw Error('Set call counts to zero for unlimited or a valid bounded count, and provide a run duration');
+  if (!['smoke', 'production'].includes(mode) || !Number.isSafeInteger(input.maxCalls) || input.maxCalls < 0 || input.maxCalls > 1000 || !Number.isSafeInteger(input.runMs) || (input.runMs !== 0 && input.runMs < 1000) || input.runMs > 3600000) throw Error('Set call counts to zero for unlimited or a valid bounded count, and set run duration to zero for spend-only or a bounded duration');
   const orchestratorMaxCalls = input.orchestratorMaxCalls ?? (input.maxCalls === 0 ? 0 : Math.max(5, Math.min(input.maxCalls, 120)));
   if (!Number.isSafeInteger(orchestratorMaxCalls) || orchestratorMaxCalls < 0 || (orchestratorMaxCalls > 0 && orchestratorMaxCalls < 5) || orchestratorMaxCalls > 1000) throw Error('The Astra overseer needs at least five calls to create one subtask per actor, or zero for unlimited');
   const maxRunSpendUsd = input.maxRunSpendUsd ?? FACTORIO_RUN_SPEND_CAP_USD;

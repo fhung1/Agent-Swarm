@@ -192,3 +192,20 @@ is a destructive disposable fixture checking extraction areas, empty placements,
 belt directions/footprints, pagination and rejected bounds. Never run it on a
 live world. Factorio base entities can lack the get-by-unit-number flag, so the
 read bridge falls back to a friendly-entity lookup without changing game state.
+
+
+## Spend-only runs (no run deadline)
+
+Set `FACTORIO_RUN_MS=0` along with both call limits set to zero. Zero persists as
+an explicit unlimited deadline in the launcher, actor, overseer and supervisor
+journals. No run-duration timer is scheduled; the shared dollar guard still
+reserves every model request and stops all roles on exhaustion. Per-request,
+startup and lease timeouts remain recovery safeguards, not run-duration limits.
+The dashboard labels this mode `no time limit`.
+
+Existing finite deadlines are never silently extended. An explicit operator
+change requires a stopped-run migration of plan.runMs and the existing actor,
+overseer and supervisor deadline fields to zero, keeping world/history IDs,
+operation journals, call counters, plans and the spend ledger intact. The
+iron-zero-20261004 migration was explicitly authorized; original configuration
+files and the unchanged ledger digest were archived privately beside the run.

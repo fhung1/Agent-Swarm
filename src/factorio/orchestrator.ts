@@ -1,3 +1,4 @@
+import { deadlineFromDuration, runExpired, remainingRunMs } from './run-duration.ts';
 import { InspectSchema, PlanWriteSchema, compactGameStatus, planBrief, type Inspection, type OverseerPlan } from './overseer-memory.ts';
 import { lookupFactorio, type FactorioReference } from './knowledge.ts';
 import { isUsefulPeerEvent, isCoordinationKind, repeatsLatestChat } from './communication.ts';
@@ -23,7 +24,7 @@ export interface OrchestratorContext {
   plan?: unknown; toolResult?: unknown; messageNotice?: unknown;
   gameStatus?: { tick: number; paused: boolean; world: { worldId: string; historyId: string }; [key: string]: unknown };
   tasks: { id: string; title: string; details: string; status: string; assignee: string; dependsOn: string }[];
-  messages: OrchestratorMessage[]; remainingCalls: number | null; remainingMs: number;
+  messages: OrchestratorMessage[]; remainingCalls: number | null; remainingMs: number | null;
 }
 export interface OrchestratorState { calls: number; references?: FactorioReference[]; plan?: OverseerPlan; toolResult?: unknown; siteSignatures?: Record<string, string>; messageCursor?: string }
 type OrchestratorBoard = Pick<MessageBoardClient, 'ready' | 'snapshot' | 'register' | 'post' | 'createTask' | 'claimTask' | 'updateTask'>;
@@ -118,9 +119,9 @@ export function buildOrchestratorPrompt(source: OrchestratorContext): string {
 export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<void> {
   const { board, scope, state } = o;
   if (scope.agents.length !== 5 || new Set(scope.agents).size !== 5 || !Number.isSafeInteger(o.maxCalls) || o.maxCalls < 0 || o.maxCalls > 1000 ||
-    !Number.isSafeInteger(o.intervalMs) || o.intervalMs < 1000 || o.intervalMs > 300000 || !Number.isFinite(o.deadline) || !o.objective.trim()) throw Error('Invalid orchestrator configuration');
+    !Number.isSafeInteger(o.intervalMs) || o.intervalMs < 1000 || o.intervalMs > 300000 || (!Number.isSafeInteger(o.deadline) || o.deadline < 0) || !o.objective.trim()) throw Error('Invalid orchestrator configuration');
   const sleep = o.sleep ?? (ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms)));
-  const withinRun = () => { o.signal?.throwIfAborted(); if (Date.now() >= o.deadline) throw Error('Orchestrator run deadline reached'); };
+  const withinRun = () => { o.signal?.throwIfAborted(); if (runExpired(o.deadline)) throw Error('Orchestrator run deadline reached'); };
   const waitReady = async () => { while (!board.ready) { withinRun(); await sleep(250); } };
   const snapshot = () => { if (!board.ready) throw Error('Board disconnected'); return board.snapshot(); };
   const post = async (eventId: string, kind: string, payload: unknown, recipient = '') => {
@@ -219,7 +220,7 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
       messageNotice: {new: newMessages.length, included: chosen.length, omitted: newMessages.length-chosen.length},
       tasks: s.tasks.filter(task => task.id.startsWith(`${scope.runId}.`)).slice(0, 20)
         .map(task => ({ id: task.id, title: task.title.slice(0, 90), details: '', status: task.status, assignee: task.assignee, dependsOn: task.dependsOn })),
-      messages: chosen, remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls - 1, remainingMs: Math.max(0, o.deadline - Date.now()),
+      messages: chosen, remainingCalls: o.maxCalls === 0 ? null : o.maxCalls - state.calls - 1, remainingMs: o.deadline === 0 ? null : remainingRunMs(o.deadline),
     };
     const prompt = buildOrchestratorPrompt(context);
     state.calls++; o.save(state);
@@ -229,8 +230,8 @@ export async function runFactorioOrchestrator(o: OrchestratorOptions): Promise<v
     const callId = `${scope.runId}-${scope.sender}-infer-${state.calls}`;
     const reservedUsd = o.spend?.reserve(callId, o.ask.model ?? '', ORCHESTRATOR_SYSTEM, prompt);
     if (reservedUsd) spend.reservedUsd = reservedUsd;
-    const modelSignal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())))])
-      : AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, o.deadline - Date.now())));
+    const modelSignal = o.signal ? AbortSignal.any([o.signal, AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, remainingRunMs(o.deadline))))])
+      : AbortSignal.timeout(Math.min(o.timeoutMs, Math.max(1, remainingRunMs(o.deadline))));
     let abort = () => {};
     const stopped = new Promise<never>((_resolve, reject) => {
       abort = () => reject(modelSignal.reason);
@@ -357,11 +358,11 @@ export async function factorioOrchestratorMain(): Promise<void> {
   const controller = new AbortController();
   const stop = () => { controller.abort(new Error('Orchestrator stopped')); board.stop(); };
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
-  const runMs = Number(process.env.FACTORIO_RUN_MS ?? 900000);
+  const runMs = Number(process.env.FACTORIO_RUN_MS ?? 0);
   const deadlinePath = join(directory, 'orchestrator-deadline.json');
   const requestedDeadline = Number(process.env.FACTORIO_RUN_DEADLINE);
   const deadline = existsSync(deadlinePath) ? JSON.parse(readFileSync(deadlinePath, 'utf8')).deadline
-    : Number.isFinite(requestedDeadline) && requestedDeadline > Date.now() ? requestedDeadline : Date.now() + runMs;
+    : Number.isSafeInteger(requestedDeadline) && requestedDeadline >= 0 ? requestedDeadline : deadlineFromDuration(runMs);
   if (!existsSync(deadlinePath)) writeFileSync(deadlinePath, JSON.stringify({ deadline }), { flag: 'wx', mode: 0o600 });
   board.start();
   try {
