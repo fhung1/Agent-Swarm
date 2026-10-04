@@ -89,3 +89,12 @@ test('completed task restart checks real inventory before accepting completion',
   await assert.rejects(runInferenceWorker(f.options), /disagrees with live actor/);
   assert.equal(f.options.state.calls, 0);
 });
+test('losing a resource reservation race becomes model feedback, not a mutation', async () => {
+  const f = fixture(); f.options.maxCalls = 1;
+  f.options.game = () => ({ ...f.observation, nearby: [{ unit: 42, type: 'container', x: 1, y: 0 }] });
+  f.options.ask = (async () => ({ kind: 'action', command: { kind: 'take', targetId: 42, item: 'iron-ore', quantity: 5 }, message: 'Take ore', recipient: '', waitMs: 0 })) as Ask;
+  f.options.board.reserve = async () => { throw Error('Peer won reservation'); };
+  await assert.rejects(runInferenceWorker(f.options), /budget exhausted/);
+  assert.match(JSON.stringify(f.options.state.lastResult), /reservation refused/);
+  assert.equal(f.options.state.pending, null);
+});

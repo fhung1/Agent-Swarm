@@ -137,7 +137,12 @@ export async function runInferenceWorker(o: InferenceWorkerOptions): Promise<voi
         reservationPath = `world/${scope.worldId}/entity/${command.targetId}`;
         const other = board.snapshot().reservations.find(r => r.path === reservationPath && r.holder !== scope.sender);
         if (other) { state.lastResult = { error: 'Resource held by peer', holder: other.holder }; state.decision = null; o.save(state); continue; }
-        await board.reserve(scope.sender, reservationPath, o.taskId, 'Inference transfer resource lease', 1);
+        try { await board.reserve(scope.sender, reservationPath, o.taskId, 'Inference transfer resource lease', 1); }
+        catch {
+          // Another actor may win between the local snapshot and atomic reducer.
+          state.lastResult = { error: 'Resource reservation refused; refresh peer state and choose another step' };
+          state.decision = null; o.save(state); await sleep(250); continue;
+        }
         for (let i = 0; i < 40 && !board.snapshot().reservations.some(r => r.path === reservationPath && r.holder === scope.sender); i++) { withinRun(); await sleep(100); }
         if (!board.snapshot().reservations.some(r => r.path === reservationPath && r.holder === scope.sender)) throw Error('Reservation not applied');
       }
