@@ -43,6 +43,10 @@ export function validateFactorioDecision(value: unknown): FactorioDecision {
   if (decision.kind === 'action') {
     if (!decision.command) throw Error('Action requires command');
     validateCommand(decision.command);
+    // `maxTicks` is a Factorio tick timeout, independent of the six-unit move
+    // distance bound. A very short model-selected timeout causes routine moves
+    // to fail, so normalize it after validating the original command bounds.
+    if (decision.command.kind === 'move' && decision.command.maxTicks < 120) decision.command.maxTicks = 120;
   } else if (decision.command !== null) throw Error('Only action may carry command');
   if (decision.kind === 'wait') {
     if (decision.waitMs < 100 || decision.waitMs > 10000) throw Error('Wait exceeds bounds');
