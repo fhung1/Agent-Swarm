@@ -353,3 +353,14 @@ Keep future entries brief: task/owner, current status, pushed commit, checks, bl
   Unrelated constraints and engine pause/ownership/budget checks remain binding.
 - Typecheck and 15 inference tests pass. Prompt assertions check the protocol;
   live model behavior still requires monitoring. Same save/run redeployed.
+
+## codex — Outgoing report memory (2026-10-04)
+
+- Agent5 repeatedly paraphrased unchanged coal endpoint reports. Actors previously
+  excluded every own message and saved only chat recipient, losing report content.
+- Retain only latest same-scope own chat and prioritize it after coordinator
+  assignments. Prompt explicitly uses it as memory and requests new information
+  before another report. Existing exact duplicate suppression remains.
+- Typecheck and 16 inference tests pass; new regression verifies own-chat retention,
+  older/audit/foreign-history exclusion and survival through peer activity.
+  Same run redeployed; behavioral reduction remains to be observed.

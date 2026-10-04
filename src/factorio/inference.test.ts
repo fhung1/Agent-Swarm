@@ -143,3 +143,13 @@ test('assignment protocol defines recency without overriding engine safety', () 
  assert.match(FACTORIO_SYSTEM,/older broadcast holds/);
  assert.match(FACTORIO_SYSTEM,/never overrides engine pause, ownership, reservations, budget/);
 });
+
+test('latest outgoing report survives while earlier own reports and audits are excluded', () => {
+ const row=(id:string,kind:string,patch={})=>({id,sender:context.sender,recipient:'run-orchestrator',
+  body:JSON.stringify({version:1,...context,sender:context.sender,kind,payload:{text:'Report '+id},...patch})});
+ const messages=selectPeerMessages([row('1','chat'),row('2','chat'),row('3','action_result'),row('4','chat',{historyId:'foreign'})],context);
+ assert.deepEqual(messages.map(m=>m.id),['2']);
+ const flood=[...messages,...Array.from({length:40},(_,i)=>({id:String(i+10),sender:'peer',recipient:'',kind:'chat',payload:{text:'Peer '+i}}))];
+ const parsed=JSON.parse(buildFactorioPrompt({...context,messages:flood}));
+ assert.ok(parsed.messages.some((m:any)=>m.id==='2'&&m.sender===context.sender));
+});
