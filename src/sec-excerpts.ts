@@ -67,18 +67,19 @@ export function filingText(html: string): string {
 
 export function extractFilingExcerpts(document: Buffer, form: string): FilingExcerpts {
   const result: FilingExcerpts = { version: 1, form, documentChecksum: checksum(document), sections: [], missing: [] };
-  if (!['10-K', '10-Q'].includes(form) || document.length > 30 * 1024 * 1024) return { ...result, missing: [...SECTIONS] };
+  const family = form.endsWith('/A') ? form.slice(0, -2) : form;
+  if (!['10-K', '10-Q'].includes(family) || document.length > 30 * 1024 * 1024) return { ...result, missing: [...SECTIONS] };
   const text = filingText(document.toString('utf8'));
   const headings: Record<Section, RegExp> = {
     risk_factors: /(?:^|\n)\s*item\s*1a\s*[.:–—-]?\s*risk\s+factors\b/gi,
-    mda: new RegExp(`(?:^|\\n)\\s*item\\s*${form === '10-K' ? '7' : '2'}\\s*[.:–—-]?\\s*management[’']?s\\s+discussion(?:\\s+(?:and|&)\\s+analysis)?(?:\\s+of\\s+financial\\s+condition\\s+and\\s+results\\s+of\\s+operations)?`, 'gi'),
+    mda: new RegExp(`(?:^|\\n)\\s*item\\s*${family === '10-K' ? '7' : '2'}\\s*[.:–—-]?\\s*management[’']?s\\s+discussion(?:\\s+(?:and|&)\\s+analysis)?(?:\\s+of\\s+financial\\s+condition\\s+and\\s+results\\s+of\\s+operations)?`, 'gi'),
   };
   for (const section of SECTIONS) {
     const candidates: { body: string; from: number }[] = [];
     for (const match of text.matchAll(headings[section])) {
       const from = match.index + match[0].length;
       // Section boundaries use the next differently numbered item, anchored to a rendered line.
-      const item = section === 'risk_factors' ? '1a' : form === '10-K' ? '7' : '2';
+      const item = section === 'risk_factors' ? '1a' : family === '10-K' ? '7' : '2';
       const remainder = text.slice(from);
       const next = [...remainder.matchAll(/(?:^|\n)\s*item\s*(\d+[a-z]?)\s*(?:[.:–—-]|\s)/gi)]
         .find(candidate => candidate[1].toLowerCase() !== item);
@@ -130,7 +131,7 @@ function readArtifact(root: string, requested: string, suffix: string, maxBytes:
 
 /** Reads only verified, content-addressed SEC artifacts within the configured directory. */
 export function loadFilingExcerpts(source: ExcerptSource, artifactDir: string): QualitativeEvidence | undefined {
-  if (!['10-K', '10-Q'].includes(source.kind)) return undefined;
+  if (!['10-K', '10-Q', '10-K/A', '10-Q/A'].includes(source.kind)) return undefined;
   try {
     const root = realpathSync(artifactDir);
     const manifest = JSON.parse(readArtifact(root, fileURLToPath(source.artifactRef), 'manifest\\.json', 32_000).toString('utf8'));

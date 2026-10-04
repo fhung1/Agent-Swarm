@@ -8,7 +8,8 @@ import { defaultTokenFile, loadToken, saveToken } from './tokens.js';
 import { recordId } from './ids.js';
 import { SecClient } from './sec-client.js';
 import { extractFilingExcerpts, excerptArtifactName, excerptFactChunks } from './sec-excerpts.js';
-import { extractFilingNarrative, requiredNarrativeSections, type FilingForm } from './sec-narrative.js';
+import { extractFilingNarrative, requiredNarrativeSections, type FilingForm as NarrativeFilingForm } from './sec-narrative.js';
+import { extractEightKExcerpts, isStandaloneQuarterDuration, selectSecFilings, splitEventFact, type SelectedSecFiling } from './sec-updates.js';
 
 // Records the latest 10-K and 10-Q for each symbol as sources, with reported XBRL facts for each filing's own period.
 // Each source's checksum is the SHA-256 of the filing document its URI names. Its artifact is a manifest that points to
@@ -18,7 +19,6 @@ const TICKERS_URL = 'https://www.sec.gov/files/company_tickers.json';
 const SUBMISSIONS_PREFIX = 'https://data.sec.gov/submissions/';
 const COMPANY_FACTS_PREFIX = 'https://data.sec.gov/api/xbrl/companyfacts/';
 const ARCHIVES_PREFIX = 'https://www.sec.gov/Archives/edgar/data/';
-const FORMS: FilingForm[] = ['10-K', '10-Q'];
 
 // Metric name → us-gaap concepts in preference order. Companies tag the same line item differently.
 const CONCEPTS: Record<string, string[]> = {
@@ -43,7 +43,7 @@ const artifactDir = process.env.SEC_ARTIFACT_DIR ??
 
 type JsonObject = Record<string, unknown>;
 type FactEntry = { start?: string; end: string; val: number; accn: string; form: string; filed: string };
-type Filing = { form: FilingForm; accession: string; filingDate: string; reportDate: string; acceptedAt: string; primaryDocument: string };
+type Filing = SelectedSecFiling;
 
 if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(runId)) throw new Error('RUN_ID has invalid characters or exceeds 64 characters');
 
@@ -109,21 +109,18 @@ function object(value: unknown, label: string): JsonObject {
 function latestFilings(submissions: JsonObject): Filing[] {
   const recent = object(object(submissions.filings, 'filings').recent, 'recent filings') as Record<string, unknown[]>;
   const forms = recent.form ?? [];
-  const result: Filing[] = [];
-  for (const form of FORMS) {
-    // EDGAR lists recent filings newest first; take the newest original (non-amended) filing of each form.
-    const index = forms.findIndex(value => value === form);
-    if (index < 0) continue;
-    result.push({
-      form,
-      accession: String(recent.accessionNumber[index]),
-      filingDate: String(recent.filingDate[index]),
-      reportDate: String(recent.reportDate[index]),
-      acceptedAt: String(recent.acceptanceDateTime[index]),
-      primaryDocument: String(recent.primaryDocument[index]),
-    });
-  }
-  return result;
+  const rows = forms.flatMap((form, index) => {
+    const accession = recent.accessionNumber?.[index];
+    const filingDate = recent.filingDate?.[index];
+    const reportDate = recent.reportDate?.[index];
+    const acceptedAt = recent.acceptanceDateTime?.[index];
+    const primaryDocument = recent.primaryDocument?.[index];
+    if ([accession, filingDate, reportDate, acceptedAt, primaryDocument].some(value => value === undefined)) return [];
+    return [{ form: String(form), accession: String(accession), filingDate: String(filingDate),
+      reportDate: String(reportDate), acceptedAt: String(acceptedAt), primaryDocument: String(primaryDocument),
+      items: String(recent.items?.[index] ?? '') }];
+  });
+  return selectSecFilings(rows);
 }
 
 function days(entry: FactEntry): number {
@@ -132,13 +129,16 @@ function days(entry: FactEntry): number {
 
 // Picks the value the filing reports for its own period end: the instant value, or the shortest duration ending then
 // (the quarter rather than year-to-date in a 10-Q). Prior-period comparatives end on other dates and are skipped.
-function factFor(companyFacts: JsonObject, concepts: string[], filing: Filing): { concept: string; unit: string; entry: FactEntry } | undefined {
+function factFor(companyFacts: JsonObject, concepts: string[], filing: Filing, metric: string): { concept: string; unit: string; entry: FactEntry } | undefined {
   const usGaap = object(object(companyFacts.facts, 'facts')['us-gaap'] ?? {}, 'us-gaap facts');
   for (const concept of concepts) {
     const units = usGaap[concept] ? object(object(usGaap[concept], concept).units, `${concept} units`) : undefined;
     if (!units) continue;
     for (const [unit, raw] of Object.entries(units)) {
-      const entries = (raw as FactEntry[]).filter(entry => entry.accn === filing.accession && entry.end === filing.reportDate);
+      let entries = (raw as FactEntry[]).filter(entry => entry.accn === filing.accession && entry.end === filing.reportDate);
+      if (filing.form === '10-Q' && metric === 'operating_cash_flow') {
+        entries = entries.filter(entry => isStandaloneQuarterDuration(entry.start, entry.end));
+      }
       if (entries.length === 0) continue;
       entries.sort((a, b) => days(a) - days(b));
       return { concept, unit, entry: entries[0] };
@@ -181,11 +181,11 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
   const cik = ciks.get(symbol.replace('.', '-'));
   if (!cik) throw new Error(`No SEC CIK found for ${symbol}`);
   const submissions = await getSecJson(`${SUBMISSIONS_PREFIX}CIK${cik}.json`, userAgent);
-  const companyFactsUrl = `${COMPANY_FACTS_PREFIX}CIK${cik}.json`;
-  const companyFacts = await getSecJson(companyFactsUrl, userAgent);
-
   const filings = latestFilings(submissions);
-  if (filings.length === 0) throw new Error(`No 10-K or 10-Q filings found for ${symbol}`);
+  if (filings.length === 0) throw new Error(`No selected 10-K, 10-Q or material 8-K filings found for ${symbol}`);
+  const financialFilings = filings.some(filing => filing.form.startsWith('10-K') || filing.form.startsWith('10-Q'));
+  const companyFactsUrl = `${COMPANY_FACTS_PREFIX}CIK${cik}.json`;
+  const companyFacts = financialFilings ? await getSecJson(companyFactsUrl, userAgent) : { facts: {} };
   for (const filing of filings) {
     const accessionDigits = filing.accession.replaceAll('-', '');
     const sourceId = recordId('sec.', `${runId}.${symbol}.${accessionDigits}`);
@@ -196,48 +196,64 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
     const document = await getSec(uri, userAgent, 'text/html,application/xhtml+xml,*/*');
     const checksum = sha256(document);
     const documentPath = saveArtifact(`${checksum}${path.extname(filing.primaryDocument) || '.htm'}`, document);
-    const excerpts = extractFilingExcerpts(document, filing.form);
-    const excerptArtifact = excerptArtifactName(excerpts);
-    const excerptPath = saveArtifact(excerptArtifact.name, excerptArtifact.data);
-    const excerptChunks = excerptFactChunks(excerpts, sourceId);
-    const narrativeSections = extractFilingNarrative(document.toString('utf8'), filing.form);
+    const isEightK = filing.form === '8-K' || filing.form === '8-K/A';
+    const isAmendment = filing.form === '10-K/A' || filing.form === '10-Q/A';
+    const excerpts = isEightK ? undefined : extractFilingExcerpts(document, filing.form);
+    const excerptArtifact = excerpts ? excerptArtifactName(excerpts) : undefined;
+    const excerptPath = excerptArtifact ? saveArtifact(excerptArtifact.name, excerptArtifact.data) : undefined;
+    const excerptChunks = excerpts ? excerptFactChunks(excerpts, sourceId) : [];
+    const eventExcerpts = isEightK ? extractEightKExcerpts(document.toString('utf8'), filing.itemCodes) : [];
+    const narrativeForm = isEightK ? undefined : filing.form as NarrativeFilingForm;
+    const narrativeSections = narrativeForm ? extractFilingNarrative(document.toString('utf8'), narrativeForm) : [];
     const availableNarrative = new Set(narrativeSections.map(section => section.key));
-    const missingNarrative = requiredNarrativeSections(filing.form).filter(section => !availableNarrative.has(section));
-    if (missingNarrative.length) {
+    const missingNarrative = narrativeForm ? requiredNarrativeSections(narrativeForm).filter(section => !availableNarrative.has(section)) : [];
+    if (missingNarrative.length && !isAmendment) {
       throw new Error(`${symbol} ${filing.form} ${filing.accession} did not yield required filing sections: ${missingNarrative.join(', ')}`);
     }
+    // An amendment supersedes an earlier source only when it carries every required narrative section.
+    // Partial amendments are durable additive evidence and leave the prior source eligible.
+    const supersedesSourceId = isAmendment && !missingNarrative.length && filing.supersedesAccession
+      ? recordId('sec.', `${runId}.${symbol}.${filing.supersedesAccession.replaceAll('-', '')}`) : undefined;
+    const provenance = JSON.stringify({ accession: filing.accession, form: filing.form,
+      reportDate: filing.reportDate || filing.filingDate, acceptedAt: filing.acceptedAt,
+      ...(supersedesSourceId ? { supersedesSourceId } : {}) });
+    const eventFacts = eventExcerpts.map(excerpt => ({ item: excerpt.item, value: splitEventFact(excerpt.text)[0] ?? '' }))
+      .filter(excerpt => excerpt.value.length > 0);
     const narrativeArtifact = JSON.stringify({
       accession: filing.accession, form: filing.form,
       sections: narrativeSections.map(({ key, item, label, chunks }) => ({ key, item, label, excerpt: chunks.join('') })),
     });
     const narrativeChecksum = sha256(narrativeArtifact);
     const narrativePath = saveArtifact(`${narrativeChecksum}.narrative.json`, narrativeArtifact);
-    // Keep both provenance formats within the existing 40-fact paired-filing budget:
-    // up to 20 XBRL + 8 verified excerpt chunks + 10 narrative chunks = 38.
+    // Keep provenance, filing facts and event facts within the evidence protocol's 48-fact / 49-ref bounds:
+    // two complete financial filings use at most 35 facts; two event sources add at most eight.
     // Full extracted narrative remains in the artifact; omitted fact characters are explicit below.
-    const narrativeFacts = narrativeSections.flatMap(section => section.chunks.slice(0, 2).map((value, index) => ({
+    const narrativeFacts = narrativeSections.flatMap(section => section.chunks.slice(0, 1).map((value, index) => ({
       id: recordId('', sourceId, `.narrative.${section.key}.${String(index + 1).padStart(2, '0')}`),
       metric: `filing_${section.key}_${String(index + 1).padStart(2, '0')}`,
       value,
       unit: 'text',
       period: `Item ${section.item}; accession ${filing.accession}; accepted ${filing.acceptedAt}`,
     })));
-    const xbrl = JSON.stringify(filingFacts(companyFacts, filing.accession));
-    const xbrlChecksum = sha256(xbrl);
-    const xbrlPath = saveArtifact(`${xbrlChecksum}.json`, xbrl);
+    const xbrl = isEightK ? undefined : JSON.stringify(filingFacts(companyFacts, filing.accession));
+    const xbrlChecksum = xbrl ? sha256(xbrl) : undefined;
+    const xbrlPath = xbrl && xbrlChecksum ? saveArtifact(`${xbrlChecksum}.json`, xbrl) : undefined;
     const manifest = JSON.stringify({
       sourceId, accession: filing.accession, form: filing.form, cik, symbol, reportDate: filing.reportDate,
-      acceptedAt: filing.acceptedAt,
+      acceptedAt: filing.acceptedAt, items: filing.itemCodes,
+      ...(supersedesSourceId ? { supersedesSourceId } : {}),
       document: { uri, sha256: checksum, bytes: document.length, path: documentPath },
-      xbrlFacts: { derivedFrom: companyFactsUrl, accession: filing.accession, sha256: xbrlChecksum, path: xbrlPath },
-      qualitativeExcerpts: { derivedFrom: uri, sha256: excerptArtifact.checksum, path: excerptPath,
+      ...(xbrlChecksum && xbrlPath ? { xbrlFacts: { derivedFrom: companyFactsUrl, accession: filing.accession, sha256: xbrlChecksum, path: xbrlPath } } : {}),
+      ...(excerptArtifact && excerptPath ? { qualitativeExcerpts: { derivedFrom: uri, sha256: excerptArtifact.checksum, path: excerptPath,
         offsetsIn: 'normalized visible text, sec-text-v1', chunks: excerptChunks.map(({ value, ...chunk }) => ({ ...chunk, sha256: sha256(value) })) },
+      } : {}),
+      eventUpdates: eventExcerpts.map(({ text, ...excerpt }) => ({ ...excerpt, factId: recordId('', sourceId, `.event.${excerpt.item.replace('.', '_')}`), sha256: sha256(text) })),
       narrative: {
         sha256: narrativeChecksum, path: narrativePath,
         sections: narrativeSections.map(({ key, item, label, chunks }) => ({
           key, item, label, characters: chunks.join('').length,
-          charactersOmittedFromFacts: chunks.slice(2).join('').length,
-          facts: chunks.slice(0, 2).map((_, index) => recordId('', sourceId, `.narrative.${key}.${String(index + 1).padStart(2, '0')}`)),
+          charactersOmittedFromFacts: chunks.slice(1).join('').length,
+          facts: chunks.slice(0, 1).map((_, index) => recordId('', sourceId, `.narrative.${key}.${String(index + 1).padStart(2, '0')}`)),
         })),
       },
     }, null, 2);
@@ -248,8 +264,16 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
     }));
     let recorded = 0;
     const missing: string[] = [];
+    const metadataFacts = [{ id: recordId('', sourceId, '.filing_provenance'), metric: 'filing_provenance',
+      value: provenance, period: `${filing.form}; accession ${filing.accession}; accepted ${filing.acceptedAt}` },
+    ...(isEightK || isAmendment ? [{ id: recordId('', sourceId, '.filing_update_review'), metric: 'filing_update_review',
+      value: 'review_required', period: `${isEightK ? `Items ${filing.itemCodes.join(',')}` : filing.form}; accession ${filing.accession}; accepted ${filing.acceptedAt}` }] : [])];
+    for (const fact of metadataFacts) {
+      if (await idempotent(fact.id, () => conn.reducers.addFact({ ...fact, sourceId, symbol, unit: 'text', quality: 'ok' }))) recorded++;
+    }
     for (const [metric, concepts] of Object.entries(CONCEPTS)) {
-      const found = factFor(companyFacts, concepts, filing);
+      if (isEightK) break;
+      const found = factFor(companyFacts, concepts, filing, metric);
       if (!found) { missing.push(metric); continue; }
       const { entry, unit, concept } = found;
       const period = entry.start ? `${entry.start}..${entry.end}` : `as of ${entry.end}`;
@@ -260,12 +284,20 @@ async function ingestSymbol(conn: DbConnection, userAgent: string, symbol: strin
     }
     for (const chunk of excerptChunks) {
       if (await idempotent(chunk.id, () => conn.reducers.addFact({ id: chunk.id, sourceId, symbol,
-        metric: chunk.metric, value: chunk.value, unit: 'text', period: filing.reportDate, quality: chunk.quality }))) recorded++;
+        metric: chunk.metric, value: chunk.value, unit: 'text', period: filing.reportDate || filing.filingDate, quality: chunk.quality }))) recorded++;
     }
-    if (excerpts.missing.length) console.log(`${symbol} ${filing.form}: excerpt sections not found: ${excerpts.missing.join(', ')}`);
+    if (excerpts?.missing.length) console.log(`${symbol} ${filing.form}: excerpt sections not found: ${excerpts.missing.join(', ')}`);
     for (const fact of narrativeFacts) {
       if (await idempotent(`${sourceId}.${fact.metric}`, () => conn.reducers.addFact({
         ...fact, sourceId, symbol, quality: 'ok',
+      }))) recorded++;
+    }
+    for (const fact of eventFacts) {
+      const itemKey = fact.item.replace('.', '_');
+      if (await idempotent(`${sourceId}.event.${itemKey}`, () => conn.reducers.addFact({
+        id: recordId('', sourceId, `.event.${itemKey}`), sourceId, symbol,
+        metric: `filing_event_${itemKey}`, value: fact.value, unit: 'text',
+        period: `Item ${fact.item}; accession ${filing.accession}; accepted ${filing.acceptedAt}`, quality: 'ok',
       }))) recorded++;
     }
     console.log(`${symbol} ${filing.form} ${filing.accession} (period ${filing.reportDate}, accepted ${filing.acceptedAt}): ` +
