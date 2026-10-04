@@ -19,3 +19,4 @@
 ## Factorio publication queue
 
 - `factorio-inference-supervision-publication`: replayed source commit `f6e5991` as `3d752ef` on current main. Root typecheck, the supervisor and launcher bundles, and four supervisor tests passed; pushing directly to main.
+- `factorio-production-demo-call-budget-publication`: replayed source `f6afec9` as `ba2f15c`, resolved the prompt conflict by keeping the current coordinate precision, and updated the runbooks with paid smoke and bounded production examples plus the supervisor build step. Root typecheck and 19 focused tests passed; direct main push is next.

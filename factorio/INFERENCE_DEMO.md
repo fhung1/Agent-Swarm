@@ -27,11 +27,12 @@ Keep that terminal running. In the worker terminal, set `RUN_ID` and `WORLD` to 
 
 ## 3. Configure and launch
 
-Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` or `claude` and an explicit supported `AGENT_MODEL`. Choose finite limits; this example permits at most thirty calls across ten actors and a five-minute run:
+Supply the selected provider credential through the environment or secret manager; do not print it or put it in prompts, logs or Git. Set `AGENT_BRAIN=codex` or `claude` and an explicit supported `AGENT_MODEL`. The following paid smoke check permits at most thirty calls across ten actors and five minutes. It can confirm connectivity and prompt shape, but it cannot complete the normal ore/fuel/plate sequence for every actor:
 
 ```sh
 export BOARD_URI=ws://127.0.0.1:3000
 export BOARD_DATABASE=quant-swarm-factorio-coord
+export FACTORIO_DEMO_MODE=smoke
 export FACTORIO_MAX_CALLS=3
 export FACTORIO_RUN_MS=300000
 export FACTORIO_INFERENCE_TIMEOUT_MS=30000
@@ -46,6 +47,8 @@ node dist/factorio-inference-swarm.mjs "$WORLD" "$RUN_ID" --start
 ```
 
 Require a successful dry run with ten distinct actors before `--start`. The launcher seeds scoped tasks, persists its plan and starts ten workers without a rules fallback.
+
+For a production rehearsal, use a **fresh** world and run ID, then set `FACTORIO_DEMO_MODE=production`, `FACTORIO_MAX_CALLS=12` and `FACTORIO_RUN_MS=900000` before the same dry-run/start commands. This caps the ten actors at 120 calls over fifteen minutes. Eight calls per actor is the enforced minimum; twelve allows room for movement and peer communication beyond taking ore and fuel, inserting both, collecting plates and reporting completion. These are planning limits, not a measured cost or proof of task completion. After the run, record each worker journal's actual `calls`, terminal supervisor status and verified plate count; use those measurements to set the next bounded production budget. A budget-exhausted worker is an incomplete run.
 
 ## 4. Observe and stop
 
